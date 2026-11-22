@@ -85,6 +85,11 @@ test('live pieces scroll, reflow, and snap to the pannable board', async (t) => 
   const scrolled = await canvas.screenshot();
   assert.notDeepEqual(await pixelAt(page, scrolled, 85, 196), await pixelAt(page, initial, 85, 196));
   await page.mouse.wheel(0, -1000);
+  const dividerBackground = [38, 58, 54, 255];
+  assert.deepEqual(await pixelAt(page, initial, 163, 320), dividerBackground);
+  assert.deepEqual(await pixelAt(page, initial, 170, 320), dividerBackground);
+  const centerPixels = await Promise.all([166, 167].map((x) => pixelAt(page, initial, x, 320)));
+  assert.equal(centerPixels.filter(([red]) => red > dividerBackground[0]).length, 1, 'The divider should draw a single centered line');
   const gripColor = await pixelAt(page, initial, 167, 448);
   assert.notDeepEqual(gripColor, await pixelAt(page, initial, 167, 320), 'The divider should have a visible center grip');
   await drag(167, 448, 552, 448);

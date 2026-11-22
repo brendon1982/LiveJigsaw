@@ -1,0 +1,21 @@
+:root {
+  color-scheme: light;
+  font-family: system-ui, sans-serif;
+  background: #f2eee3;
+  color: #263a36;
+}
+
+body {
+  margin: 0;
+}
+
+main {
+  width: min(100% - 2rem, 48rem);
+  margin: 3rem auto;
+}
+
+#game {
+  aspect-ratio: 520 / 288;
+  overflow: hidden;
+  border-radius: 0.5rem;
+}

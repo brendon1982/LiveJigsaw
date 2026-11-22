@@ -163,6 +163,37 @@ test('live pieces scroll, reflow, and snap to the pannable board', async (t) => 
   assert.deepEqual(errors, []);
 });
 
+test('the four new artwork scenes animate on the board', async (t) => {
+  const { page, waitForText, errors } = await openPuzzle(t, { viewport: { width: 1320, height: 780 } });
+  const selections = [
+    { title: 'Mountains', x: 340, y: 529, scroll: 320 },
+    { title: 'Meadow', x: 1003, y: 529, scroll: 320 },
+    { title: 'Desert', x: 340, y: 717, scroll: 1000 },
+    { title: 'Forest', x: 1003, y: 717, scroll: 1000 },
+  ];
+  const board = { x: 435, y: 275, width: 590, height: 320 };
+
+  for (const { title, x, y, scroll } of selections) {
+    await page.mouse.move(340, 300);
+    await page.mouse.wheel(0, scroll);
+    await page.evaluate(() => { window.paintedText = []; });
+    await page.mouse.click(x, y);
+    await waitForText(title);
+    await waitForText('0 of 8 placed');
+    const before = await page.screenshot({ clip: board });
+    assert.notDeepEqual(await pixelAt(page, before, 302, 165), [25, 46, 40, 255], `${title} should fill the board guide`);
+    await page.evaluate(async () => {
+      for (let frame = 0; frame < 12; frame += 1) await new Promise(requestAnimationFrame);
+    });
+    const after = await page.screenshot({ clip: board });
+    assert.ok(!before.equals(after), `${title} should animate the captured artwork`);
+    await page.evaluate(() => { window.paintedText = []; });
+    await page.mouse.click(99, 43);
+    await waitForText('Classic · 8');
+  }
+  assert.deepEqual(errors, []);
+});
+
 test('the picker scrolls past two cards and clips previews', async (t) => {
   await build({
     base: '/picker-fixture/',

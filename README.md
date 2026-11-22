@@ -1,6 +1,6 @@
 # Live Jigsaw
 
-A browser jigsaw prototype built around live, self-running Phaser 4 scenes. Choose **Windmill** or **Lighthouse** in **Classic** (8 pieces) or **Large** (32 pieces). Each puzzle draws the source into one shared texture.
+A browser jigsaw prototype built around live, self-running Phaser 4 scenes. Play any scene in **Classic** (8 pieces) or **Large** (32 pieces). Each puzzle draws the source into one shared texture.
 
 The play area fills the window. Scroll the piece tray with the mouse wheel, scrollbar, or by dragging empty space. Drag the divider to make room for more columns. Drag the board to bring any puzzle corner to the center of the board viewport. The faint live image guides placement.
 

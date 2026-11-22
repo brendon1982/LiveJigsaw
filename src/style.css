@@ -10,12 +10,36 @@ body {
 }
 
 main {
-  width: min(100% - 2rem, 48rem);
+  width: min(100% - 2rem, 78rem);
   margin: 3rem auto;
 }
 
+.preview-tools {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.preview-tools select {
+  padding: 0.45rem 0.75rem;
+  border: 1px solid currentColor;
+  border-radius: 0.35rem;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.preview-tools select:disabled {
+  opacity: 0.65;
+  cursor: default;
+}
+
 #game {
-  aspect-ratio: 520 / 288;
+  width: 100%;
+  aspect-ratio: 3 / 1;
   overflow: hidden;
   border-radius: 0.5rem;
 }

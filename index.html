@@ -8,7 +8,17 @@
   <body>
     <main>
       <h1>Live Jigsaw</h1>
-      <div id="game" aria-label="Animated windmill preview"></div>
+      <div class="preview-tools">
+        <label for="render-view">View</label>
+        <select id="render-view" aria-controls="game" disabled>
+          <option value="puzzle">Puzzle</option>
+          <option value="texture">Dynamic texture</option>
+          <option value="direct">Direct Phaser rendering</option>
+        </select>
+        <span id="render-details" hidden></span>
+      </div>
+      <p id="puzzle-progress" role="status"></p>
+      <div id="game" aria-label="Live Jigsaw game canvas"></div>
     </main>
     <script type="module" src="/src/main.ts"></script>
   </body>

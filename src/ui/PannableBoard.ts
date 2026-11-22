@@ -15,7 +15,7 @@ export class PannableBoard {
   constructor(scene: Phaser.Scene, private readonly size: Size, capture: LivePuzzleCapture) {
     this.offset = { x: -size.width / 2, y: -size.height / 2 };
     this.layer = scene.add.layer();
-    this.camera = scene.cameras.add().setName('Puzzle board');
+    this.camera = scene.cameras.add().setName('Puzzle board').setOrigin(0);
     this.camera.inputEnabled = false;
     const guide = scene.add.image(0, 0, capture.texture.key, '__BASE').setOrigin(0)
       .setDisplaySize(size.width, size.height).setAlpha(0.24);
@@ -60,15 +60,32 @@ export class PannableBoard {
   }
 
   toLocal(point: Point): Point {
-    return { x: point.x - this.viewport.x - this.offset.x, y: point.y - this.viewport.y - this.offset.y };
+    return {
+      x: (point.x - this.viewport.x - this.offset.x) / this.zoom,
+      y: (point.y - this.viewport.y - this.offset.y) / this.zoom,
+    };
+  }
+
+  get zoom(): number {
+    return this.camera.zoom;
+  }
+
+  pinch(previousCenter: Point, center: Point, scale: number) {
+    const anchor = this.toLocal(previousCenter);
+    this.camera.setZoom(Phaser.Math.Clamp(this.zoom * scale, 0.5, 2.5));
+    this.offset = {
+      x: center.x - this.viewport.x - anchor.x * this.zoom,
+      y: center.y - this.viewport.y - anchor.y * this.zoom,
+    };
+    this.pan(0, 0);
   }
 
   pan(dx: number, dy: number) {
     this.offset = {
-      x: this.limitOffset(this.offset.x + dx, this.viewport.width, this.size.width),
-      y: this.limitOffset(this.offset.y + dy, this.viewport.height, this.size.height),
+      x: this.limitOffset(this.offset.x + dx, this.viewport.width, this.size.width * this.zoom),
+      y: this.limitOffset(this.offset.y + dy, this.viewport.height, this.size.height * this.zoom),
     };
-    this.camera.setScroll(-this.offset.x, -this.offset.y);
+    this.camera.setScroll(-this.offset.x / this.zoom, -this.offset.y / this.zoom);
   }
 
   private limitOffset(offset: number, viewport: number, content: number): number {

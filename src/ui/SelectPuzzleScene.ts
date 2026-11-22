@@ -4,9 +4,6 @@ import { availablePuzzleSizes, puzzleSizes } from '../domain/puzzleSizes';
 import { puzzleSources } from '../sources/catalog';
 import { makeButton, mutedColor, textColor } from './button';
 
-const pickerWidth = 1248;
-const pickerHeight = 540;
-
 export class SelectPuzzleScene extends Phaser.Scene {
   static readonly key = 'SelectPuzzle';
   declare rexUI: RexUIPlugin;
@@ -25,23 +22,33 @@ export class SelectPuzzleScene extends Phaser.Scene {
 
     // TODO: Add pagination or scrolling when the catalog outgrows the two cards.
     const viewport = puzzleSizes[0];
-    for (const [index, source] of puzzleSources.entries()) {
-      const x = 48 + index * 592;
-      this.rexUI.add.roundRectangle(x + 280, 324, 560, 392, 16, 0x30453f);
+    const cards = puzzleSources.map((source) => {
+      const background = this.rexUI.add.roundRectangle(0, 0, 560, 392, 16, 0x30453f);
       const scale = Math.min(1, source.maxViewport.width / viewport.width, source.maxViewport.height / viewport.height);
       const objects = source.drawPreview(this, { width: viewport.width * scale, height: viewport.height * scale });
-      this.add.container(x + 24, 152, objects).setScale(1 / scale);
-      this.add.text(x + 24, 461, source.title, {
+      const art = this.add.container(0, 0, objects).setScale(1 / scale);
+      const title = this.add.text(0, 0, source.title, {
         fontFamily: 'system-ui', fontSize: '23px', color: textColor,
       });
-      for (const [option, size] of availablePuzzleSizes(source.maxViewport).entries()) {
-        makeButton(this, x + 228 + option * 158, 452, `${size.label} · ${size.columns * size.rows}`,
-          () => this.scene.start('PlayPuzzle', { source, size }), 150);
-      }
-    }
+      const buttons = availablePuzzleSizes(source.maxViewport).map((size) =>
+        makeButton(this, 0, 0, `${size.label} · ${size.columns * size.rows}`,
+          () => this.scene.start('PlayPuzzle', { source, size }), 150));
+      return { background, art, title, buttons };
+    });
 
     const fitPicker = () => {
       const { width, height } = this.scale.gameSize;
+      const portrait = height > width;
+      const pickerWidth = portrait ? 656 : 1248;
+      const pickerHeight = portrait ? 960 : 540;
+      for (const [index, { background, art, title, buttons }] of cards.entries()) {
+        const x = portrait ? 48 : 48 + index * 592;
+        const y = portrait ? 128 + index * 408 : 128;
+        background.setPosition(x + 280, y + 196);
+        art.setPosition(x + 24, y + 24);
+        title.setPosition(x + 24, y + 333);
+        buttons.forEach((button, option) => button.setPosition(x + 228 + option * 158, y + 324));
+      }
       const zoom = Math.min(1, width / pickerWidth, height / pickerHeight);
       const viewWidth = Math.floor(pickerWidth * zoom);
       const viewHeight = Math.floor(pickerHeight * zoom);

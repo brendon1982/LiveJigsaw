@@ -16,7 +16,7 @@ async function pixelAt(page, png, x, y) {
   }, { png: png.toString('base64'), x, y });
 }
 
-test('live pieces scroll, reflow, and snap to the pannable board', async (t) => {
+async function openPuzzle(t, options) {
   const server = await preview({ preview: { host: '127.0.0.1', port: 0 } });
   t.after(() => server.close());
   const { port } = server.httpServer.address();
@@ -26,7 +26,7 @@ test('live pieces scroll, reflow, and snap to the pannable board', async (t) => 
   });
   t.after(() => browser.close());
 
-  const page = await browser.newPage({ viewport: { width: 1320, height: 780 } });
+  const page = await browser.newPage(options);
   await page.addInitScript(() => {
     window.paintedText = [];
     const fillText = CanvasRenderingContext2D.prototype.fillText;
@@ -41,6 +41,11 @@ test('live pieces scroll, reflow, and snap to the pannable board', async (t) => 
   const canvas = page.locator('#game canvas');
   const waitForText = (text) => page.waitForFunction((value) => window.paintedText.includes(value), text, { timeout: 4000 });
   await waitForText('Choose a live puzzle');
+  return { page, canvas, waitForText, errors };
+}
+
+test('live pieces scroll, reflow, and snap to the pannable board', async (t) => {
+  const { page, canvas, waitForText, errors } = await openPuzzle(t, { viewport: { width: 1320, height: 780 } });
   const bounds = await canvas.boundingBox();
   assert.equal(bounds.width, 1320);
   assert.equal(bounds.height, 780);
@@ -127,6 +132,74 @@ test('live pieces scroll, reflow, and snap to the pannable board', async (t) => 
   const pickerZoom = 900 / 1248;
   const pickerTop = Math.floor((620 - Math.floor(540 * pickerZoom)) / 2);
   await click(351 * pickerZoom, pickerTop + 473 * pickerZoom);
+  await waitForText('0 of 8 placed');
+  assert.deepEqual(errors, []);
+});
+
+test('tablet touch scrolls, resizes, zooms, cancels, and places pieces', async (t) => {
+  const { page, canvas, waitForText, errors } = await openPuzzle(t, {
+    viewport: { width: 1024, height: 768 },
+    hasTouch: true,
+    isMobile: true,
+  });
+  const touch = await page.context().newCDPSession(page);
+  const dispatch = (type, ...points) => touch.send('Input.dispatchTouchEvent', {
+    type, touchPoints: points.map(([x, y], id) => ({ x, y, id })),
+  });
+  const moveFinger = async (x, y, endX, endY, end = 'touchEnd') => {
+    await dispatch('touchStart', [x, y]);
+    for (let step = 1; step <= 8; step += 1) {
+      await dispatch('touchMove', [x + (endX - x) * step / 8, y + (endY - y) * step / 8]);
+    }
+    await dispatch(end);
+  };
+
+  await page.touchscreen.tap(288, 556);
+  await waitForText('0 of 8 placed');
+  await waitForText('Drag to pan · Pinch to zoom');
+  const startingPiece = await pixelAt(page, await canvas.screenshot(), 85, 196);
+  await moveFinger(85, 310, 85, 196);
+  assert.notDeepEqual(await pixelAt(page, await canvas.screenshot(), 85, 196), startingPiece, 'A swipe starting on a piece should scroll');
+  await moveFinger(85, 196, 85, 310);
+  assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 85, 196), startingPiece);
+  await moveFinger(167, 340, 450, 340);
+  assert.notDeepEqual(await pixelAt(page, await canvas.screenshot(), 199, 196), [48, 72, 65, 255], 'The touch divider should reflow the tray');
+
+  const panelBackground = [25, 46, 40, 255];
+  assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 900, 244), panelBackground);
+  await dispatch('touchStart', [530, 400]);
+  await dispatch('touchStart', [530, 400], [650, 400]);
+  await dispatch('touchMove', [500, 400], [680, 400]);
+  await dispatch('touchEnd');
+  assert.notDeepEqual(await pixelAt(page, await canvas.screenshot(), 900, 255), panelBackground, 'A pinch should enlarge the board artwork');
+
+  await moveFinger(85, 309, 508, 355, 'touchCancel');
+  assert.equal(await page.evaluate(() => window.paintedText.includes('1 of 8 placed')), false, 'A cancelled touch should not place a piece');
+  await dispatch('touchStart', [85, 309]);
+  await dispatch('touchMove', [55, 309]);
+  assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 140, 309), [48, 72, 65, 255],
+    'A leftward move should leave the piece in the tray');
+  await dispatch('touchEnd');
+  await dispatch('touchStart', [85, 309]);
+  await dispatch('touchMove', [85, 321]);
+  await dispatch('touchMove', [99, 344]);
+  assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 145, 341), [192, 221, 219, 255],
+    'A rightward drag near 70° should lift the piece after a small vertical start');
+  await dispatch('touchMove', [508, 355]);
+  await dispatch('touchEnd');
+  await waitForText('1 of 8 placed');
+  assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 508, 355), [192, 221, 219, 255], 'A touch drop should snap at the zoomed target');
+  await moveFinger(700, 500, 850, 500);
+  const panned = await canvas.screenshot();
+  assert.deepEqual(await pixelAt(page, panned, 508, 355), panelBackground, 'One finger should pan the zoomed board');
+  assert.deepEqual(await pixelAt(page, panned, 658, 355), [192, 221, 219, 255], 'Placed pieces should follow the pan');
+
+  await page.setViewportSize({ width: 768, height: 1024 });
+  await page.waitForFunction(() => document.querySelector('canvas').height === 1024);
+  await page.evaluate(() => { window.paintedText = []; });
+  await page.touchscreen.tap(99, 43);
+  await waitForText('Choose a live puzzle');
+  await page.touchscreen.tap(407, 511);
   await waitForText('0 of 8 placed');
   assert.deepEqual(errors, []);
 });

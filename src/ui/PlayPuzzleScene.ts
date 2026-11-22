@@ -6,6 +6,7 @@ import type { PuzzleSource } from '../sources/PuzzleSource';
 import { makeButton, mutedColor, textColor } from './button';
 import { PuzzleBoardView } from './PuzzleBoardView';
 import { SelectPuzzleScene } from './SelectPuzzleScene';
+import { hasTouchTargets } from './touchLayout';
 
 type Selection = { source: PuzzleSource; size: PuzzleSize };
 
@@ -28,7 +29,8 @@ export class PlayPuzzleScene extends Phaser.Scene {
     const helpStyle = { fontFamily: 'system-ui', fontSize: '17px', color: mutedColor };
     this.add.text(24, 88, 'Pieces', helpStyle);
     const progress = this.add.text(196, 88, '', helpStyle);
-    const boardHelp = this.add.text(0, 88, 'Drag the board to pan', helpStyle).setOrigin(1, 0);
+    const boardHelp = this.add.text(0, 88, hasTouchTargets() ? 'Drag to pan · Pinch to zoom' : 'Drag the board to pan',
+      helpStyle).setOrigin(1, 0);
     const positionHelp = () => {
       const { width } = this.scale.gameSize;
       title.setFontSize(width < 440 ? 24 : 34);

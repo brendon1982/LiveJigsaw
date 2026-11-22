@@ -15,6 +15,13 @@ Prefer cohesive, readable, and simple code. Keep related behavior together, use 
 
 Keep extensions small. Add board layouts and cut rules to the domain when a concrete game mode requires them. Keep a specific TODO next to any prototype assumption that blocks that work. Register new sources directly in the catalog.
 
+## Touch input
+
+- Treat touch as a primary input. Keep the picker and play area usable in both tablet orientations. Give touch controls generous hit areas and make every essential action available without hover or a mouse wheel.
+- A vertical swipe scrolls the tray, including when it starts on a piece. Rightward movement up to 70° above or below horizontal picks up a piece. Give scrolling a longer threshold so a small vertical movement can turn into a drag.
+- One finger pans the board. Two fingers zoom about their midpoint. Convert drops through the current board pan and zoom before applying puzzle rules. A cancelled contact returns a lifted piece to the tray.
+- Exercise touch paths with touch events in the browser suite. Cover gesture conflicts, cancellation, and placement after zooming alongside the desktop mouse path.
+
 ## Rendering details
 
 - Keep board geometry in logical pixels. Scale texture frame coordinates at the capture boundary. Use 2× capture and linear filtering to smooth geometry when the source and GPU texture limits allow it.

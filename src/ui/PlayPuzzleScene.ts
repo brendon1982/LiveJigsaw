@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import type RexUIPlugin from 'phaser4-rex-plugins/templates/ui/ui-plugin.js';
 import { createPuzzle, type PuzzleSize } from '../domain/puzzleSizes';
 import { LivePuzzleCapture } from '../rendering/LivePuzzleCapture';
-import type { PuzzleSource } from '../sources/PuzzleSource';
+import type { PuzzleSource } from '../puzzles/PuzzleSource';
 import { makeButton, mutedColor, textColor } from './button';
 import { PuzzleBoardView } from './PuzzleBoardView';
 import { SelectPuzzleScene } from './SelectPuzzleScene';

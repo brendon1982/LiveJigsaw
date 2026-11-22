@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import type { Size } from '../domain/geometry';
+import type { Size } from '../../domain/geometry';
 
 const artworkSize = { width: 512, height: 288 };
 

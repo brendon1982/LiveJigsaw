@@ -26,4 +26,4 @@ Run `pnpm test` for fast puzzle-rule and geometry tests. Run `pnpm test:browser`
 - [Domain](src/domain/Puzzle.ts) owns the board, piece outlines, drop rules, and completion.
 - [Play scene](src/ui/PlayPuzzleScene.ts) coordinates the board UI, piece tray, and the selected source.
 - [Capture adapter](src/rendering/LivePuzzleCapture.ts) owns the source lifecycle and the shared Phaser texture.
-- [Source catalog](src/sources/catalog.ts) lists the built-in scenes. Add a scene class and a picker preview using the [source contract](src/sources/PuzzleSource.ts).
+- [Source catalog](src/puzzles/catalog.ts) lists the built-in scenes. Keep each scene, its artwork, and its assets in its own folder under `src/puzzles`. Export an entry with the scene and picker preview using the [source contract](src/puzzles/PuzzleSource.ts).

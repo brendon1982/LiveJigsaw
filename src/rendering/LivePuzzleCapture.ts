@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import type { Size } from '../domain/geometry';
 import { captureScale } from '../domain/puzzleSizes';
-import type { PuzzleSource } from '../sources/PuzzleSource';
+import type { PuzzleSource } from '../puzzles/PuzzleSource';
 
 export class LivePuzzleCapture {
   readonly texture: Phaser.Textures.DynamicTexture;

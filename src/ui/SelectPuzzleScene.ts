@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import type RexUIPlugin from 'phaser4-rex-plugins/templates/ui/ui-plugin.js';
 import { availablePuzzleSizes, puzzleSizes } from '../domain/puzzleSizes';
-import { puzzleSources } from '../sources/catalog';
+import { puzzleSources } from '../puzzles/catalog';
 import { makeButton, mutedColor, textColor } from './button';
 
 export class SelectPuzzleScene extends Phaser.Scene {

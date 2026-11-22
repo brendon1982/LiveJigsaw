@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import RexUIPlugin from 'phaser4-rex-plugins/templates/ui/ui-plugin.js';
-import { puzzleSources } from './sources/catalog';
+import { puzzleSources } from './puzzles/catalog';
 import { PlayPuzzleScene } from './ui/PlayPuzzleScene';
 import { SelectPuzzleScene } from './ui/SelectPuzzleScene';
 import './style.css';

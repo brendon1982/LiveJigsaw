@@ -50,6 +50,7 @@ test('the host renders a live jigsaw and compares both source rendering paths', 
   const puzzle = await canvas.screenshot();
   assert.deepEqual(await samplePixel(page, puzzle, 565, 75, 1248, 420), [38, 58, 54, 255]);
   assert.notDeepEqual(await samplePixel(page, puzzle, 637, 125, 1248, 420), [38, 58, 54, 255]);
+  assert.deepEqual(await samplePixel(page, puzzle, 1147, 125, 1248, 420), [192, 221, 219, 255], 'The top-left piece should show its own region');
 
   await chooseView('texture');
   assert.equal(await dimensions.isVisible(), true);
@@ -57,6 +58,8 @@ test('the host renders a live jigsaw and compares both source rendering paths', 
   const textureBounds = await canvas.boundingBox();
   const texture = await canvas.screenshot();
   assert.deepEqual(await samplePixel(page, texture, 256, 29), [192, 221, 219, 255]);
+  const sunEdge = await samplePixel(page, texture, 368, 55);
+  assert.ok(sunEdge[0] > 192 && sunEdge[0] < 253, 'The textured sun should blend into the sky at its edge');
   assert.notDeepEqual(await canvas.screenshot(), texture, 'The textured windmill should animate');
 
   await chooseView('direct');
@@ -77,7 +80,7 @@ test('the host renders a live jigsaw and compares both source rendering paths', 
   }
   assert.equal(await status.textContent(), 'Puzzle complete');
   const solved = await canvas.screenshot();
-  assert.deepEqual(await samplePixel(page, solved, 16 + 256, 48 + 29, 1248, 420), [192, 221, 219, 255]);
+  assert.deepEqual(await samplePixel(page, solved, 16 + 260, 48 + 29, 1248, 420), [192, 221, 219, 255]);
   await chooseView('direct');
   await chooseView('puzzle');
   assert.equal(await status.textContent(), 'Puzzle complete');

@@ -11,6 +11,7 @@ const trayCellWidth = cellWidth + 2 * tabDepth + 8;
 const trayCellHeight = cellHeight + 2 * tabDepth + 8;
 const trayOrder = [5, 2, 7, 0, 3, 6, 1, 4];
 const textureKey = 'windmill-output';
+const captureScale = 2;
 export const puzzleWidth = trayX + columns * trayCellWidth + padding;
 export const puzzleHeight = trayY + rows * trayCellHeight + padding;
 
@@ -25,8 +26,11 @@ export class PuzzleScene extends Phaser.Scene {
     const details = document.querySelector<HTMLSpanElement>('#render-details')!;
     const progress = document.querySelector<HTMLParagraphElement>('#puzzle-progress')!;
     const windmill = this.scene.get<WindmillScene>(WindmillScene.key);
-    const source = this.textures.addDynamicTexture(textureKey, sceneWidth, sceneHeight);
+    const source = this.textures.addDynamicTexture(textureKey, sceneWidth * captureScale, sceneHeight * captureScale);
     if (!source) throw new Error('Could not create the windmill render target');
+    // The WebGL framebuffer is single-sampled. Render larger and filter when displaying it.
+    source.camera.setOrigin(0).setZoom(captureScale);
+    source.setFilter(Phaser.Textures.FilterMode.LINEAR);
 
     const puzzle = this.add.layer();
     const board = this.add.graphics();
@@ -71,16 +75,19 @@ export class PuzzleScene extends Phaser.Scene {
       context.fill();
       mask.refresh();
 
-      source.add(index, 0, shape.left, shape.top, shape.width, shape.height);
+      const frame = `piece-${index}`;
+      source.add(frame, 0, shape.left * captureScale, shape.top * captureScale, shape.width * captureScale, shape.height * captureScale);
       const trayPieceX = trayX + (slot % columns + 0.5) * trayCellWidth;
       const trayPieceY = trayY + (Math.floor(slot / columns) + 0.5) * trayCellHeight;
       const targetX = boardX + (column + 0.5) * cellWidth;
       const targetY = boardY + (row + 0.5) * cellHeight;
-      const piece = this.add.image(trayPieceX, trayPieceY, textureKey, index);
+      const piece = this.add.image(trayPieceX, trayPieceY, textureKey, frame);
       piece.setOrigin(shape.centerX / shape.width, shape.centerY / shape.height);
+      piece.setDisplaySize(shape.width, shape.height);
       piece.enableFilters().filters!.internal.addMask(maskKey);
       puzzle.add(piece);
-      piece.setInteractive(new Phaser.Geom.Polygon(shape.points), Phaser.Geom.Polygon.Contains);
+      const hitOutline = shape.points.map(({ x, y }) => ({ x: x * captureScale, y: y * captureScale }));
+      piece.setInteractive(new Phaser.Geom.Polygon(hitOutline), Phaser.Geom.Polygon.Contains);
       this.input.setDraggable(piece);
       piece.on('dragstart', () => piece.setDepth(1));
       piece.on('drag', (_pointer: Phaser.Input.Pointer, x: number, y: number) => piece.setPosition(x, y));
@@ -96,7 +103,8 @@ export class PuzzleScene extends Phaser.Scene {
       });
     }
 
-    const texturePreview = this.add.image(0, 0, textureKey, '__BASE').setOrigin(0).setVisible(false);
+    const texturePreview = this.add.image(0, 0, textureKey, '__BASE')
+      .setOrigin(0).setDisplaySize(sceneWidth, sceneHeight).setVisible(false);
     const refreshTexture = () => {
       if (view.value !== 'direct') source.clear().draw(windmill.children).render();
     };

@@ -4,6 +4,8 @@ A browser jigsaw prototype built around a live, self-running Phaser 4 scene. The
 
 Use **View** to switch between **Dynamic texture** and **Direct Phaser rendering**. Both show the same animated scene at 512 × 288. The direct view draws the source scene through its own Phaser camera with texture capture paused. Select **Puzzle** to return to the board.
 
+Phaser's WebGL dynamic texture uses a single-sample framebuffer. The puzzle renders to a 1024 × 576 target and samples it with linear filtering at half size to smooth geometry edges.
+
 ## Local development
 
 Use Node.js 22.12 or newer and pnpm.

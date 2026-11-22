@@ -1,37 +1,54 @@
 import Phaser from 'phaser';
+import type RexUIPlugin from 'phaser4-rex-plugins/templates/ui/ui-plugin.js';
 import { cellHeight, cellWidth, columns, pieceShape, rows, tabDepth } from './pieces';
-import { sceneHeight, sceneWidth, WindmillScene } from './WindmillScene';
+import { PuzzleSourceScene, sceneHeight, sceneWidth } from './PuzzleSourceScene';
+import type { Puzzle } from './puzzles';
+import { SelectPuzzleScene } from './SelectPuzzleScene';
+import { makeButton, mutedColor, textColor } from './ui';
 
 const padding = 16;
 const boardX = padding;
-const boardY = 48;
+const boardY = 164;
 const trayX = boardX + sceneWidth + 24;
-const trayY = 32;
+const trayY = 144;
 const trayCellWidth = cellWidth + 2 * tabDepth + 8;
 const trayCellHeight = cellHeight + 2 * tabDepth + 8;
 const trayOrder = [5, 2, 7, 0, 3, 6, 1, 4];
-const textureKey = 'windmill-output';
+const textureKey = 'live-puzzle-output';
 const captureScale = 2;
 export const puzzleWidth = trayX + columns * trayCellWidth + padding;
-export const puzzleHeight = trayY + rows * trayCellHeight + padding;
+export const puzzleHeight = 540;
+const previewX = (puzzleWidth - sceneWidth) / 2;
+const previewY = 190;
+const views = [
+  { key: 'puzzle', label: 'Puzzle', x: 24, width: 100 },
+  { key: 'texture', label: 'Dynamic texture', x: 134, width: 170 },
+  { key: 'direct', label: 'Direct Phaser', x: 314, width: 152 },
+] as const;
+type View = typeof views[number]['key'];
 
-export class PuzzleScene extends Phaser.Scene {
+export class PlayPuzzleScene extends Phaser.Scene {
+  declare rexUI: RexUIPlugin;
+
   constructor() {
-    super('Puzzle');
+    super('PlayPuzzle');
   }
 
-  create() {
-    const game = document.querySelector<HTMLDivElement>('#game')!;
-    const view = document.querySelector<HTMLSelectElement>('#render-view')!;
-    const details = document.querySelector<HTMLSpanElement>('#render-details')!;
-    const progress = document.querySelector<HTMLParagraphElement>('#puzzle-progress')!;
-    const windmill = this.scene.get<WindmillScene>(WindmillScene.key);
+  create(puzzleConfig: Puzzle) {
+    const sourceScene = this.scene.get<PuzzleSourceScene>(puzzleConfig.sourceKey);
     const source = this.textures.addDynamicTexture(textureKey, sceneWidth * captureScale, sceneHeight * captureScale);
-    if (!source) throw new Error('Could not create the windmill render target');
+    if (!source) throw new Error('Could not create the puzzle render target');
     // The WebGL framebuffer is single-sampled. Render larger and filter when displaying it.
     source.camera.setOrigin(0).setZoom(captureScale);
     source.setFilter(Phaser.Textures.FilterMode.LINEAR);
 
+    makeButton(this, 24, 22, 'All puzzles', () => this.scene.start(SelectPuzzleScene.key), 150);
+    this.add.text(196, 19, puzzleConfig.title, {
+      fontFamily: 'system-ui', fontSize: '34px', fontStyle: 'bold', color: textColor,
+    });
+    const helpStyle = { fontFamily: 'system-ui', fontSize: '16px', color: mutedColor };
+    const details = this.add.text(previewX, previewY - 28, '', helpStyle).setVisible(false);
+    const progress = this.add.text(490, 91, '', helpStyle);
     const puzzle = this.add.layer();
     const board = this.add.graphics();
     board.fillStyle(0x304843).fillRect(boardX, boardY, sceneWidth, sceneHeight);
@@ -44,24 +61,25 @@ export class PuzzleScene extends Phaser.Scene {
     const labelStyle = { fontFamily: 'system-ui', fontSize: '16px', color: '#e4efe4' };
     puzzle.add([
       board,
-      this.add.text(boardX, padding, 'Puzzle board', labelStyle),
-      this.add.text(trayX, 8, 'Pieces', labelStyle),
+      this.add.text(boardX, boardY - 24, 'Puzzle board', labelStyle),
+      this.add.text(trayX, boardY - 24, 'Pieces', labelStyle),
     ]);
 
     let placed = 0;
     const updateProgress = () => {
-      progress.textContent = placed === trayOrder.length
+      progress.setText(placed === trayOrder.length
         ? 'Puzzle complete'
-        : `Drag the pieces onto the board. ${placed} of ${trayOrder.length} placed.`;
+        : `Drag the pieces onto the board. ${placed} of ${trayOrder.length} placed.`);
     };
     updateProgress();
 
     const masks: string[] = [];
+    const pieces: Phaser.GameObjects.Image[] = [];
     for (const [slot, index] of trayOrder.entries()) {
       const column = index % columns;
       const row = Math.floor(index / columns);
       const shape = pieceShape(column, row);
-      const maskKey = `windmill-piece-mask-${index}`;
+      const maskKey = `live-puzzle-mask-${index}`;
       const mask = this.textures.createCanvas(maskKey, shape.width, shape.height);
       if (!mask) throw new Error('Could not create a puzzle piece mask');
       masks.push(maskKey);
@@ -85,6 +103,7 @@ export class PuzzleScene extends Phaser.Scene {
       piece.setOrigin(shape.centerX / shape.width, shape.centerY / shape.height);
       piece.setDisplaySize(shape.width, shape.height);
       piece.enableFilters().filters!.internal.addMask(maskKey);
+      pieces.push(piece);
       puzzle.add(piece);
       const hitOutline = shape.points.map(({ x, y }) => ({ x: x * captureScale, y: y * captureScale }));
       piece.setInteractive(new Phaser.Geom.Polygon(hitOutline), Phaser.Geom.Polygon.Contains);
@@ -103,50 +122,43 @@ export class PuzzleScene extends Phaser.Scene {
       });
     }
 
-    const texturePreview = this.add.image(0, 0, textureKey, '__BASE')
+    const texturePreview = this.add.image(previewX, previewY, textureKey, '__BASE')
       .setOrigin(0).setDisplaySize(sceneWidth, sceneHeight).setVisible(false);
+    let view: View = 'puzzle';
     const refreshTexture = () => {
-      if (view.value !== 'direct') source.clear().draw(windmill.children).render();
+      if (view !== 'direct') source.clear().draw(sourceScene.children).render();
     };
-    const changeView = () => {
-      const showPuzzle = view.value === 'puzzle';
-      const showTexture = view.value === 'texture';
+    const changeView = (next: View) => {
+      view = next;
+      const showPuzzle = view === 'puzzle';
+      const showTexture = view === 'texture';
       puzzle.setVisible(showPuzzle);
-      this.input.enabled = showPuzzle;
+      for (const piece of pieces) piece.setVisible(showPuzzle);
       texturePreview.setVisible(showTexture);
-      windmill.scene.setVisible(view.value === 'direct');
-      details.hidden = showPuzzle;
-      progress.hidden = !showPuzzle;
-
-      const width = showPuzzle ? puzzleWidth : sceneWidth;
-      const height = showPuzzle ? puzzleHeight : sceneHeight;
-      game.style.aspectRatio = `${width} / ${height}`;
-      game.style.maxWidth = `${width}px`;
-      this.scale.getParentBounds();
-      if (this.scale.gameSize.width !== width || this.scale.gameSize.height !== height) {
-        this.scale.setGameSize(width, height);
-      } else {
-        this.scale.refresh();
-      }
+      sourceScene.scene.setVisible(view === 'direct');
+      details.setVisible(!showPuzzle).setText(showTexture
+        ? '512 × 288 display · 2× render target'
+        : '512 × 288 display · Scene camera');
+      progress.setVisible(showPuzzle);
+      for (const [key, button] of buttons) button.setSelected(key === view);
     };
+
+    const buttons = views.map(({ key, label, x, width }) =>
+      [key, makeButton(this, x, 76, label, () => changeView(key), width)] as const);
+    changeView('puzzle');
+
     const startPreview = () => {
-      changeView();
+      sourceScene.cameras.main.setViewport(previewX, previewY, sceneWidth, sceneHeight);
       refreshTexture();
       this.game.events.on(Phaser.Core.Events.POST_STEP, refreshTexture);
-      view.disabled = false;
     };
-    view.value = 'puzzle';
-    details.textContent = `${sceneWidth} × ${sceneHeight} px`;
-    view.addEventListener('change', changeView);
-    windmill.events.once(Phaser.Scenes.Events.CREATE, startPreview);
-    this.scene.launch(WindmillScene.key);
+    sourceScene.events.once(Phaser.Scenes.Events.CREATE, startPreview);
+    this.scene.launch(puzzleConfig.sourceKey);
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.game.events.off(Phaser.Core.Events.POST_STEP, refreshTexture);
-      windmill.events.off(Phaser.Scenes.Events.CREATE, startPreview);
-      this.scene.stop(WindmillScene.key);
-      view.removeEventListener('change', changeView);
-      view.disabled = true;
+      sourceScene.events.off(Phaser.Scenes.Events.CREATE, startPreview);
+      this.scene.stop(puzzleConfig.sourceKey);
       this.textures.remove(source);
       for (const mask of masks) this.textures.remove(mask);
     });

@@ -1,0 +1,31 @@
+import type Phaser from 'phaser';
+import type RexUIPlugin from 'phaser4-rex-plugins/templates/ui/ui-plugin.js';
+
+export type UIScene = Phaser.Scene & { rexUI: RexUIPlugin };
+
+export const textColor = '#edf3e9';
+export const mutedColor = '#bacdc1';
+
+export function makeButton(scene: UIScene, x: number, y: number, text: string, click: () => void, width = 0) {
+  const background = scene.rexUI.add.roundRectangle(0, 0, 1, 1, 9, 0x3a514b);
+  const caption = scene.add.text(0, 0, text, {
+    fontFamily: 'system-ui', fontSize: '17px', color: textColor,
+  });
+  const button = scene.rexUI.add.label({
+    x, y, width, height: 42, align: 'center', background, text: caption,
+    space: { left: 16, right: 16 },
+  }).setOrigin(0).layout();
+  scene.rexUI.add.click(button).on('click', click);
+  button.input!.cursor = 'pointer';
+  let selected = false;
+  button.on('pointerover', () => background.setFillStyle(selected ? 0xe3c78c : 0x4b655b));
+  button.on('pointerout', () => background.setFillStyle(selected ? 0xe3c78c : 0x3a514b));
+
+  return {
+    setSelected(active: boolean) {
+      selected = active;
+      background.setFillStyle(active ? 0xe3c78c : 0x3a514b);
+      caption.setColor(active ? '#233832' : textColor);
+    },
+  };
+}

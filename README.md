@@ -1,8 +1,8 @@
 # Live Jigsaw
 
-A browser jigsaw prototype built around a live, self-running Phaser 4 scene. The puzzle scene launches the input-free windmill scene and renders its display list to one shared `DynamicTexture`. Eight draggable pieces sample that texture through static masks and snap into place on the board.
+A browser jigsaw prototype built around live, self-running Phaser 4 scenes. Choose **Windmill** or **Lighthouse** on the RexUI puzzle picker. The play scene launches the chosen input-free source and renders its display list to one shared `DynamicTexture`. Eight draggable pieces sample that texture through static masks and snap into place on the board.
 
-Use **View** to switch between **Dynamic texture** and **Direct Phaser rendering**. Both show the same animated scene at 512 × 288. The direct view draws the source scene through its own Phaser camera with texture capture paused. Select **Puzzle** to return to the board.
+In the play scene, **Dynamic texture** and **Direct Phaser** show the same animated scene at 512 × 288. The direct view draws the source through its own Phaser camera with texture capture paused. Select **Puzzle** to return to the board without losing progress, or **All puzzles** to choose another scene.
 
 Phaser's WebGL dynamic texture uses a single-sample framebuffer. The puzzle renders to a 1024 × 576 target and samples it with linear filtering at half size to smooth geometry edges.
 

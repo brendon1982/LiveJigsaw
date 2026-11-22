@@ -1,4 +1,4 @@
-import { sceneHeight, sceneWidth } from './WindmillScene';
+import { sceneHeight, sceneWidth } from './PuzzleSourceScene';
 
 export const columns = 4;
 export const rows = 2;

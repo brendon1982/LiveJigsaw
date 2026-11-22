@@ -104,6 +104,7 @@ export class PuzzleBoardView {
     scene.input.on('pointermove', this.moveGesture);
     scene.input.on('pointerup', this.endGesture);
     scene.input.on('pointerupoutside', this.cancelGesture);
+    scene.input.on(Phaser.Input.Events.POINTER_WHEEL, this.zoomWithWheel);
   }
 
   destroy() {
@@ -112,6 +113,7 @@ export class PuzzleBoardView {
     this.scene.input.off('pointermove', this.moveGesture);
     this.scene.input.off('pointerup', this.endGesture);
     this.scene.input.off('pointerupoutside', this.cancelGesture);
+    this.scene.input.off(Phaser.Input.Events.POINTER_WHEEL, this.zoomWithWheel);
     this.scene.input.setDefaultCursor('default');
     this.tray.destroy();
     this.board.destroy();
@@ -147,17 +149,35 @@ export class PuzzleBoardView {
   private startPieceDrag(pointer: Phaser.Input.Pointer, entry: PuzzlePieceView, grab: Point) {
     const offset = { x: entry.position.x - grab.x, y: entry.position.y - grab.y };
     this.gesture = { kind: 'piece', pointerId: pointer.id, entry, offset };
-    this.tray.lift(entry, this.board.zoom);
+    this.tray.lift(entry);
+    entry.setScale(this.board.zoom);
     entry.addTo(this.floatingPieces);
     entry.moveTo(pointer.x + offset.x, pointer.y + offset.y);
   }
+
+  private readonly zoomWithWheel = (pointer: Phaser.Input.Pointer, _over: Phaser.GameObjects.GameObject[], _dx: number, dy: number) => {
+    if (!dy || this.pinch || !this.board.contains(pointer)) return;
+    const { deltaMode } = pointer.event as WheelEvent;
+    const pixelsPerUnit = deltaMode === WheelEvent.DOM_DELTA_PAGE ? this.board.camera.height
+      : deltaMode === WheelEvent.DOM_DELTA_LINE ? 16 : 1;
+    const previousZoom = this.board.zoom;
+    this.board.zoomAt(pointer, 1.5 ** (-dy * pixelsPerUnit / 200));
+
+    const gesture = this.gesture;
+    if (gesture?.kind === 'piece' && gesture.pointerId === pointer.id) {
+      gesture.entry.setScale(this.board.zoom);
+      const scale = this.board.zoom / previousZoom;
+      gesture.offset = { x: gesture.offset.x * scale, y: gesture.offset.y * scale };
+      this.moveGesture(pointer);
+    }
+  };
 
   private readonly moveGesture = (pointer: Phaser.Input.Pointer) => {
     const pinch = this.pinch;
     if (pinch) {
       if (pinch.fingers.includes(pointer)) {
         const next = measurePinch(...pinch.fingers);
-        this.board.pinch(pinch.center, next.center, next.span / pinch.span);
+        this.board.zoomAt(next.center, next.span / pinch.span, pinch.center);
         Object.assign(pinch, next);
       }
       return;

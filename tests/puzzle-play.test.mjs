@@ -67,6 +67,7 @@ test('live pieces scroll, reflow, and snap to the pannable board', async (t) => 
 
   await click(387, 593);
   await waitForText('0 of 8 placed');
+  await waitForText('Drag to pan · Scroll to zoom');
   const initial = await canvas.screenshot();
   const sky = [192, 221, 219, 255];
   const guide = await pixelAt(page, initial, 542, 376);
@@ -84,10 +85,22 @@ test('live pieces scroll, reflow, and snap to the pannable board', async (t) => 
   assert.deepEqual(boardSeam, guide, 'The faint guide should be continuous across piece boundaries');
   await drag(427, 196, 600, 110);
   assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 427, 196), sky, 'An invalid drop should return to the tray');
-  await drag(427, 196, 735, 376);
+  await move(427, 196);
+  await page.mouse.down();
+  await move(735, 376, 8);
+  const beforeZoom = await canvas.screenshot();
+  await page.mouse.wheel(0, -200);
+  const zoomed = await canvas.screenshot();
+  const panelBackground = [25, 46, 40, 255];
+  assert.deepEqual(await pixelAt(page, beforeZoom, 650, 500), panelBackground);
+  assert.notDeepEqual(await pixelAt(page, zoomed, 650, 500), panelBackground, 'The wheel should enlarge the board');
+  assert.notDeepEqual(await pixelAt(page, beforeZoom, 815, 366), sky);
+  assert.deepEqual(await pixelAt(page, zoomed, 815, 366), sky, 'A piece in hand should scale with the board');
+  await page.mouse.up();
   await waitForText('1 of 8 placed');
   const placed = await canvas.screenshot();
-  assert.deepEqual(await pixelAt(page, placed, 735, 376), sky, 'Placed artwork should be opaque');
+  assert.deepEqual(await pixelAt(page, placed, 735, 376), sky, 'Zooming at the drop target should keep it under the pointer');
+  await page.mouse.wheel(0, 200);
   await drag(199, 309, 863, 376);
   await waitForText('2 of 8 placed');
   const joined = await canvas.screenshot();
@@ -95,7 +108,6 @@ test('live pieces scroll, reflow, and snap to the pannable board', async (t) => 
     assert.deepEqual(await pixelAt(page, joined, x, y), sky, 'The live guide should not show through joined pieces');
   }
 
-  const panelBackground = [25, 46, 40, 255];
   const assertCornerAtCenter = async (horizontal, vertical) => {
     const screenshot = await canvas.screenshot();
     assert.notDeepEqual(await pixelAt(page, screenshot, 927 + 14 * horizontal, 448 + 14 * vertical), panelBackground);

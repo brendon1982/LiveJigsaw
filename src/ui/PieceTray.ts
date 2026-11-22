@@ -80,9 +80,8 @@ export class PieceTray {
     this.panel.setChildOY(this.panel.childOY + pixels, true);
   }
 
-  lift(entry: PuzzlePieceView, boardZoom: number) {
+  lift(entry: PuzzlePieceView) {
     this.lifted = entry;
-    entry.setScale(boardZoom);
   }
 
   returnPiece(entry: PuzzlePieceView) {

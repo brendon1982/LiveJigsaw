@@ -70,12 +70,12 @@ export class PannableBoard {
     return this.camera.zoom;
   }
 
-  pinch(previousCenter: Point, center: Point, scale: number) {
-    const anchor = this.toLocal(previousCenter);
+  zoomAt(point: Point, scale: number, previousPoint: Point = point) {
+    const anchor = this.toLocal(previousPoint);
     this.camera.setZoom(Phaser.Math.Clamp(this.zoom * scale, 0.5, 2.5));
     this.offset = {
-      x: center.x - this.viewport.x - anchor.x * this.zoom,
-      y: center.y - this.viewport.y - anchor.y * this.zoom,
+      x: point.x - this.viewport.x - anchor.x * this.zoom,
+      y: point.y - this.viewport.y - anchor.y * this.zoom,
     };
     this.pan(0, 0);
   }

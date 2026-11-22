@@ -29,7 +29,7 @@ export class PlayPuzzleScene extends Phaser.Scene {
     const helpStyle = { fontFamily: 'system-ui', fontSize: '17px', color: mutedColor };
     this.add.text(24, 88, 'Pieces', helpStyle);
     const progress = this.add.text(196, 88, '', helpStyle);
-    const boardHelp = this.add.text(0, 88, hasTouchTargets() ? 'Drag to pan · Pinch to zoom' : 'Drag the board to pan',
+    const boardHelp = this.add.text(0, 88, hasTouchTargets() ? 'Drag to pan · Pinch to zoom' : 'Drag to pan · Scroll to zoom',
       helpStyle).setOrigin(1, 0);
     const positionHelp = () => {
       const { width } = this.scale.gameSize;

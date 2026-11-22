@@ -37,7 +37,7 @@ export class PuzzleBoardView {
     const boardPanel = scene.add.rectangle(0, 0, 1, 1, 0x192e28);
     const divider = scene.rexUI.add.roundRectangle(0, 0, dividerWidth, 1, 4, 0x809b90);
     this.tray = new PieceTray(scene, this.pieces);
-    this.board = new PannableBoard(scene, puzzle, capture);
+    this.board = new PannableBoard(scene, puzzle.board.size, capture);
     this.floatingPieces = scene.add.layer();
     const dragCamera = scene.cameras.add().setName('Dragged piece');
     dragCamera.inputEnabled = false;

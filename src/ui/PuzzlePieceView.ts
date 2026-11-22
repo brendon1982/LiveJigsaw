@@ -2,12 +2,10 @@ import Phaser from 'phaser';
 import type { PuzzlePiece } from '../domain/Puzzle';
 import type { Point } from '../domain/geometry';
 import type { LivePuzzleCapture } from '../rendering/LivePuzzleCapture';
-import { strokeOutline } from './strokeOutline';
 
 export class PuzzlePieceView {
   readonly mask: Phaser.Textures.CanvasTexture;
   private readonly image: Phaser.GameObjects.Image;
-  private readonly outline: Phaser.GameObjects.Graphics;
   private readonly hitArea: Phaser.Geom.Polygon;
   private scale = 1;
 
@@ -38,8 +36,6 @@ export class PuzzlePieceView {
 
     const points = piece.outline.points.map(({ x, y }) => ({ x: x - piece.target.x, y: y - piece.target.y }));
     this.hitArea = new Phaser.Geom.Polygon(points);
-    this.outline = scene.add.graphics().lineStyle(2, 0xc1dbcb);
-    strokeOutline(this.outline, points);
   }
 
   get position(): Point {
@@ -53,17 +49,15 @@ export class PuzzlePieceView {
 
   moveTo(x: number, y: number) {
     this.image.setPosition(x, y);
-    this.outline.setPosition(x, y);
   }
 
   setScale(scale: number) {
     this.scale = scale;
     const { width, height } = this.piece.outline.frame;
     this.image.setDisplaySize(width * scale, height * scale);
-    this.outline.setScale(scale);
   }
 
   addTo(layer: Phaser.GameObjects.Layer) {
-    layer.add([this.image, this.outline]);
+    layer.add(this.image);
   }
 }

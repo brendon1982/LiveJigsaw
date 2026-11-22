@@ -68,18 +68,14 @@ test('live pieces scroll, reflow, and snap to the pannable board', async (t) => 
   await drag(167, 320, 552, 320);
   const widened = await canvas.screenshot();
   assert.deepEqual(await pixelAt(page, widened, 427, 196), sky, 'Widening the tray should reveal another column');
-  const trayEdge = await pixelAt(page, widened, 427, 153);
-  assert.ok(trayEdge[0] >= 186 && trayEdge[2] >= 190 && trayEdge[2] < 215, 'The tray piece should have a light edge');
   const boardSeam = await pixelAt(page, widened, 798, 330);
-  assert.ok(boardSeam[0] > guide[0] + 20, 'The guide should show the piece seams');
+  assert.deepEqual(boardSeam, guide, 'The faint guide should be continuous across piece boundaries');
   await drag(427, 196, 600, 110);
   assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 427, 196), sky, 'An invalid drop should return to the tray');
   await drag(427, 196, 735, 376);
   await waitForText('1 of 8 placed');
   const placed = await canvas.screenshot();
   assert.deepEqual(await pixelAt(page, placed, 735, 376), sky, 'Placed artwork should be opaque');
-  const placedEdge = await pixelAt(page, placed, 735, 304);
-  assert.ok(placedEdge[0] >= 186 && placedEdge[2] >= 190 && placedEdge[2] < 215, 'The placed piece should keep its outline');
 
   const panelBackground = [25, 46, 40, 255];
   const assertCornerAtCenter = async (horizontal, vertical) => {

@@ -2,7 +2,7 @@
 
 A browser jigsaw prototype built around live, self-running Phaser 4 scenes. Choose **Windmill** or **Lighthouse** in **Classic** (8 pieces) or **Large** (32 pieces). Each puzzle draws the source into one shared texture.
 
-The play area fills the window. Scroll the piece tray with the mouse wheel, scrollbar, or by dragging empty space. Drag the divider to make room for more columns. Drag the board to bring any puzzle corner to the center of the board viewport. The faint live image and matching piece outlines guide placement.
+The play area fills the window. Scroll the piece tray with the mouse wheel, scrollbar, or by dragging empty space. Drag the divider to make room for more columns. Drag the board to bring any puzzle corner to the center of the board viewport. The faint live image guides placement.
 
 Each source declares its maximum viewport. The engine uses it to offer puzzle sizes and decides whether to use 2× supersampling within the source and GPU texture limits. Both built-in sources support up to 1024 × 576, so Classic uses 2× capture and Large uses native resolution.
 

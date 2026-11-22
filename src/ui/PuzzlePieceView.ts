@@ -60,4 +60,8 @@ export class PuzzlePieceView {
   addTo(layer: Phaser.GameObjects.Layer) {
     layer.add(this.image);
   }
+
+  hide() {
+    this.image.setVisible(false);
+  }
 }

@@ -95,6 +95,7 @@ export class PuzzleBoardView {
     this.scene.input.off('pointerupoutside', this.cancelGesture);
     this.scene.input.setDefaultCursor('default');
     this.tray.destroy();
+    this.board.destroy();
     for (const { mask } of this.pieces) this.scene.textures.remove(mask);
   }
 
@@ -141,9 +142,8 @@ export class PuzzleBoardView {
 
     const { entry } = gesture;
     if (this.board.contains(pointer) && this.puzzle.drop(entry.piece.id, this.board.toLocal(entry.position)) === 'placed') {
-      const { x, y } = entry.piece.target;
-      entry.moveTo(x, y);
-      entry.addTo(this.board.layer);
+      this.board.addPiece(entry.piece);
+      entry.hide();
       this.tray.remove(entry, this.trayPanel.getBounds());
       this.onPlacement();
     } else {

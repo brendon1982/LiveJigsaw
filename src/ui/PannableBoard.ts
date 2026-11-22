@@ -1,10 +1,14 @@
 import Phaser from 'phaser';
 import type { Point, Size } from '../domain/geometry';
+import type { PuzzlePiece } from '../domain/Puzzle';
 import type { LivePuzzleCapture } from '../rendering/LivePuzzleCapture';
 
 export class PannableBoard {
   readonly layer: Phaser.GameObjects.Layer;
   readonly camera: Phaser.Cameras.Scene2D.Camera;
+  private readonly placedMask: Phaser.Textures.CanvasTexture;
+  private readonly placedImage: Phaser.GameObjects.Image;
+  private readonly placedPath = new Path2D();
   private viewport = new Phaser.Geom.Rectangle();
   private offset: Point;
 
@@ -15,7 +19,32 @@ export class PannableBoard {
     this.camera.inputEnabled = false;
     const guide = scene.add.image(0, 0, capture.texture.key, '__BASE').setOrigin(0)
       .setDisplaySize(size.width, size.height).setAlpha(0.24);
-    this.layer.add(guide);
+    const placedMask = scene.textures.createCanvas('live-puzzle-placed-mask', size.width, size.height);
+    if (!placedMask) throw new Error('Could not create the placed pieces mask');
+    this.placedMask = placedMask;
+    this.placedImage = scene.add.image(0, 0, capture.texture.key, '__BASE').setOrigin(0)
+      .setDisplaySize(size.width, size.height).setVisible(false);
+    this.placedImage.enableFilters().filters!.internal.addMask(placedMask.key);
+    this.layer.add([guide, this.placedImage]);
+  }
+
+  addPiece(piece: PuzzlePiece) {
+    const [first, ...rest] = piece.outline.points;
+    this.placedPath.moveTo(first.x, first.y);
+    for (const point of rest) this.placedPath.lineTo(point.x, point.y);
+    this.placedPath.closePath();
+
+    // Fill all placed shapes together so shared edges get full pixel coverage.
+    const { context } = this.placedMask;
+    context.clearRect(0, 0, this.size.width, this.size.height);
+    context.fillStyle = '#fff';
+    context.fill(this.placedPath);
+    this.placedMask.refresh();
+    this.placedImage.setVisible(true);
+  }
+
+  destroy() {
+    this.placedMask.manager.remove(this.placedMask);
   }
 
   layout(bounds: Phaser.Geom.Rectangle) {

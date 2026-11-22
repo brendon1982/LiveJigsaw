@@ -76,6 +76,12 @@ test('live pieces scroll, reflow, and snap to the pannable board', async (t) => 
   await waitForText('1 of 8 placed');
   const placed = await canvas.screenshot();
   assert.deepEqual(await pixelAt(page, placed, 735, 376), sky, 'Placed artwork should be opaque');
+  await drag(199, 309, 863, 376);
+  await waitForText('2 of 8 placed');
+  const joined = await canvas.screenshot();
+  for (const [x, y] of [[798, 365], [802, 367], [811, 370], [815, 376], [809, 385]]) {
+    assert.deepEqual(await pixelAt(page, joined, x, y), sky, 'The live guide should not show through joined pieces');
+  }
 
   const panelBackground = [25, 46, 40, 255];
   const assertCornerAtCenter = async (horizontal, vertical) => {

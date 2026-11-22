@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { chromium } from 'playwright-core';
-import { preview } from 'vite';
+import { build, preview } from 'vite';
 
 async function pixelAt(page, png, x, y) {
   return page.evaluate(async ({ png, x, y }) => {
@@ -16,7 +16,7 @@ async function pixelAt(page, png, x, y) {
   }, { png: png.toString('base64'), x, y });
 }
 
-async function openPuzzle(t, options) {
+async function openPuzzle(t, options, path = '/') {
   const server = await preview({ preview: { host: '127.0.0.1', port: 0 } });
   t.after(() => server.close());
   const { port } = server.httpServer.address();
@@ -44,10 +44,17 @@ async function openPuzzle(t, options) {
   });
   const errors = [];
   page.on('pageerror', (error) => errors.push(error.message));
-  await page.goto('http://127.0.0.1:' + port);
+  await page.goto(`http://127.0.0.1:${port}${path}`);
   const canvas = page.locator('#game canvas');
-  const waitForText = (text) => page.waitForFunction((value) => window.paintedText.includes(value), text, { timeout: 4000 });
-  await waitForText('Choose a live puzzle');
+  const waitForText = async (text) => {
+    try {
+      await page.waitForFunction((value) => window.paintedText.includes(value), text, { timeout: 4000 });
+    } catch (error) {
+      assert.deepEqual(errors, []);
+      throw error;
+    }
+  };
+  await waitForText('Classic · 8');
   return { page, canvas, waitForText, errors };
 }
 
@@ -65,7 +72,7 @@ test('live pieces scroll, reflow, and snap to the pannable board', async (t) => 
     await page.mouse.up();
   };
 
-  await click(387, 593);
+  await click(340, 361);
   await waitForText('0 of 8 placed');
   await waitForText('Drag to pan · Scroll to zoom');
   const initial = await canvas.screenshot();
@@ -130,8 +137,8 @@ test('live pieces scroll, reflow, and snap to the pannable board', async (t) => 
   await page.waitForFunction(() => document.querySelector('canvas').height === 780);
   await page.evaluate(() => { window.paintedText = []; });
   await click(99, 43);
-  await waitForText('Choose a live puzzle');
-  await click(1137, 593);
+  await waitForText('Classic · 8');
+  await click(1160, 361);
   await waitForText('0 of 32 placed');
   await drag(167, 320, 552, 320);
   const largeBefore = await canvas.screenshot();
@@ -147,15 +154,75 @@ test('live pieces scroll, reflow, and snap to the pannable board', async (t) => 
   await page.waitForFunction(() => document.querySelector('canvas').width === 900);
   await page.evaluate(() => { window.paintedText = []; });
   await click(99, 43);
-  await waitForText('Choose a live puzzle');
-  const pickerZoom = 900 / 1248;
-  const pickerTop = Math.floor((620 - Math.floor(540 * pickerZoom)) / 2);
-  await click(351 * pickerZoom, pickerTop + 473 * pickerZoom);
+  await waitForText('Classic · 8');
+  await click(460, 361);
   await waitForText('0 of 8 placed');
   const replay = await canvas.screenshot();
   assert.deepEqual(await pixelAt(page, replay, 85, 196), sky);
   assert.notDeepEqual(await pixelAt(page, initial, 85, 196), sky, 'Reopening the same puzzle should shuffle the tray again');
   assert.deepEqual(errors, []);
+});
+
+test('the picker scrolls past two cards and clips previews', async (t) => {
+  await build({
+    base: '/picker-fixture/',
+    build: {
+      outDir: 'dist/picker-fixture',
+      rollupOptions: { input: 'tests/fixtures/puzzle-picker.html' },
+    },
+  });
+  const path = '/picker-fixture/tests/fixtures/puzzle-picker.html';
+  const previewColor = [255, 0, 255, 255];
+  await t.test('mouse wheel scrolls to a selectable third card', async (t) => {
+    const { page, canvas, waitForText, errors } = await openPuzzle(t, { viewport: { width: 1320, height: 540 } }, path);
+    const initial = await canvas.screenshot();
+    assert.deepEqual(await pixelAt(page, initial, 120, 165), [192, 221, 219, 255]);
+    assert.notDeepEqual(await pixelAt(page, initial, 800, 165), [38, 58, 54, 255], 'The second card should sit beside the first');
+    await page.setViewportSize({ width: 768, height: 540 });
+    await page.waitForFunction(() => document.querySelector('canvas').width === 768);
+    const narrow = await canvas.screenshot();
+    assert.deepEqual(await pixelAt(page, narrow, 140, 165), [192, 221, 219, 255]);
+    assert.deepEqual(await pixelAt(page, narrow, 700, 165), [38, 58, 54, 255], 'The same picker should reflow to one column');
+    await page.setViewportSize({ width: 1320, height: 540 });
+    await page.waitForFunction(() => document.querySelector('canvas').width === 1320);
+    await page.mouse.move(340, 300);
+    await page.mouse.wheel(0, 1000);
+    const scrolled = await canvas.screenshot();
+    assert.deepEqual(await pixelAt(page, scrolled, 120, 165), previewColor);
+    for (const [x, y] of [[50, 165], [582, 165], [120, 148], [120, 452]]) {
+      assert.notDeepEqual(await pixelAt(page, scrolled, x, y), previewColor, `Artwork should stay inside all four preview edges (${x}, ${y})`);
+    }
+    await page.mouse.click(340, 477);
+    await waitForText('0 of 8 placed');
+    assert.deepEqual(errors, []);
+  });
+
+  await t.test('touch can start scrolling on a card button and tap the third card', async (t) => {
+    const { page, canvas, waitForText, errors } = await openPuzzle(t, {
+      viewport: { width: 768, height: 780 },
+      hasTouch: true,
+      isMobile: true,
+    }, path);
+    const touch = await page.context().newCDPSession(page);
+    const swipeUp = async (x, startY, endY) => {
+      await touch.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y: startY }] });
+      for (let step = 1; step <= 10; step += 1) {
+        const y = startY + (endY - startY) * step / 10;
+        await touch.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y }] });
+      }
+      await touch.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    };
+
+    const initial = await canvas.screenshot();
+    await swipeUp(400, 367, 145);
+    assert.notDeepEqual(await pixelAt(page, await canvas.screenshot(), 140, 160), await pixelAt(page, initial, 140, 160));
+    assert.equal(await page.evaluate(() => window.paintedText.includes('0 of 8 placed')), false, 'A swipe should not activate the button');
+    await swipeUp(170, 700, 180);
+    assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 140, 410), previewColor, 'A swipe should reveal the third card');
+    await page.touchscreen.tap(400, 723);
+    await waitForText('0 of 8 placed');
+    assert.deepEqual(errors, []);
+  });
 });
 
 test('tablet touch scrolls, resizes, zooms, cancels, and places pieces', async (t) => {
@@ -176,7 +243,7 @@ test('tablet touch scrolls, resizes, zooms, cancels, and places pieces', async (
     await dispatch(end);
   };
 
-  await page.touchscreen.tap(288, 556);
+  await page.touchscreen.tap(522, 367);
   await waitForText('0 of 8 placed');
   await waitForText('Drag to pan · Pinch to zoom');
   const startingPiece = await pixelAt(page, await canvas.screenshot(), 85, 196);
@@ -220,8 +287,8 @@ test('tablet touch scrolls, resizes, zooms, cancels, and places pieces', async (
   await page.waitForFunction(() => document.querySelector('canvas').height === 1024);
   await page.evaluate(() => { window.paintedText = []; });
   await page.touchscreen.tap(99, 43);
-  await waitForText('Choose a live puzzle');
-  await page.touchscreen.tap(407, 511);
+  await waitForText('Classic · 8');
+  await page.touchscreen.tap(395, 367);
   await waitForText('0 of 8 placed');
   assert.deepEqual(errors, []);
 });

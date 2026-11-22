@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Jigsaw picker fixture</title>
+  </head>
+  <body>
+    <main id="game"></main>
+    <script type="module">
+      import Phaser from 'phaser';
+      import { puzzleSources } from '../../src/puzzles/catalog';
+
+      const previewColor = 0xff00ff;
+      class OversizedPreviewScene extends Phaser.Scene {
+        static key = 'OversizedPreview';
+
+        constructor() {
+          super(OversizedPreviewScene.key);
+        }
+
+        create({ width, height }) {
+          this.add.rectangle(0, 0, width, height, previewColor).setOrigin(0);
+        }
+      }
+
+      puzzleSources.push({
+        title: 'Oversized preview',
+        maxViewport: { width: 512, height: 288 },
+        scene: OversizedPreviewScene,
+        drawPreview(scene, { width, height }) {
+          const graphics = scene.add.graphics();
+          graphics.fillStyle(previewColor).fillRect(-40, -40, width + 80, height + 80);
+          return [graphics];
+        },
+      });
+
+      await import('../../src/main');
+    </script>
+  </body>
+</html>

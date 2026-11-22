@@ -6,6 +6,8 @@ import type { Size } from '../domain/geometry';
  * as its scene data and captures the scene's display list. Draw from (0, 0)
  * and let the host manage input, visibility, and the capture camera.
  * maxViewport caps both the logical artwork size and the capture resolution.
+ * drawPreview creates objects from (0, 0). The picker snapshots them within
+ * the requested viewport and destroys them after drawing.
  */
 export type PuzzleSource = Readonly<{
   title: string;

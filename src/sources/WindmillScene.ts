@@ -1,25 +1,30 @@
-import type Phaser from 'phaser';
-import { type Artwork, PuzzleSourceScene, sceneHeight, sceneWidth } from './PuzzleSourceScene';
+import Phaser from 'phaser';
+import type { Size } from '../domain/geometry';
 
-export class WindmillScene extends PuzzleSourceScene {
+export class WindmillScene extends Phaser.Scene {
   static readonly key = 'Windmill';
+  private animate!: (delta: number) => void;
 
   constructor() {
     super(WindmillScene.key);
   }
 
-  protected drawArtwork() {
-    return drawWindmill(this);
+  create(viewport: Size) {
+    this.animate = drawWindmill(this, viewport).animate;
+  }
+
+  update(_time: number, delta: number) {
+    this.animate(delta);
   }
 }
 
-export function drawWindmill(scene: Phaser.Scene): Artwork {
+export function drawWindmill(scene: Phaser.Scene, { width, height }: Size) {
   const landscape = scene.add.graphics();
-  landscape.fillStyle(0xc0dddb).fillRect(0, 0, sceneWidth, sceneHeight);
+  landscape.fillStyle(0xc0dddb).fillRect(0, 0, width, height);
   landscape.fillStyle(0xfdf0ba).fillCircle(393, 66, 27);
   landscape.fillStyle(0x91ae87).fillEllipse(115, 223, 360, 115);
   landscape.fillStyle(0x789774).fillEllipse(385, 243, 355, 150);
-  landscape.fillStyle(0x587f68).fillRect(0, 235, sceneWidth, 53);
+  landscape.fillStyle(0x587f68).fillRect(0, 235, width, height - 235);
   landscape.fillStyle(0xead7ac).fillRect(226, 151, 60, 91);
   landscape.fillStyle(0xa25b48).fillTriangle(216, 151, 256, 118, 296, 151);
   landscape.fillStyle(0x755344).fillRect(249, 206, 14, 36);
@@ -34,5 +39,10 @@ export function drawWindmill(scene: Phaser.Scene): Artwork {
   }
   sails.fillStyle(0x755344).fillCircle(0, 0, 5);
 
-  return { objects: [landscape, sails], animate: (delta) => { sails.rotation += delta * 0.00035; } };
+  return {
+    objects: [landscape, sails],
+    animate(delta: number) {
+      sails.rotation += delta * 0.00035;
+    },
+  };
 }

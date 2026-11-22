@@ -7,8 +7,8 @@ body {
 }
 
 #game {
-  width: min(100%, 1248px);
-  height: min(100svh, 540px);
+  width: 100%;
+  height: 100svh;
   overflow: hidden;
 }
 

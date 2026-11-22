@@ -1,0 +1,43 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import { givenPuzzle } from './puzzleScenario.mjs';
+
+test('pieces must be dropped near their own target', () => {
+  const game = givenPuzzle({ snapTolerance: 5 });
+  const topLeft = game.whenPiece(0, 0);
+
+  assert.equal(topLeft.dropsOn(1, 0), 'missed');
+  assert.equal(topLeft.dropsNearTarget({ x: 4, y: 4 }), 'missed');
+  game.expectProgress({ placed: 0, total: 4 });
+
+  assert.equal(topLeft.dropsNearTarget({ x: 3, y: 4 }), 'placed');
+  game.expectProgress({ placed: 1, total: 4 });
+});
+
+test('placing one piece twice does not fill two slots', () => {
+  const game = givenPuzzle({ columns: 2, rows: 1 });
+  const left = game.whenPiece(0, 0);
+
+  assert.equal(left.dropsOn(0, 0), 'placed');
+  assert.equal(left.dropsOn(0, 0), 'already-placed');
+  game.expectProgress({ placed: 1, total: 2 });
+
+  assert.equal(game.whenPiece(1, 0).dropsOn(1, 0), 'placed');
+  game.expectProgress({ placed: 2, total: 2, complete: true });
+});
+
+test('a zero-tolerance single-piece puzzle needs an exact drop', () => {
+  const game = givenPuzzle({ columns: 1, rows: 1, snapTolerance: 0 });
+  const onlyPiece = game.whenPiece(0, 0);
+
+  assert.equal(onlyPiece.dropsNearTarget({ x: 0.1 }), 'missed');
+  assert.equal(onlyPiece.dropsNearTarget(), 'placed');
+  game.expectProgress({ placed: 1, total: 1, complete: true });
+});
+
+test('a drop from outside the puzzle leaves its progress intact', () => {
+  const game = givenPuzzle();
+
+  assert.throws(() => game.puzzle.drop('unregistered-piece', { x: 64, y: 72 }), /Unknown piece/);
+  game.expectProgress({ placed: 0, total: 4 });
+});

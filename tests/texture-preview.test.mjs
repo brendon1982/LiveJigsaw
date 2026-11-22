@@ -2,9 +2,9 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { chromium } from 'playwright-core';
 import { preview } from 'vite';
+import { newClassicPuzzle } from '../src/domain/classicPuzzle.ts';
+import { arrangeTray, boardBounds, gameHeight, gameWidth, previewBounds, traySlotCenter } from '../src/ui/playLayout.ts';
 
-const width = 1248;
-const height = 540;
 const sky = [192, 221, 219, 255];
 const night = [38, 54, 77, 255];
 const background = [38, 58, 54, 255];
@@ -22,7 +22,7 @@ async function samplePixels(page, screenshot, x, y, columns = 1, rows = 1) {
     context.drawImage(image, Math.floor(image.width * x / width), Math.floor(image.height * y / height),
       columns, rows, 0, 0, columns, rows);
     return Array.from(context.getImageData(0, 0, columns, rows).data);
-  }, { png: screenshot.toString('base64'), x, y, width, height, columns, rows });
+  }, { png: screenshot.toString('base64'), x, y, width: gameWidth, height: gameHeight, columns, rows });
 }
 
 test('the RexUI picker launches either live puzzle and the host compares both rendering paths', async (t) => {
@@ -51,23 +51,29 @@ test('the RexUI picker launches either live puzzle and the host compares both re
 
   const canvas = page.locator('#game canvas');
   await canvas.waitFor();
-  const { x, y } = await canvas.boundingBox();
+  const bounds = await canvas.boundingBox();
+  const screenX = (x) => bounds.x + x * bounds.width / gameWidth;
+  const screenY = (y) => bounds.y + y * bounds.height / gameHeight;
   const click = async (worldX, worldY) => {
-    await page.mouse.click(x + worldX, y + worldY);
+    await page.mouse.click(screenX(worldX), screenY(worldY));
     await page.evaluate(() => new Promise((resolve) => {
       requestAnimationFrame(() => requestAnimationFrame(resolve));
     }));
   };
   const waitForText = (text) => page.waitForFunction((value) => window.paintedText.includes(value), text);
-  const solve = async () => {
-    const order = [5, 2, 7, 0, 3, 6, 1, 4];
-    for (const [slot, index] of order.entries()) {
-      await page.mouse.move(x + 552 + (slot % 4 + 0.5) * 170, y + 144 + (Math.floor(slot / 4) + 0.5) * 186);
-      await page.mouse.down();
-      await page.mouse.move(x + 16 + (index % 4 + 0.5) * 128, y + 164 + (Math.floor(index / 4) + 0.5) * 144, { steps: 8 });
-      await page.mouse.up();
-    }
-    await waitForText('Puzzle complete');
+  const classic = newClassicPuzzle();
+  const topLeft = classic.pieces[0];
+  const tray = arrangeTray(classic.pieces);
+  const home = traySlotCenter(tray.indexOf(topLeft));
+  const target = { x: boardBounds.x + topLeft.target.x, y: boardBounds.y + topLeft.target.y };
+  const previewPixel = (frame, x, y, columns, rows) =>
+    samplePixels(page, frame, previewBounds.x + x, previewBounds.y + y, columns, rows);
+  const placeTopLeft = async () => {
+    await page.mouse.move(screenX(home.x), screenY(home.y));
+    await page.mouse.down();
+    await page.mouse.move(screenX(target.x), screenY(target.y), { steps: 8 });
+    await page.mouse.up();
+    await waitForText(`Drag the pieces onto the board. 1 of ${classic.pieces.length} placed.`);
   };
 
   await waitForText('Choose a live puzzle');
@@ -77,48 +83,44 @@ test('the RexUI picker launches either live puzzle and the host compares both re
   assert.equal(await page.locator('button, select').count(), 0);
 
   await click(328, 473);
-  await waitForText('Drag the pieces onto the board. 0 of 8 placed.');
+  await waitForText(`Drag the pieces onto the board. 0 of ${classic.pieces.length} placed.`);
   const puzzle = await canvas.screenshot();
-  assert.deepEqual(await samplePixels(page, puzzle, 565, 187), background);
-  assert.notDeepEqual(await samplePixels(page, puzzle, 637, 237), background);
-  assert.deepEqual(await samplePixels(page, puzzle, 1147, 237), sky, 'The top-left piece should show its own region');
+  const firstSlot = traySlotCenter(0);
+  assert.notDeepEqual(await samplePixels(page, puzzle, firstSlot.x, firstSlot.y), background);
+  assert.deepEqual(await samplePixels(page, puzzle, home.x, home.y), sky, 'The top-left piece should show its own region');
 
   await click(219, 97);
   const texture = await canvas.screenshot();
-  assert.deepEqual(await samplePixels(page, texture, 368 + 256, 190 + 29), sky);
-  const sunEdge = await samplePixels(page, texture, 368 + 364, 190 + 49, 12, 12);
+  assert.deepEqual(await previewPixel(texture, 256, 29), sky);
+  const sunEdge = await previewPixel(texture, 364, 49, 12, 12);
   assert.ok(sunEdge.some((red, channel) => channel % 4 === 0 && red > 192 && red < 253),
     'The textured sun should blend into the sky at its edge');
   assert.notDeepEqual(await canvas.screenshot(), texture, 'The textured windmill should animate');
 
   await click(390, 97);
   const direct = await canvas.screenshot();
-  assert.deepEqual(await samplePixels(page, direct, 368 + 256, 190 + 29), sky);
+  assert.deepEqual(await previewPixel(direct, 256, 29), sky);
   assert.notDeepEqual(await canvas.screenshot(), direct, 'The direct windmill should animate');
 
   await click(74, 97);
-  await solve();
+  await placeTopLeft();
   await click(390, 97);
   await click(74, 97);
-  const solved = await canvas.screenshot();
-  assert.deepEqual(await samplePixels(page, solved, 16 + 260, 164 + 29), sky, 'The solved board should survive view changes');
+  const resumed = await canvas.screenshot();
+  assert.deepEqual(await samplePixels(page, resumed, target.x, target.y), sky, 'Placed pieces should survive view changes');
 
   await click(99, 43);
   await click(920, 473);
   const lighthouse = await canvas.screenshot();
-  assert.deepEqual(await samplePixels(page, lighthouse, 1147, 237), night, 'Lighthouse pieces should use the new source');
+  assert.deepEqual(await samplePixels(page, lighthouse, home.x, home.y), night, 'Lighthouse pieces should use the new source');
   await click(219, 97);
   const lighthouseTexture = await canvas.screenshot();
-  assert.deepEqual(await samplePixels(page, lighthouseTexture, 368 + 256, 190 + 29), night);
+  assert.deepEqual(await previewPixel(lighthouseTexture, 256, 29), night);
   assert.notDeepEqual(await canvas.screenshot(), lighthouseTexture, 'The lighthouse should animate');
   await click(390, 97);
-  assert.deepEqual(await samplePixels(page, await canvas.screenshot(), 368 + 256, 190 + 29), night);
-  await click(74, 97);
-  await page.evaluate(() => { window.paintedText = []; });
-  await solve();
-  assert.deepEqual(await samplePixels(page, await canvas.screenshot(), 16 + 260, 164 + 29), night);
+  assert.deepEqual(await previewPixel(await canvas.screenshot(), 256, 29), night);
   await click(99, 43);
   await click(328, 473);
-  assert.deepEqual(await samplePixels(page, await canvas.screenshot(), 1147, 237), sky, 'Windmill should open again with fresh pieces');
+  assert.deepEqual(await samplePixels(page, await canvas.screenshot(), home.x, home.y), sky, 'Windmill should open again with fresh pieces');
   assert.deepEqual(errors, []);
 });

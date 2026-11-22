@@ -17,4 +17,11 @@ pnpm dev
 
 Run `pnpm check` for type checking, `pnpm build` for the production build, and `pnpm preview` to serve that build locally.
 
-Run `pnpm test:browser` with Google Chrome installed to verify the texture preview in a headless browser. Set `LIVE_JIGSAW_BROWSER=msedge` to use Microsoft Edge.
+Run `pnpm test` for fast puzzle-rule and geometry tests. Run `pnpm test:browser` with Google Chrome installed to verify scene switching, WebGL rendering, and dragging. Set `LIVE_JIGSAW_BROWSER=msedge` to use Microsoft Edge.
+
+## Reading the code
+
+- [Domain](src/domain/Puzzle.ts) owns the board, piece outlines, drop rules, and completion.
+- [Play scene](src/ui/PlayPuzzleScene.ts) coordinates the board UI, view controls, and the selected source.
+- [Capture adapter](src/rendering/LivePuzzleCapture.ts) owns the source lifecycle and the shared Phaser texture.
+- [Source catalog](src/sources/catalog.ts) lists the built-in scenes. Add a scene class and a picker preview using the [source contract](src/sources/PuzzleSource.ts).

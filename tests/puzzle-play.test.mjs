@@ -28,6 +28,13 @@ async function openPuzzle(t, options) {
 
   const page = await browser.newPage(options);
   await page.addInitScript(() => {
+    // Use a repeatable game seed so the placement coordinates refer to known pieces.
+    const getRandomValues = crypto.getRandomValues.bind(crypto);
+    crypto.getRandomValues = (values) => {
+      crypto.getRandomValues = getRandomValues;
+      values[0] = 1_011_889;
+      return values;
+    };
     window.paintedText = [];
     const fillText = CanvasRenderingContext2D.prototype.fillText;
     CanvasRenderingContext2D.prototype.fillText = function (text, ...args) {
@@ -133,6 +140,9 @@ test('live pieces scroll, reflow, and snap to the pannable board', async (t) => 
   const pickerTop = Math.floor((620 - Math.floor(540 * pickerZoom)) / 2);
   await click(351 * pickerZoom, pickerTop + 473 * pickerZoom);
   await waitForText('0 of 8 placed');
+  const replay = await canvas.screenshot();
+  assert.deepEqual(await pixelAt(page, replay, 85, 196), sky);
+  assert.notDeepEqual(await pixelAt(page, initial, 85, 196), sky, 'Reopening the same puzzle should shuffle the tray again');
   assert.deepEqual(errors, []);
 });
 

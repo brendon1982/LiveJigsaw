@@ -6,10 +6,12 @@ import { SelectPuzzleScene } from './ui/SelectPuzzleScene';
 import './style.css';
 
 const gameRoot = document.querySelector<HTMLElement>('#game')!;
+const [seed] = crypto.getRandomValues(new Uint32Array(1));
 
 new Phaser.Game({
   type: Phaser.WEBGL,
   parent: gameRoot,
+  seed: [String(seed)],
   width: '100%',
   height: '100%',
   backgroundColor: '#263a36',

@@ -5,10 +5,10 @@ import type { LivePuzzleCapture } from '../rendering/LivePuzzleCapture';
 import type { UIScene } from './button';
 import { PannableBoard } from './PannableBoard';
 import { PieceTray } from './PieceTray';
-import { arrangeTray, playWorkspace } from './playLayout';
+import { playWorkspace } from './playLayout';
 import { PuzzlePieceView } from './PuzzlePieceView';
 
-type Gesture = { pointerId: number; start?: Point } & (
+type Gesture = { pointerId: number } & (
   | { kind: 'tray-touch'; entry: PuzzlePieceView; start: Point }
   | { kind: 'piece'; entry: PuzzlePieceView; offset: Point }
   | { kind: 'pan'; pointer: Phaser.Input.Pointer; previous: Point }
@@ -48,7 +48,8 @@ export class PuzzleBoardView {
     capture: LivePuzzleCapture,
     private readonly onPlacement: () => void,
   ) {
-    this.pieces = arrangeTray(puzzle.pieces).map((piece) => new PuzzlePieceView(scene, capture, piece));
+    this.pieces = Phaser.Math.RND.shuffle([...puzzle.pieces])
+      .map((piece) => new PuzzlePieceView(scene, capture, piece));
 
     this.trayPanel = scene.add.rectangle(0, 0, 1, 1, 0x304841);
     const boardPanel = scene.add.rectangle(0, 0, 1, 1, 0x192e28);
@@ -145,7 +146,7 @@ export class PuzzleBoardView {
 
   private startPieceDrag(pointer: Phaser.Input.Pointer, entry: PuzzlePieceView, grab: Point) {
     const offset = { x: entry.position.x - grab.x, y: entry.position.y - grab.y };
-    this.gesture = { kind: 'piece', pointerId: pointer.id, entry, offset, start: { x: grab.x, y: grab.y } };
+    this.gesture = { kind: 'piece', pointerId: pointer.id, entry, offset };
     this.tray.lift(entry, this.board.zoom);
     entry.addTo(this.floatingPieces);
     entry.moveTo(pointer.x + offset.x, pointer.y + offset.y);
@@ -170,7 +171,7 @@ export class PuzzleBoardView {
       if (dx > 0 && Math.abs(dy) <= dx * pieceDragSlope) {
         if (distance >= pieceDragThreshold) this.startPieceDrag(pointer, gesture.entry, gesture.start);
       } else if (Math.abs(dy) >= trayScrollThreshold) {
-        this.gesture = { kind: 'scroll', pointerId: pointer.id, start: gesture.start, previous: { x: pointer.x, y: pointer.y } };
+        this.gesture = { kind: 'scroll', pointerId: pointer.id, previous: { x: pointer.x, y: pointer.y } };
         this.tray.scrollBy(dy);
       }
     } else if (gesture.kind === 'piece') {
@@ -181,14 +182,6 @@ export class PuzzleBoardView {
       if (gesture.kind === 'pan') this.board.pan(dx, dy);
       else this.tray.scrollBy(dy);
       gesture.previous = { x: pointer.x, y: pointer.y };
-    }
-    if (import.meta.env.DEV && pointer.wasTouch && gesture.start) {
-      const dx = pointer.x - gesture.start.x;
-      const dy = pointer.y - gesture.start.y;
-      const angle = Math.atan2(dy, Math.abs(dx)) * 180 / Math.PI;
-      const direction = dx === 0 ? 'vertical' : dx > 0 ? 'rightward' : 'leftward';
-      const mode = this.gesture?.kind === 'tray-touch' ? 'pending' : this.gesture?.kind;
-      console.log(`[Live Jigsaw] Touch drag angle ${angle.toFixed(1)}° from horizontal (${direction}, ${mode})`);
     }
   };
 

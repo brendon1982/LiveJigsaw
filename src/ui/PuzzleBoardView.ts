@@ -54,7 +54,14 @@ export class PuzzleBoardView {
     this.trayPanel = scene.add.rectangle(0, 0, 1, 1, 0x304841);
     const boardPanel = scene.add.rectangle(0, 0, 1, 1, 0x192e28);
     const dividerWidth = 10;
-    const divider = scene.rexUI.add.roundRectangle(0, 0, dividerWidth, 1, 4, 0x809b90);
+    const divider = scene.rexUI.add.roundRectangle(0, 0, dividerWidth, 1, 0, 0x40574f)
+      .setStrokeStyle(1, 0x71897e);
+    const grip = scene.add.graphics().setDepth(1);
+    grip.fillStyle(0x607b70).fillRoundedRect(-4, -16, 8, 32, 3);
+    grip.fillStyle(0xdce9e0);
+    for (const y of [-8, -3, 3, 8]) {
+      grip.fillCircle(-2, y, 1).fillCircle(2, y, 1);
+    }
     this.tray = new PieceTray(scene, this.pieces);
     this.board = new PannableBoard(scene, puzzle.board.size, capture);
     this.floatingPieces = scene.add.layer();
@@ -68,6 +75,7 @@ export class PuzzleBoardView {
     if (divider.input) divider.input.cursor = 'ew-resize';
 
     const layoutPanels = () => {
+      grip.setPosition(divider.x, divider.y);
       this.tray.layout(this.trayPanel.getBounds());
       this.board.layout(boardPanel.getBounds());
     };

@@ -85,8 +85,11 @@ test('live pieces scroll, reflow, and snap to the pannable board', async (t) => 
   const scrolled = await canvas.screenshot();
   assert.notDeepEqual(await pixelAt(page, scrolled, 85, 196), await pixelAt(page, initial, 85, 196));
   await page.mouse.wheel(0, -1000);
-  await drag(167, 320, 552, 320);
+  const gripColor = await pixelAt(page, initial, 167, 448);
+  assert.notDeepEqual(gripColor, await pixelAt(page, initial, 167, 320), 'The divider should have a visible center grip');
+  await drag(167, 448, 552, 448);
   const widened = await canvas.screenshot();
+  assert.deepEqual(await pixelAt(page, widened, 552, 448), gripColor, 'The grip should move with the divider');
   assert.deepEqual(await pixelAt(page, widened, 427, 196), sky, 'Widening the tray should reveal another column');
   const boardSeam = await pixelAt(page, widened, 798, 330);
   assert.deepEqual(boardSeam, guide, 'The faint guide should be continuous across piece boundaries');
@@ -282,7 +285,7 @@ test('tablet touch scrolls, resizes, zooms, cancels, and places pieces', async (
   assert.notDeepEqual(await pixelAt(page, await canvas.screenshot(), 85, 196), startingPiece, 'A swipe starting on a piece should scroll');
   await moveFinger(85, 196, 85, 310);
   assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 85, 196), startingPiece);
-  await moveFinger(167, 340, 450, 340);
+  await moveFinger(167, 442, 450, 442);
   assert.notDeepEqual(await pixelAt(page, await canvas.screenshot(), 199, 196), [48, 72, 65, 255], 'The touch divider should reflow the tray');
 
   const panelBackground = [25, 46, 40, 255];

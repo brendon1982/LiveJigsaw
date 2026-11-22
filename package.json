@@ -10,7 +10,7 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "node --experimental-strip-types --disable-warning=ExperimentalWarning --test \"tests/domain/*.test.mjs\"",
-    "test:browser": "pnpm build && node --experimental-strip-types --disable-warning=ExperimentalWarning --test tests/texture-preview.test.mjs"
+    "test:browser": "pnpm build && node --experimental-strip-types --disable-warning=ExperimentalWarning --test tests/puzzle-play.test.mjs"
   },
   "dependencies": {
     "phaser": "^4.1.0",

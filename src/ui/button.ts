@@ -17,15 +17,6 @@ export function makeButton(scene: UIScene, x: number, y: number, text: string, c
   }).setOrigin(0).layout();
   scene.rexUI.add.click(button).on('click', click);
   button.input!.cursor = 'pointer';
-  let selected = false;
-  button.on('pointerover', () => background.setFillStyle(selected ? 0xe3c78c : 0x4b655b));
-  button.on('pointerout', () => background.setFillStyle(selected ? 0xe3c78c : 0x3a514b));
-
-  return {
-    setSelected(active: boolean) {
-      selected = active;
-      background.setFillStyle(active ? 0xe3c78c : 0x3a514b);
-      caption.setColor(active ? '#233832' : textColor);
-    },
-  };
+  button.on('pointerover', () => background.setFillStyle(0x4b655b));
+  button.on('pointerout', () => background.setFillStyle(0x3a514b));
 }

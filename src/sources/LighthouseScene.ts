@@ -1,6 +1,8 @@
 import Phaser from 'phaser';
 import type { Size } from '../domain/geometry';
 
+const artworkSize = { width: 512, height: 288 };
+
 export class LighthouseScene extends Phaser.Scene {
   static readonly key = 'Lighthouse';
   private animate!: (delta: number) => void;
@@ -10,7 +12,9 @@ export class LighthouseScene extends Phaser.Scene {
   }
 
   create(viewport: Size) {
-    this.animate = drawLighthouse(this, viewport).animate;
+    const { objects, animate } = drawLighthouse(this, artworkSize);
+    this.add.container(0, 0, objects).setScale(viewport.width / artworkSize.width, viewport.height / artworkSize.height);
+    this.animate = animate;
   }
 
   update(_time: number, delta: number) {

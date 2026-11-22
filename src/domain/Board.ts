@@ -20,7 +20,7 @@ export class Board {
     if (!Number.isFinite(size.width) || size.width <= 0 || !Number.isFinite(size.height) || size.height <= 0) {
       throw new RangeError('A board needs positive, finite dimensions');
     }
-    this.size = { ...size };
+    this.size = { width: size.width, height: size.height };
     this.columns = columns;
     this.rows = rows;
     const width = size.width / columns;

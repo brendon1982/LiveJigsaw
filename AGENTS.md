@@ -2,6 +2,10 @@
 
 Live Jigsaw is a Phaser 4 jigsaw game with RexUI controls. Each puzzle samples one shared texture from an autonomous Phaser scene.
 
+## Code style
+
+Prefer cohesive, readable, and simple code. Keep related behavior together, use names that reflect the game, and make the main flow easy to follow. Add an abstraction when it clarifies the code or serves a concrete need.
+
 ## Where changes belong
 
 - [Domain](src/domain) owns board dimensions, the grid and cut geometry, piece identities, snapping, and completion. Keep it independent of Phaser, RexUI, and the DOM. Put state transitions on the domain entities and use value objects when they make coordinates or rules clearer.

@@ -9,7 +9,7 @@ import { PuzzleBoardView } from './PuzzleBoardView';
 import { SelectPuzzleScene } from './SelectPuzzleScene';
 import { hasTouchTargets } from './touchLayout';
 
-type Selection = { source: PuzzleSource; size: PuzzleSize; connectorStyle?: ConnectorStyleId };
+export type PuzzleSelection = { source: PuzzleSource; size: PuzzleSize; connectorStyle?: ConnectorStyleId; seed: number };
 
 export class PlayPuzzleScene extends Phaser.Scene {
   static readonly key = 'PlayPuzzle';
@@ -19,9 +19,9 @@ export class PlayPuzzleScene extends Phaser.Scene {
     super(PlayPuzzleScene.key);
   }
 
-  create({ source, size, connectorStyle }: Selection) {
-    const puzzle = createPuzzle(size, connectorStyle);
-    const capture = new LivePuzzleCapture(this, source, puzzle.board.size);
+  create({ source, size, connectorStyle, seed }: PuzzleSelection) {
+    const puzzle = createPuzzle(size, connectorStyle, seed);
+    const capture = new LivePuzzleCapture(this, source, { ...puzzle.board.size, seed: puzzle.seed });
 
     makeButton(this, 24, 22, 'All puzzles', () => this.scene.start(SelectPuzzleScene.key), 150);
     const title = this.add.text(196, 19, source.title, {

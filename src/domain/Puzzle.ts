@@ -24,17 +24,19 @@ export type DropResult = 'placed' | 'missed' | 'already-placed';
 export class Puzzle {
   readonly board: Board;
   readonly pieces: readonly PuzzlePiece[];
+  readonly seed: number;
   private readonly snapTolerance: number;
   private readonly piecesById: ReadonlyMap<string, PuzzlePiece>;
   private readonly placed = new Set<string>();
 
-  constructor(board: Board, snapTolerance: number, connectorStyle: ConnectorStyleId = 'classic') {
+  constructor(board: Board, snapTolerance: number, connectorStyle: ConnectorStyleId = 'classic', seed = 0) {
     if (!Number.isFinite(snapTolerance) || snapTolerance < 0) {
       throw new RangeError('Snap tolerance must be finite and non-negative');
     }
     this.board = board;
+    this.seed = seed;
     this.snapTolerance = snapTolerance;
-    const outlines = PieceOutline.forBoard(board, connectorStyle);
+    const outlines = PieceOutline.forBoard(board, connectorStyle, seed);
     this.pieces = board.cells.map((cell, index) => new PuzzlePiece(cell, outlines[index]));
     this.piecesById = new Map(this.pieces.map((piece) => [piece.id, piece]));
   }

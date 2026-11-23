@@ -1,7 +1,6 @@
 import Phaser from 'phaser';
-import type { Size } from '../domain/geometry';
 import { captureScale } from '../domain/puzzleSizes';
-import type { PuzzleSource } from '../puzzles/PuzzleSource';
+import type { PuzzleSource, PuzzleSourceSceneData } from '../puzzles/PuzzleSource';
 
 export class LivePuzzleCapture {
   readonly texture: Phaser.Textures.DynamicTexture;
@@ -11,14 +10,15 @@ export class LivePuzzleCapture {
   constructor(
     private readonly host: Phaser.Scene,
     source: PuzzleSource,
-    private readonly size: Size,
+    private readonly data: PuzzleSourceSceneData,
   ) {
+    const { width, height } = data;
     this.sourceScene = host.scene.get(source.scene.key);
     const renderer = host.renderer as Phaser.Renderer.WebGL.WebGLRenderer;
     const gl = renderer.gl;
-    this.scale = captureScale(size, source.maxViewport, gl.getParameter(gl.MAX_TEXTURE_SIZE));
+    this.scale = captureScale(data, source.maxViewport, gl.getParameter(gl.MAX_TEXTURE_SIZE));
     const texture = host.textures.addDynamicTexture(
-      'live-puzzle-output', size.width * this.scale, size.height * this.scale,
+      'live-puzzle-output', width * this.scale, height * this.scale,
     );
     if (!texture) throw new Error('Could not create the puzzle render target');
     // The framebuffer is single-sampled. Supersample when the source and GPU have room.
@@ -29,7 +29,7 @@ export class LivePuzzleCapture {
 
   start() {
     this.sourceScene.events.once(Phaser.Scenes.Events.CREATE, this.onSourceCreated);
-    this.host.scene.launch(this.sourceScene, this.size);
+    this.host.scene.launch(this.sourceScene, this.data);
   }
 
   destroy() {

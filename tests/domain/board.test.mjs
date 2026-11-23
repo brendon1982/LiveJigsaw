@@ -16,7 +16,7 @@ test('the board controls the number, targets, and unique identities of pieces', 
 });
 
 test('neighboring tabs and sockets follow the same outline on both axes', () => {
-  const game = givenPuzzle();
+  const game = givenPuzzle({ seed: 2 });
   const [topLeft, topRight, bottomLeft] = game.puzzle.pieces;
   const [leftCell] = game.board.cells;
   const { width, height } = leftCell.bounds;
@@ -45,7 +45,7 @@ test('small pieces stay inside the board and their frames preserve the local out
 
 test('varied connector profiles follow the same seam in reverse and shift along the edge', () => {
   for (const connectorStyle of ['rounded', 'angular']) {
-    const game = givenPuzzle({ columns: 4, rows: 1, connectorStyle });
+    const game = givenPuzzle({ columns: 4, rows: 1, connectorStyle, seed: 42 });
     const seams = Array.from({ length: 3 }, (_, column) => {
       const first = game.pieceAt(column, 0);
       const second = game.pieceAt(column + 1, 0);
@@ -58,6 +58,21 @@ test('varied connector profiles follow the same seam in reverse and shift along 
     assert.notEqual(seams[0].length, seams[1].length, 'Two seams should use different profiles');
     assert.equal(seams[0].length, seams[2].length);
     assert.notEqual(seams[0][0].y, seams[2][0].y, 'The same profile should appear at different offsets');
+  }
+});
+
+test('recreating a puzzle from its seed reproduces every piece', () => {
+  for (const connectorStyle of ['classic', 'angular']) {
+    const options = { columns: 4, rows: 2, connectorStyle };
+    const original = givenPuzzle({ ...options, seed: 42 }).puzzle;
+    const different = givenPuzzle({ ...options, seed: 314159 }).puzzle;
+    const recreated = givenPuzzle({ ...options, seed: original.seed }).puzzle;
+
+    assert.equal(original.seed, 42);
+    assert.deepEqual(recreated.pieces, original.pieces);
+    assert.notDeepEqual(different.pieces.map(({ outline }) => outline), original.pieces.map(({ outline }) => outline));
+    assert.deepEqual(different.pieces.map(({ id, target }) => ({ id, target })),
+      original.pieces.map(({ id, target }) => ({ id, target })));
   }
 });
 

@@ -1,6 +1,7 @@
 import type { Board } from './Board.ts';
 import { connectorStyles, type ConnectorStyleId } from './connectorStyles.ts';
 import { Bounds, type Point } from './geometry.ts';
+import { seededRandom } from './seededRandom.ts';
 
 export class PieceOutline {
   readonly points: readonly Point[];
@@ -13,11 +14,12 @@ export class PieceOutline {
     this.localPoints = points.map((point) => this.frame.toLocal(point));
   }
 
-  static forBoard(board: Board, styleId: ConnectorStyleId): PieceOutline[] {
+  static forBoard(board: Board, styleId: ConnectorStyleId, seed: number): PieceOutline[] {
     const { rows, columns, cellSize: { width, height } } = board;
     const { profiles, offsets, scaleBase } = connectorStyles[styleId];
     const scale = Math.min(1, width / scaleBase, height / scaleBase);
     const seams: { right: Point[]; bottom: Point[] }[] = [];
+    const random = seededRandom(seed);
     let seamIndex = 0;
 
     // Seam points exclude the grid corners, so either piece can trace them in its own direction.
@@ -25,7 +27,7 @@ export class PieceOutline {
       if (profiles.length === 0) return [];
 
       const profile = profiles[seamIndex % profiles.length];
-      const offset = offsets[Math.floor(seamIndex / profiles.length) % offsets.length];
+      const offset = offsets[Math.floor(random() * offsets.length)];
       seamIndex += 1;
       const dx = Math.sign(end.x - start.x);
       const dy = Math.sign(end.y - start.y);

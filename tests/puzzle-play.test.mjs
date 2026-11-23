@@ -127,8 +127,8 @@ test('live pieces scroll, reflow, and snap to the pannable board', async (t) => 
   const panelBackground = [25, 46, 40, 255];
   assert.deepEqual(await pixelAt(page, beforeZoom, 650, 500), panelBackground);
   assert.notDeepEqual(await pixelAt(page, zoomed, 650, 500), panelBackground, 'The wheel should enlarge the board');
-  assert.notDeepEqual(await pixelAt(page, beforeZoom, 815, 366), sky);
-  assert.deepEqual(await pixelAt(page, zoomed, 815, 366), sky, 'A piece in hand should scale with the board');
+  assert.notDeepEqual(await pixelAt(page, beforeZoom, 823, 366), sky);
+  assert.deepEqual(await pixelAt(page, zoomed, 823, 366), sky, 'A piece in hand should scale with the board');
   await page.mouse.up();
   await waitForText('1 of 8 placed');
   const placed = await canvas.screenshot();

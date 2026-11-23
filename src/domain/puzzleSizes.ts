@@ -18,8 +18,8 @@ export function availablePuzzleSizes(maximum: Size): readonly PuzzleSize[] {
   return puzzleSizes.filter((size) => fitsViewport(size, maximum));
 }
 
-export function createPuzzle(size: PuzzleSize, connectorStyle: ConnectorStyleId = 'classic'): Puzzle {
-  return new Puzzle(new Board(size, size.columns, size.rows), 28, connectorStyle);
+export function createPuzzle(size: PuzzleSize, connectorStyle: ConnectorStyleId = 'classic', seed = 0): Puzzle {
+  return new Puzzle(new Board(size, size.columns, size.rows), 28, connectorStyle, seed);
 }
 
 export function captureScale(size: Size, maximum: Size, textureLimit: number): number {

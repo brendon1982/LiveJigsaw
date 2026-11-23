@@ -14,8 +14,8 @@ export const connectorStyles = {
       [-22, 0], [-10, 0], [-11, 4], [-14, 8], [-13, 12], [-9, 16],
       [-4, 17], [4, 17], [9, 16], [13, 12], [14, 8], [11, 4], [10, 0], [22, 0],
     ]],
-    offsets: [0],
-    scaleBase: 64,
+    offsets: [-0.12, 0, 0.12],
+    scaleBase: 104,
   },
   rounded: {
     label: 'Rounded',

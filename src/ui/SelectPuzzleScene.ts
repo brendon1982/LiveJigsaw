@@ -4,6 +4,7 @@ import { availablePuzzleSizes, puzzleSizes } from '../domain/puzzleSizes';
 import { puzzleSources } from '../puzzles/catalog';
 import type { PuzzleSource } from '../puzzles/PuzzleSource';
 import { textColor } from './button';
+import type { PuzzleSelection } from './PlayPuzzleScene';
 import { showPuzzleOptions } from './puzzleOptions';
 
 const cardWidth = 560;
@@ -31,7 +32,8 @@ export class SelectPuzzleScene extends Phaser.Scene {
       if (options) return;
       panel.setScrollerEnable(false).setMouseWheelScrollerEnable(false);
       options = showPuzzleOptions(this, source, (size, connectorStyle) => {
-        this.scene.start('PlayPuzzle', { source, size, connectorStyle });
+        const [seed] = crypto.getRandomValues(new Uint32Array(1));
+        this.scene.start('PlayPuzzle', { source, size, connectorStyle, seed } satisfies PuzzleSelection);
       }, () => {
         options = undefined;
         panel.setScrollerEnable(true).setMouseWheelScrollerEnable(true);

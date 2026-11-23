@@ -19,7 +19,10 @@
           super(OversizedPreviewScene.key);
         }
 
-        create({ width, height }) {
+        create({ width, height, seed }) {
+          if (!Number.isInteger(seed) || seed < 0 || seed > 0xffffffff) {
+            throw new Error('Expected a puzzle seed in the source scene data');
+          }
           this.add.rectangle(0, 0, width, height, previewColor).setOrigin(0);
         }
       }

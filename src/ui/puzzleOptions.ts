@@ -1,44 +1,170 @@
+import Phaser from 'phaser';
 import { connectorStyles, type ConnectorStyleId } from '../domain/connectorStyles';
 import { availablePuzzleSizes, type PuzzleSize } from '../domain/puzzleSizes';
 import type { PuzzleSource } from '../puzzles/PuzzleSource';
+import { makeButtonLabel, mutedColor, textColor, type UIScene } from './button';
+
+const optionWidth = 96;
+const optionGap = 8;
+const contentWidth = 4 * optionWidth + 3 * optionGap;
+const iconFill = 0x65877a;
+const iconStroke = 0xdfede3;
+// RexUI sizer children are separate entries in the Phaser display list.
+const depth = { cover: 1, panel: 2, controls: 3, tileContents: 4 };
+
+type Option = {
+  name: string;
+  label: string;
+  drawIcon: () => Phaser.GameObjects.Container;
+};
 
 export function showPuzzleOptions(
+  scene: UIScene,
   source: PuzzleSource,
   play: (size: PuzzleSize, connectorStyle: ConnectorStyleId) => void,
-): HTMLDialogElement {
+  onClose: () => void,
+) {
   const sizes = availablePuzzleSizes(source.maxViewport);
   const styles = Object.keys(connectorStyles) as ConnectorStyleId[];
-  const dialog = document.createElement('dialog');
-  dialog.className = 'puzzle-options';
-  dialog.setAttribute('aria-labelledby', 'puzzle-options-title');
-  dialog.innerHTML = `
-    <form>
-      <h2 id="puzzle-options-title"></h2>
-      <label>Puzzle size <select name="size" autofocus></select></label>
-      <label>Connector style <select name="connectorStyle"></select></label>
-      <div class="puzzle-options-actions">
-        <button type="button">Cancel</button>
-        <button type="submit">Play</button>
-      </div>
-    </form>
-  `;
-  dialog.querySelector('h2')!.textContent = source.title;
-  const sizeSelect = dialog.querySelector<HTMLSelectElement>('select[name="size"]')!;
-  const styleSelect = dialog.querySelector<HTMLSelectElement>('select[name="connectorStyle"]')!;
-  for (const size of sizes) sizeSelect.add(new Option(`${size.label} · ${size.columns * size.rows}`));
-  for (const style of styles) styleSelect.add(new Option(connectorStyles[style].label, style));
+  const cover = scene.add.rectangle(0, 0, 1, 1, 0x142521, 0.72)
+    .setOrigin(0).setDepth(depth.cover).setInteractive();
+  const sizeButtons = makeRadioButtons(scene, sizes.map((size) => ({
+    name: size.label,
+    label: `${size.label} · ${size.columns * size.rows}`,
+    drawIcon: () => drawSizeIcon(scene, size),
+  })), sizes[0].label);
+  const styleButtons = makeRadioButtons(scene, styles.map((style) => ({
+    name: style,
+    label: connectorStyles[style].label,
+    drawIcon: () => drawConnectorIcon(scene, style),
+  })), 'classic');
 
-  dialog.querySelector<HTMLButtonElement>('button[type="button"]')!.addEventListener('click', () => dialog.close());
-  dialog.addEventListener('close', () => dialog.remove(), { once: true });
-  dialog.querySelector('form')!.addEventListener('submit', (event) => {
-    event.preventDefault();
-    const size = sizes[sizeSelect.selectedIndex];
-    const style = styles[styleSelect.selectedIndex];
-    if (!size || !style) return;
-    dialog.close();
-    play(size, style);
+  const content = scene.rexUI.add.sizer({ orientation: 'y', width: contentWidth, space: { item: 14 } });
+  for (const [heading, buttons] of [['Puzzle size', sizeButtons], ['Connector style', styleButtons]] as const) {
+    const section = scene.rexUI.add.sizer({ orientation: 'y', space: { item: 6 } });
+    section.add(scene.add.text(0, 0, heading, {
+      fontFamily: 'system-ui', fontSize: '17px', color: mutedColor,
+    }).setFixedSize(0, 24).setDepth(depth.controls), { align: 'left' });
+    section.add(buttons, { align: 'left' });
+    content.add(section, { align: 'left' });
+  }
+
+  const dialog = scene.rexUI.add.dialog({
+    background: scene.rexUI.add.roundRectangle(0, 0, 1, 1, 16, 0x30453f)
+      .setStrokeStyle(1, 0x71897e).setDepth(depth.panel),
+    title: scene.add.text(0, 0, source.title, {
+      fontFamily: 'system-ui', fontSize: '25px', fontStyle: 'bold', color: textColor,
+    }).setFixedSize(0, 34).setDepth(depth.controls),
+    content,
+    actions: [
+      makeButtonLabel(scene, 'Cancel', 92, 52).setDepth(depth.controls),
+      makeButtonLabel(scene, 'Play', 92, 52, true).setDepth(depth.controls),
+    ],
+    align: { title: 'left', actions: 'right' },
+    space: { top: 20, bottom: 20, left: 20, right: 20, title: 14, content: 18, action: 8 },
+    click: { mode: 'release', clickInterval: 0 },
+  }).layout();
+
+  dialog.forEachAction((button) => { button.input!.cursor = 'pointer'; });
+
+  const fit = () => {
+    const { width, height } = scene.scale.gameSize;
+    const { zoom } = scene.cameras.main;
+    const scale = Math.min(1, Math.max(1, width - 24) / dialog.width, Math.max(1, height - 24) / dialog.height);
+    cover.setSize(width / zoom, height / zoom);
+    dialog.setPosition(width / (2 * zoom), height / (2 * zoom)).setScale(scale / zoom);
+  };
+  const cancel = () => dialog.modalClose();
+  let startPuzzle = false;
+  dialog.on('action.click', (_button: Phaser.GameObjects.GameObject, index: number, pointer: Phaser.Input.Pointer) => {
+    if (pointer.wasCanceled) return;
+    startPuzzle = index === 1;
+    dialog.modalClose();
   });
-  document.body.append(dialog);
-  dialog.showModal();
+
+  scene.scale.on('resize', fit);
+  scene.input.keyboard?.on('keydown-ESC', cancel);
+  dialog.once('destroy', () => {
+    cover.destroy();
+    scene.scale.off('resize', fit);
+    scene.input.keyboard?.off('keydown-ESC', cancel);
+  });
+  fit();
+
+  dialog.modal({
+    defaultBehavior: false,
+    manualClose: true,
+    // @ts-expect-error RexUI accepts false at runtime to disable its cover.
+    cover: false,
+    duration: { in: 0, out: 0 },
+  }, () => {
+    onClose();
+    if (!startPuzzle) return;
+
+    const size = sizes.find(({ label }) => label === sizeButtons.getSelectedButtonName());
+    const style = styles.find((id) => id === styleButtons.getSelectedButtonName());
+    if (size && style) play(size, style);
+  });
+
   return dialog;
+}
+
+function makeRadioButtons(scene: UIScene, options: readonly Option[], selectedName: string) {
+  const tiles = options.map(({ name, label, drawIcon }) => {
+    const background = scene.rexUI.add.roundRectangle(0, 0, 1, 1, 9, 0x263a36)
+      .setStrokeStyle(1, 0x69847a).setDepth(depth.controls);
+    const button = scene.rexUI.add.label({
+      name, width: optionWidth, height: 82, orientation: 'y', align: 'center', background,
+      icon: drawIcon().setDepth(depth.tileContents),
+      text: scene.add.text(0, 0, label, { fontFamily: 'system-ui', fontSize: '15px', color: textColor })
+        .setDepth(depth.tileContents),
+      space: { icon: 4 },
+    }).setDepth(depth.controls, true);
+    return { button, background };
+  });
+
+  const buttons = scene.rexUI.add.buttons({
+    orientation: 'x', type: 'radio', buttons: tiles.map(({ button }) => button),
+    click: { threshold: 12, clickInterval: 0 },
+    space: { item: optionGap },
+    setValueCallback: (button, selected) => {
+      const tile = tiles.find((entry) => entry.button === button)!;
+      tile.background.setFillStyle(selected ? 0x4b6c5e : 0x263a36)
+        .setStrokeStyle(selected ? 2 : 1, selected ? 0xc7e1d1 : 0x69847a);
+    },
+  });
+  for (const { button } of tiles) button.input!.cursor = 'pointer';
+  return buttons.setSelectedButtonName(selectedName);
+}
+
+function drawSizeIcon(scene: UIScene, { columns, rows }: PuzzleSize) {
+  const art = scene.add.graphics();
+  const width = 60;
+  const height = 34;
+  art.fillStyle(iconFill).fillRect(-width / 2, -height / 2, width, height);
+  art.lineStyle(1, iconStroke).strokeRect(-width / 2, -height / 2, width, height);
+  for (let column = 1; column < columns; column += 1) {
+    const x = -width / 2 + (column * width) / columns;
+    art.lineBetween(x, -height / 2, x, height / 2);
+  }
+  for (let row = 1; row < rows; row += 1) {
+    const y = -height / 2 + (row * height) / rows;
+    art.lineBetween(-width / 2, y, width / 2, y);
+  }
+  return scene.add.container(0, 0, [art]).setSize(64, 44);
+}
+
+function drawConnectorIcon(scene: UIScene, style: ConnectorStyleId) {
+  const art = scene.add.graphics();
+  const profile = connectorStyles[style].profiles[0] ?? [];
+  const points = [
+    new Phaser.Math.Vector2(-28, -5),
+    ...profile.map(([along, depth]) => new Phaser.Math.Vector2(along, -5 - depth * 0.85)),
+    new Phaser.Math.Vector2(28, -5),
+    new Phaser.Math.Vector2(28, 16),
+    new Phaser.Math.Vector2(-28, 16),
+  ];
+  art.fillStyle(iconFill).fillPoints(points, true);
+  art.lineStyle(1.5, iconStroke).strokePoints(points, true);
+  return scene.add.container(0, 0, [art]).setSize(64, 44);
 }

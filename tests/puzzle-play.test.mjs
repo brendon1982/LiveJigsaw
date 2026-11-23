@@ -55,16 +55,24 @@ async function openPuzzle(t, options, path = '/') {
     }
   };
   await waitForText('Windmill');
-  const dialog = page.getByRole('dialog');
-  const playSelection = async ({ size, connectorStyle } = {}) => {
-    await dialog.waitFor();
-    if (size) await dialog.getByLabel('Puzzle size').selectOption({ label: size });
-    if (connectorStyle) await dialog.getByLabel('Connector style').selectOption({ label: connectorStyle });
-    const play = dialog.getByRole('button', { name: 'Play' });
-    if (options.hasTouch) await play.tap();
-    else await play.click();
+  const clickDialog = async (dx, dy) => {
+    const { x, y, width, height } = await canvas.boundingBox();
+    const tap = options.hasTouch ? page.touchscreen.tap.bind(page.touchscreen) : page.mouse.click.bind(page.mouse);
+    await tap(x + width / 2 + dx, y + height / 2 + dy);
   };
-  return { page, canvas, waitForText, errors, dialog, playSelection };
+  const playSelection = async ({ size, connectorStyle } = {}) => {
+    await waitForText('Connector style');
+    // Phaser hit-tests the camera's render list, which updates on the first dialog frame.
+    await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    if (size) await clickDialog(size === 'Large · 32' ? -52 : -156, -59);
+    if (connectorStyle) {
+      const index = ['Classic', 'Rounded', 'Angular', 'None'].indexOf(connectorStyle);
+      assert.ok(index >= 0);
+      await clickDialog(-156 + 104 * index, 67);
+    }
+    await clickDialog(158, 152);
+  };
+  return { page, canvas, waitForText, errors, clickDialog, playSelection };
 }
 
 test('live pieces scroll, reflow, and snap to the pannable board', async (t) => {
@@ -226,7 +234,7 @@ test('the picker scrolls past two cards and clips previews', async (t) => {
   const path = '/picker-fixture/tests/fixtures/puzzle-picker.html';
   const previewColor = [255, 0, 255, 255];
   await t.test('mouse wheel scrolls to a selectable third card', async (t) => {
-    const { page, canvas, waitForText, errors, dialog, playSelection } = await openPuzzle(t, { viewport: { width: 1320, height: 540 } }, path);
+    const { page, canvas, waitForText, errors, clickDialog, playSelection } = await openPuzzle(t, { viewport: { width: 1320, height: 540 } }, path);
     const initial = await canvas.screenshot();
     assert.deepEqual(await pixelAt(page, initial, 120, 165), [192, 221, 219, 255]);
     assert.notDeepEqual(await pixelAt(page, initial, 800, 165), [38, 58, 54, 255], 'The second card should sit beside the first');
@@ -245,10 +253,28 @@ test('the picker scrolls past two cards and clips previews', async (t) => {
       assert.notDeepEqual(await pixelAt(page, scrolled, x, y), previewColor, `Artwork should stay inside all four preview edges (${x}, ${y})`);
     }
     await page.mouse.click(340, 165);
-    await dialog.getByRole('heading', { name: 'Oversized preview' }).waitFor();
-    assert.deepEqual(await dialog.getByLabel('Puzzle size').locator('option').allTextContents(), ['Classic · 8']);
-    await dialog.getByRole('button', { name: 'Cancel' }).click();
-    await dialog.waitFor({ state: 'hidden' });
+    await waitForText('Connector style');
+    assert.equal(await page.evaluate(() => window.paintedText.includes('Large · 32')), false);
+    const selectedFill = [75, 108, 94, 255];
+    const beforeSelection = await canvas.screenshot();
+    assert.deepEqual(await pixelAt(page, beforeSelection, 467, 337), selectedFill);
+    const iconFill = [101, 135, 122, 255];
+    assert.deepEqual(await pixelAt(page, beforeSelection, 480, 190), iconFill, 'The size illustration should draw above the dialog and tile');
+    assert.deepEqual(await pixelAt(page, beforeSelection, 816, 330), iconFill, 'The connector illustration should draw above the dialog and tile');
+    await clickDialog(-52, 67);
+    const afterSelection = await canvas.screenshot();
+    assert.notDeepEqual(await pixelAt(page, afterSelection, 467, 337), selectedFill);
+    assert.deepEqual(await pixelAt(page, afterSelection, 571, 337), selectedFill);
+    await page.setViewportSize({ width: 375, height: 540 });
+    await page.waitForFunction(() => document.querySelector('canvas').width === 375);
+    const [cornerRed] = await pixelAt(page, await canvas.screenshot(), 373, 538);
+    assert.ok(cornerRed < 38, 'The modal backdrop should still reach the corner after resizing');
+    await page.setViewportSize({ width: 1320, height: 540 });
+    await page.waitForFunction(() => document.querySelector('canvas').width === 1320);
+    await page.mouse.move(340, 165);
+    await page.mouse.wheel(0, -1000);
+    await clickDialog(58, 152);
+    assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 120, 165), previewColor, 'Cancel should preserve the picker scroll position');
     await page.mouse.click(340, 165);
     await playSelection();
     await waitForText('0 of 8 placed');
@@ -256,7 +282,7 @@ test('the picker scrolls past two cards and clips previews', async (t) => {
   });
 
   await t.test('touch can swipe from a preview and tap a different puzzle', async (t) => {
-    const { page, canvas, waitForText, errors, dialog, playSelection } = await openPuzzle(t, {
+    const { page, canvas, waitForText, errors, playSelection } = await openPuzzle(t, {
       viewport: { width: 768, height: 780 },
       hasTouch: true,
       isMobile: true,
@@ -274,7 +300,7 @@ test('the picker scrolls past two cards and clips previews', async (t) => {
     const initial = await canvas.screenshot();
     await swipeUp(400, 265, 43);
     assert.notDeepEqual(await pixelAt(page, await canvas.screenshot(), 140, 160), await pixelAt(page, initial, 140, 160));
-    assert.equal(await dialog.count(), 0, 'A swipe should keep the options closed');
+    assert.equal(await page.evaluate(() => window.paintedText.includes('Connector style')), false, 'A swipe should keep the options closed');
     await swipeUp(170, 700, 180);
     assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 140, 410), previewColor, 'A swipe should reveal the third card');
     await page.touchscreen.tap(400, 410);

@@ -19,7 +19,6 @@ const scrollThreshold = 10;
 export class SelectPuzzleScene extends Phaser.Scene {
   static readonly key = 'SelectPuzzle';
   declare rexUI: RexUIPlugin;
-  private options?: HTMLDialogElement;
 
   constructor() {
     super(SelectPuzzleScene.key);
@@ -27,7 +26,17 @@ export class SelectPuzzleScene extends Phaser.Scene {
 
   create() {
     const listBounds = new Phaser.Geom.Rectangle();
-    const cards = puzzleSources.map((source) => this.makeCard(source, listBounds));
+    let options: ReturnType<typeof showPuzzleOptions> | undefined;
+    const cards = puzzleSources.map((source) => this.makeCard(source, listBounds, () => {
+      if (options) return;
+      panel.setScrollerEnable(false).setMouseWheelScrollerEnable(false);
+      options = showPuzzleOptions(this, source, (size, connectorStyle) => {
+        this.scene.start('PlayPuzzle', { source, size, connectorStyle });
+      }, () => {
+        options = undefined;
+        panel.setScrollerEnable(true).setMouseWheelScrollerEnable(true);
+      });
+    }));
     const grid = this.rexUI.add.gridSizer({
       column: 1, row: 1, space: { top: listPadding, bottom: listPadding },
     });
@@ -71,13 +80,11 @@ export class SelectPuzzleScene extends Phaser.Scene {
     this.scale.on(Phaser.Scale.Events.RESIZE, fitPicker);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.scale.off(Phaser.Scale.Events.RESIZE, fitPicker);
-      this.options?.remove();
-      this.options = undefined;
     });
     fitPicker();
   }
 
-  private makeCard(source: PuzzleSource, listBounds: Phaser.Geom.Rectangle) {
+  private makeCard(source: PuzzleSource, listBounds: Phaser.Geom.Rectangle, openOptions: () => void) {
     const background = this.rexUI.add.roundRectangle(0, 0, cardWidth, cardHeight, 16, 0x30453f).setOrigin(0);
     const title = this.add.text(24, 333, source.title, {
       fontFamily: 'system-ui', fontSize: '23px', color: textColor,
@@ -88,11 +95,9 @@ export class SelectPuzzleScene extends Phaser.Scene {
           const camera = this.cameras.main;
           const start = camera.getWorldPoint(pointer.downX, pointer.downY);
           const end = camera.getWorldPoint(pointer.x, pointer.y);
-          if (this.options?.open || pointer.wasCanceled || pointer.getDistance() >= scrollThreshold
+          if (pointer.wasCanceled || pointer.getDistance() >= scrollThreshold
             || !listBounds.contains(start.x, start.y) || !listBounds.contains(end.x, end.y)) return;
-          this.options = showPuzzleOptions(source, (size, connectorStyle) => {
-            this.scene.start('PlayPuzzle', { source, size, connectorStyle });
-          });
+          openOptions();
         });
       background.input!.cursor = 'pointer';
     }

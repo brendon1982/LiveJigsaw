@@ -93,62 +93,66 @@ test('live pieces scroll, reflow, and snap to the pannable board', async (t) => 
     await page.mouse.up();
   };
 
+  await page.evaluate(() => { window.paintedText = []; });
   await click(340, 180);
   await playSelection();
   await waitForText('0 of 8 placed');
-  await waitForText('Drag to pan · Scroll to zoom');
+  const header = await page.evaluate(() => window.paintedText);
+  assert.ok(header.includes('All puzzles') && header.includes('Windmill'));
+  assert.ok(!header.includes('Pieces') && !header.includes('Drag to pan · Scroll to zoom'));
   const initial = await canvas.screenshot();
   const sky = [192, 221, 219, 255];
-  const guide = await pixelAt(page, initial, 542, 376);
+  const panelBackground = [25, 46, 40, 255];
+  assert.deepEqual(await pixelAt(page, initial, 1290, 100), panelBackground, 'The board should extend into the reclaimed space');
+  const guide = await pixelAt(page, initial, 542, 348);
   assert.ok(guide[0] > 25 && guide[0] < sky[0], 'The board should show the artwork at low opacity');
-  assert.notDeepEqual(await pixelAt(page, initial, 199, 196), sky, 'The tray should start with one column');
-  await move(85, 196);
+  assert.notDeepEqual(await pixelAt(page, initial, 199, 140), sky, 'The tray should start with one column');
+  await move(85, 140);
   await page.mouse.wheel(0, 475);
   const scrolled = await canvas.screenshot();
-  assert.notDeepEqual(await pixelAt(page, scrolled, 85, 196), await pixelAt(page, initial, 85, 196));
+  assert.notDeepEqual(await pixelAt(page, scrolled, 85, 140), await pixelAt(page, initial, 85, 140));
   await page.mouse.wheel(0, -1000);
   const dividerBackground = [38, 58, 54, 255];
   assert.deepEqual(await pixelAt(page, initial, 163, 320), dividerBackground);
   assert.deepEqual(await pixelAt(page, initial, 170, 320), dividerBackground);
   const centerPixels = await Promise.all([166, 167].map((x) => pixelAt(page, initial, x, 320)));
   assert.equal(centerPixels.filter(([red]) => red > dividerBackground[0]).length, 1, 'The divider should draw a single centered line');
-  const gripColor = await pixelAt(page, initial, 167, 448);
+  const gripColor = await pixelAt(page, initial, 167, 420);
   assert.notDeepEqual(gripColor, await pixelAt(page, initial, 167, 320), 'The divider should have a visible center grip');
-  await drag(167, 448, 552, 448);
+  await drag(167, 420, 552, 420);
   const widened = await canvas.screenshot();
-  assert.deepEqual(await pixelAt(page, widened, 552, 448), gripColor, 'The grip should move with the divider');
-  assert.deepEqual(await pixelAt(page, widened, 427, 196), sky, 'Widening the tray should reveal another column');
-  const boardSeam = await pixelAt(page, widened, 798, 330);
+  assert.deepEqual(await pixelAt(page, widened, 552, 420), gripColor, 'The grip should move with the divider');
+  assert.deepEqual(await pixelAt(page, widened, 427, 140), sky, 'Widening the tray should reveal another column');
+  const boardSeam = await pixelAt(page, widened, 798, 302);
   assert.deepEqual(boardSeam, guide, 'The faint guide should be continuous across piece boundaries');
-  await drag(427, 196, 600, 110);
-  assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 427, 196), sky, 'An invalid drop should return to the tray');
-  await move(427, 196);
+  await drag(427, 140, 600, 70);
+  assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 427, 140), sky, 'An invalid drop should return to the tray');
+  await move(427, 140);
   await page.mouse.down();
-  await move(735, 376, 8);
+  await move(735, 348, 8);
   const beforeZoom = await canvas.screenshot();
   await page.mouse.wheel(0, -200);
   const zoomed = await canvas.screenshot();
-  const panelBackground = [25, 46, 40, 255];
-  assert.deepEqual(await pixelAt(page, beforeZoom, 650, 500), panelBackground);
-  assert.notDeepEqual(await pixelAt(page, zoomed, 650, 500), panelBackground, 'The wheel should enlarge the board');
-  assert.notDeepEqual(await pixelAt(page, beforeZoom, 823, 366), sky);
-  assert.deepEqual(await pixelAt(page, zoomed, 823, 366), sky, 'A piece in hand should scale with the board');
+  assert.deepEqual(await pixelAt(page, beforeZoom, 650, 472), panelBackground);
+  assert.notDeepEqual(await pixelAt(page, zoomed, 650, 472), panelBackground, 'The wheel should enlarge the board');
+  assert.notDeepEqual(await pixelAt(page, beforeZoom, 823, 338), sky);
+  assert.deepEqual(await pixelAt(page, zoomed, 823, 338), sky, 'A piece in hand should scale with the board');
   await page.mouse.up();
   await waitForText('1 of 8 placed');
   const placed = await canvas.screenshot();
-  assert.deepEqual(await pixelAt(page, placed, 735, 376), sky, 'Zooming at the drop target should keep it under the pointer');
+  assert.deepEqual(await pixelAt(page, placed, 735, 348), sky, 'Zooming at the drop target should keep it under the pointer');
   await page.mouse.wheel(0, 200);
-  await drag(199, 309, 863, 376);
+  await drag(199, 253, 863, 348);
   await waitForText('2 of 8 placed');
   const joined = await canvas.screenshot();
-  for (const [x, y] of [[798, 365], [802, 367], [811, 370], [815, 376], [809, 385]]) {
+  for (const [x, y] of [[798, 337], [802, 339], [811, 342], [815, 348], [809, 357]]) {
     assert.deepEqual(await pixelAt(page, joined, x, y), sky, 'The live guide should not show through joined pieces');
   }
 
   const assertCornerAtCenter = async (horizontal, vertical) => {
     const screenshot = await canvas.screenshot();
-    assert.notDeepEqual(await pixelAt(page, screenshot, 927 + 14 * horizontal, 448 + 14 * vertical), panelBackground);
-    assert.deepEqual(await pixelAt(page, screenshot, 927 - 14 * horizontal, 448 - 14 * vertical), panelBackground);
+    assert.notDeepEqual(await pixelAt(page, screenshot, 927 + 14 * horizontal, 420 + 14 * vertical), panelBackground);
+    assert.deepEqual(await pixelAt(page, screenshot, 927 - 14 * horizontal, 420 - 14 * vertical), panelBackground);
   };
   await drag(610, 180, 1240, 700);
   await assertCornerAtCenter(1, 1);
@@ -175,10 +179,10 @@ test('live pieces scroll, reflow, and snap to the pannable board', async (t) => 
   const largeBefore = await canvas.screenshot();
   await drag(900, 350, 800, 270);
   const largeAfter = await canvas.screenshot();
-  const tower = await pixelAt(page, largeBefore, 1124, 520);
-  assert.notDeepEqual(await pixelAt(page, largeAfter, 1124, 520), tower);
-  assert.deepEqual(await pixelAt(page, largeAfter, 1024, 440), tower, 'Large artwork should move with both pan axes');
-  await drag(313, 447, 635, 296);
+  const tower = await pixelAt(page, largeBefore, 1124, 492);
+  assert.notDeepEqual(await pixelAt(page, largeAfter, 1124, 492), tower);
+  assert.deepEqual(await pixelAt(page, largeAfter, 1024, 412), tower, 'Large artwork should move with both pan axes');
+  await drag(313, 391, 635, 268);
   await waitForText('1 of 32 placed');
 
   await page.setViewportSize({ width: 900, height: 620 });
@@ -190,15 +194,15 @@ test('live pieces scroll, reflow, and snap to the pannable board', async (t) => 
   await playSelection();
   await waitForText('0 of 8 placed');
   const replay = await canvas.screenshot();
-  assert.deepEqual(await pixelAt(page, replay, 85, 196), sky);
-  assert.notDeepEqual(await pixelAt(page, initial, 85, 196), sky, 'Reopening the same puzzle should shuffle the tray again');
+  assert.deepEqual(await pixelAt(page, replay, 85, 140), sky);
+  assert.notDeepEqual(await pixelAt(page, initial, 85, 140), sky, 'Reopening the same puzzle should shuffle the tray again');
   await page.evaluate(() => { window.paintedText = []; });
   await click(99, 43);
   await waitForText('Windmill');
   await click(340, 180);
   await playSelection({ size: 'Dense · 64' });
   await waitForText('0 of 64 placed');
-  assert.notDeepEqual(await pixelAt(page, await canvas.screenshot(), 85, 196), [48, 72, 65, 255], 'The dense tray should render its thumbnails');
+  assert.notDeepEqual(await pixelAt(page, await canvas.screenshot(), 85, 140), [48, 72, 65, 255], 'The dense tray should render its thumbnails');
   assert.deepEqual(errors, []);
 });
 
@@ -342,43 +346,42 @@ test('tablet touch scrolls, resizes, zooms, cancels, and places pieces', async (
   await page.touchscreen.tap(522, 180);
   await playSelection();
   await waitForText('0 of 8 placed');
-  await waitForText('Drag to pan · Pinch to zoom');
-  const startingPiece = await pixelAt(page, await canvas.screenshot(), 85, 196);
-  await moveFinger(85, 310, 85, 196);
-  assert.notDeepEqual(await pixelAt(page, await canvas.screenshot(), 85, 196), startingPiece, 'A swipe starting on a piece should scroll');
-  await moveFinger(85, 196, 85, 310);
-  assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 85, 196), startingPiece);
-  await moveFinger(167, 442, 450, 442);
-  assert.notDeepEqual(await pixelAt(page, await canvas.screenshot(), 199, 196), [48, 72, 65, 255], 'The touch divider should reflow the tray');
+  const startingPiece = await pixelAt(page, await canvas.screenshot(), 85, 140);
+  await moveFinger(85, 254, 85, 140);
+  assert.notDeepEqual(await pixelAt(page, await canvas.screenshot(), 85, 140), startingPiece, 'A swipe starting on a piece should scroll');
+  await moveFinger(85, 140, 85, 254);
+  assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 85, 140), startingPiece);
+  await moveFinger(167, 414, 450, 414);
+  assert.notDeepEqual(await pixelAt(page, await canvas.screenshot(), 199, 140), [48, 72, 65, 255], 'The touch divider should reflow the tray');
 
   const panelBackground = [25, 46, 40, 255];
-  assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 900, 244), panelBackground);
-  await dispatch('touchStart', [530, 400]);
-  await dispatch('touchStart', [530, 400], [650, 400]);
-  await dispatch('touchMove', [500, 400], [680, 400]);
+  assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 900, 216), panelBackground);
+  await dispatch('touchStart', [530, 372]);
+  await dispatch('touchStart', [530, 372], [650, 372]);
+  await dispatch('touchMove', [500, 372], [680, 372]);
   await dispatch('touchEnd');
-  assert.notDeepEqual(await pixelAt(page, await canvas.screenshot(), 900, 255), panelBackground, 'A pinch should enlarge the board artwork');
+  assert.notDeepEqual(await pixelAt(page, await canvas.screenshot(), 900, 227), panelBackground, 'A pinch should enlarge the board artwork');
 
-  await moveFinger(85, 309, 508, 355, 'touchCancel');
+  await moveFinger(85, 253, 508, 327, 'touchCancel');
   assert.equal(await page.evaluate(() => window.paintedText.includes('1 of 8 placed')), false, 'A cancelled touch should not place a piece');
-  await dispatch('touchStart', [85, 309]);
-  await dispatch('touchMove', [55, 309]);
-  assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 140, 309), [48, 72, 65, 255],
+  await dispatch('touchStart', [85, 253]);
+  await dispatch('touchMove', [55, 253]);
+  assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 140, 253), [48, 72, 65, 255],
     'A leftward move should leave the piece in the tray');
   await dispatch('touchEnd');
-  await dispatch('touchStart', [85, 309]);
-  await dispatch('touchMove', [85, 321]);
-  await dispatch('touchMove', [99, 344]);
-  assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 145, 341), [192, 221, 219, 255],
+  await dispatch('touchStart', [85, 253]);
+  await dispatch('touchMove', [85, 265]);
+  await dispatch('touchMove', [99, 288]);
+  assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 145, 285), [192, 221, 219, 255],
     'A rightward drag near 70° should lift the piece after a small vertical start');
-  await dispatch('touchMove', [508, 355]);
+  await dispatch('touchMove', [508, 327]);
   await dispatch('touchEnd');
   await waitForText('1 of 8 placed');
-  assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 508, 355), [192, 221, 219, 255], 'A touch drop should snap at the zoomed target');
+  assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 508, 327), [192, 221, 219, 255], 'A touch drop should snap at the zoomed target');
   await moveFinger(700, 500, 850, 500);
   const panned = await canvas.screenshot();
-  assert.deepEqual(await pixelAt(page, panned, 508, 355), panelBackground, 'One finger should pan the zoomed board');
-  assert.deepEqual(await pixelAt(page, panned, 658, 355), [192, 221, 219, 255], 'Placed pieces should follow the pan');
+  assert.deepEqual(await pixelAt(page, panned, 508, 327), panelBackground, 'One finger should pan the zoomed board');
+  assert.deepEqual(await pixelAt(page, panned, 658, 327), [192, 221, 219, 255], 'Placed pieces should follow the pan');
 
   await page.setViewportSize({ width: 768, height: 1024 });
   await page.waitForFunction(() => document.querySelector('canvas').height === 1024);
@@ -389,6 +392,6 @@ test('tablet touch scrolls, resizes, zooms, cancels, and places pieces', async (
   await playSelection({ size: 'Expert · 128', connectorStyle: 'Rounded' });
   await waitForText('0 of 128 placed');
   const expertTray = await canvas.screenshot();
-  assert.notDeepEqual(await pixelAt(page, expertTray, 105, 196), [48, 72, 65, 255], 'The smallest pieces should scale up to the tray target');
+  assert.notDeepEqual(await pixelAt(page, expertTray, 105, 140), [48, 72, 65, 255], 'The smallest pieces should scale up to the tray target');
   assert.deepEqual(errors, []);
 });

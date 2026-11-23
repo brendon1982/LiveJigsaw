@@ -4,8 +4,7 @@ import type ScrollablePanel from 'phaser4-rex-plugins/templates/ui/scrollablepan
 import type { Point, Size } from '../domain/geometry';
 import type { UIScene } from './button';
 import type { PuzzlePieceView } from './PuzzlePieceView';
-
-import { palette } from './theme';
+import { styleWithTheme } from './theme';
 
 const scrollbarSpace = 24;
 
@@ -44,20 +43,25 @@ export class PieceTray {
     this.camera.inputEnabled = false;
 
     this.grid = scene.rexUI.add.gridSizer({ column: 1, row: 1 });
+    const track = scene.rexUI.add.roundRectangle(0, 0, 6, 10, 3);
+    const thumb = scene.rexUI.add.roundRectangle(0, 0, 8, 36, 4);
     this.panel = scene.rexUI.add.scrollablePanel({
       panel: { child: this.grid, mask: false },
       scroller: false,
       clampChildOY: true,
       mouseWheelScroller: { focus: 2, speed: 0.75 },
       slider: {
-        track: scene.rexUI.add.roundRectangle(0, 0, 6, 10, 3, palette.scrollbarTrack),
-        thumb: scene.rexUI.add.roundRectangle(0, 0, 8, 36, 4, palette.scrollbarThumb),
+        track, thumb,
         adaptThumbSize: true,
         minThumbSize: 36,
         hideUnscrollableSlider: true,
       },
       space: { left: 4, right: 8, sliderY: 6 },
     }).setOrigin(0);
+    styleWithTheme(this.panel, (colors) => {
+      track.setFillStyle(colors.scrollbarTrack);
+      thumb.setFillStyle(colors.scrollbarThumb);
+    });
 
     for (const entry of entries) this.returnPiece(entry);
     scene.events.on(Phaser.Scenes.Events.POST_UPDATE, this.syncScroll);

@@ -1,6 +1,6 @@
 import type Phaser from 'phaser';
 import type RexUIPlugin from 'phaser4-rex-plugins/templates/ui/ui-plugin.js';
-import { palette } from './theme';
+import { palette, styleWithTheme } from './theme';
 import { hasTouchTargets } from './touchLayout';
 
 export type UIScene = Phaser.Scene & { rexUI: RexUIPlugin };
@@ -17,18 +17,27 @@ export function makeButton(
   return button;
 }
 
-export function makeButtonLabel(scene: UIScene, text: string, width: number, height: number, primary = false) {
-  const fill = primary ? palette.primaryButton : palette.button;
-  const hover = primary ? palette.primaryButtonHover : palette.buttonHover;
-  const background = scene.rexUI.add.roundRectangle(0, 0, 1, 1, 9, fill);
+export function makeButtonLabel(
+  scene: UIScene, text: string, width: number, height: number, primary: boolean | (() => boolean) = false,
+) {
+  const background = scene.rexUI.add.roundRectangle(0, 0, 1, 1, 9);
   const caption = scene.add.text(0, 0, text, {
-    fontFamily: 'system-ui', fontSize: '17px', color: primary ? palette.primaryButtonText : palette.text,
+    fontFamily: 'system-ui', fontSize: '17px',
   });
   const button = scene.rexUI.add.label({
     width, height, align: 'center', background, text: caption,
     space: { left: 16, right: 16 },
   });
-  button.on('pointerover', () => background.setFillStyle(hover));
-  button.on('pointerout', () => background.setFillStyle(fill));
+  let hovered = false;
+  const restyle = (colors: typeof palette) => {
+    const highlighted = typeof primary === 'function' ? primary() : primary;
+    const fill = highlighted ? colors.primaryButton : colors.button;
+    const hover = highlighted ? colors.primaryButtonHover : colors.buttonHover;
+    background.setFillStyle(hovered ? hover : fill);
+    caption.setColor(highlighted ? colors.primaryButtonText : colors.text);
+  };
+  styleWithTheme(button, restyle);
+  button.on('pointerover', () => { hovered = true; restyle(palette); });
+  button.on('pointerout', () => { hovered = false; restyle(palette); });
   return button;
 }

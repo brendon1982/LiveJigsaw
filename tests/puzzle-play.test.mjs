@@ -80,7 +80,7 @@ async function openPuzzle(t, options, path = '/') {
 }
 
 test('live pieces scroll, reflow, and snap to the pannable board', async (t) => {
-  const { page, canvas, waitForText, errors, playSelection } = await openPuzzle(t, { viewport: { width: 1320, height: 780 } });
+  const { page, canvas, waitForText, errors, clickDialog, playSelection } = await openPuzzle(t, { viewport: { width: 1320, height: 780 } });
   const bounds = await canvas.boundingBox();
   assert.equal(bounds.width, 1320);
   assert.equal(bounds.height, 780);
@@ -141,6 +141,22 @@ test('live pieces scroll, reflow, and snap to the pannable board', async (t) => 
   await waitForText('1 of 8 placed');
   const placed = await canvas.screenshot();
   assert.deepEqual(await pixelAt(page, placed, 735, 348), sky, 'Zooming at the drop target should keep it under the pointer');
+  await click(1246, 43);
+  await waitForText('Color theme');
+  await clickDialog(58, 0);
+  await clickDialog(64, 73);
+  const slate = await canvas.screenshot();
+  assert.deepEqual(await pixelAt(page, slate, 1290, 100), [31, 45, 64, 255], 'Settings should restyle the active board');
+  assert.deepEqual(await pixelAt(page, slate, 735, 348), sky, 'The placed piece should stay at its zoomed position');
+  await page.evaluate(() => { window.paintedText = []; });
+  await click(1246, 43);
+  await waitForText('Color theme');
+  await clickDialog(-58, 0);
+  await page.waitForFunction(() => localStorage.getItem('live-jigsaw.theme') === 'Forest');
+  await page.keyboard.press('Escape');
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 1290, 100), panelBackground);
+  await move(735, 348);
   await page.mouse.wheel(0, 200);
   await drag(199, 253, 863, 348);
   await waitForText('2 of 8 placed');
@@ -209,8 +225,8 @@ test('live pieces scroll, reflow, and snap to the pannable board', async (t) => 
 test('the four new artwork scenes animate on the board', async (t) => {
   const { page, waitForText, errors, playSelection } = await openPuzzle(t, { viewport: { width: 1320, height: 780 } });
   const selections = [
-    { title: 'Mountains', x: 340, y: 529, scroll: 320 },
-    { title: 'Meadow', x: 1003, y: 529, scroll: 320 },
+    { title: 'Mountains', x: 340, y: 613, scroll: 320 },
+    { title: 'Meadow', x: 1003, y: 613, scroll: 320 },
     { title: 'Desert', x: 340, y: 717, scroll: 1000 },
     { title: 'Forest', x: 1003, y: 717, scroll: 1000 },
   ];
@@ -235,6 +251,27 @@ test('the four new artwork scenes animate on the board', async (t) => {
     await page.mouse.click(99, 43);
     await waitForText('Windmill');
   }
+  assert.deepEqual(errors, []);
+});
+
+test('picker Settings works on a narrow touch screen and remembers the theme', async (t) => {
+  const { page, canvas, waitForText, errors, clickDialog } = await openPuzzle(t, {
+    viewport: { width: 375, height: 640 }, hasTouch: true, isMobile: true,
+  });
+  await waitForText('Select a Puzzle');
+  const forest = await canvas.screenshot();
+  assert.deepEqual(await pixelAt(page, forest, 5, 105), [38, 58, 54, 255]);
+  await page.touchscreen.tap(301, 39);
+  await waitForText('Color theme');
+  await clickDialog(58, 0);
+  await clickDialog(64, 73);
+  const slate = await canvas.screenshot();
+  assert.deepEqual(await pixelAt(page, slate, 5, 105), [39, 51, 68, 255]);
+  assert.deepEqual(await pixelAt(page, slate, 5, 130), [39, 51, 68, 255], 'The Phaser canvas background should change too');
+  assert.deepEqual(await pixelAt(page, slate, 75, 170), await pixelAt(page, forest, 75, 170), 'Preview artwork should keep its colors');
+  await page.reload();
+  await waitForText('Select a Puzzle');
+  assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 5, 105), [39, 51, 68, 255]);
   assert.deepEqual(errors, []);
 });
 
@@ -314,7 +351,7 @@ test('the picker scrolls past two cards and clips previews', async (t) => {
 
     const initial = await canvas.screenshot();
     await swipeUp(400, 265, 43);
-    assert.notDeepEqual(await pixelAt(page, await canvas.screenshot(), 140, 160), await pixelAt(page, initial, 140, 160));
+    assert.notDeepEqual(await pixelAt(page, await canvas.screenshot(), 140, 244), await pixelAt(page, initial, 140, 244));
     assert.equal(await page.evaluate(() => window.paintedText.includes('Connector style')), false, 'A swipe should keep the options closed');
     await swipeUp(170, 700, 180);
     assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 140, 410), previewColor, 'A swipe should reveal the third card');

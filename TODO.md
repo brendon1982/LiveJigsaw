@@ -4,5 +4,6 @@
 - [ ] Add unlockable effects that play when a piece is placed. Decide how players unlock them.
 - [ ] Add more puzzle piece shapes.
 - [x] Vary the shape of piece connectors and where they sit along each edge.
-- [ ] Add UI themes.
+- [x] Add UI themes.
+- [ ] Add a loading screen.
 - [ ] Add colour filters for the image drawn on the board, such as black and white or sepia.

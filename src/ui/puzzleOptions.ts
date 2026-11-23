@@ -3,7 +3,6 @@ import { connectorStyles, type ConnectorStyleId } from '../domain/connectorStyle
 import { availablePuzzleSizes, type PuzzleSize } from '../domain/puzzleSizes';
 import type { PuzzleSource } from '../puzzles/PuzzleSource';
 import { makeButtonLabel, type UIScene } from './button';
-
 import { palette } from './theme';
 
 const optionWidth = 96;

@@ -4,8 +4,10 @@ import { availablePuzzleSizes, puzzleSizes } from '../domain/puzzleSizes';
 import { puzzleSources } from '../puzzles/catalog';
 import type { PuzzleSource } from '../puzzles/PuzzleSource';
 import type { PuzzleSelection } from './PlayPuzzleScene';
+import { headerInset, makeSettingsButton, puzzleHeader } from './puzzleHeader';
 import { showPuzzleOptions } from './puzzleOptions';
-import { palette } from './theme';
+import { openSettings } from './SettingsScene';
+import { styleWithTheme } from './theme';
 
 const cardWidth = 560;
 const cardHeight = 392;
@@ -42,6 +44,8 @@ export class SelectPuzzleScene extends Phaser.Scene {
     const grid = this.rexUI.add.gridSizer({
       column: 1, row: 1, space: { top: listPadding, bottom: listPadding },
     });
+    const track = this.rexUI.add.roundRectangle(0, 0, 8, 10, 4);
+    const thumb = this.rexUI.add.roundRectangle(0, 0, scrollbarWidth, 36, 5);
     const panel = this.rexUI.add.scrollablePanel({
       panel: { child: grid, mask: { maskType: 'stencil' } },
       clampChildOY: true,
@@ -49,21 +53,39 @@ export class SelectPuzzleScene extends Phaser.Scene {
       scroller: { threshold: scrollThreshold },
       mouseWheelScroller: { focus: 2, speed: 0.75 },
       slider: {
-        track: this.rexUI.add.roundRectangle(0, 0, 8, 10, 4, palette.scrollbarTrack),
-        thumb: this.rexUI.add.roundRectangle(0, 0, scrollbarWidth, 36, 5, palette.scrollbarThumb),
+        track, thumb,
         adaptThumbSize: true,
         minThumbSize: 36,
         hideUnscrollableSlider: true,
       },
       space: { sliderY: scrollbarGap },
     }).setOrigin(0);
+    styleWithTheme(panel, (colors) => {
+      track.setFillStyle(colors.scrollbarTrack);
+      thumb.setFillStyle(colors.scrollbarThumb);
+    });
+    const headerBackground = this.add.rectangle(0, 0, 1, 1).setOrigin(0);
+    const title = this.add.text(0, 0, 'Select a Puzzle', {
+      fontFamily: 'system-ui', fontSize: '34px', fontStyle: 'bold',
+    }).setOrigin(0, 0.5);
+    styleWithTheme(headerBackground, (colors) => {
+      headerBackground.setFillStyle(colors.background);
+      title.setColor(colors.text);
+    });
+    const settings = makeSettingsButton(this, () => {
+      if (options) return;
+      panel.setScrollerEnable(false).setMouseWheelScrollerEnable(false);
+      openSettings(this, () => panel.setScrollerEnable(true).setMouseWheelScrollerEnable(true));
+    });
 
     let currentColumns = 0;
     const fitPicker = () => {
       const { width, height } = this.scale.gameSize;
       const zoom = Math.min(1, width / (cardWidth + 2 * listPadding + scrollbarSpace));
+      const header = puzzleHeader(width);
+      const panelTop = header.height / zoom;
       const panelWidth = width / zoom;
-      const panelHeight = height / zoom;
+      const panelHeight = Math.max(1, (height - header.height) / zoom);
       const listWidth = panelWidth - scrollbarSpace;
       const fittingColumns = Math.floor((listWidth - 2 * listPadding + columnGap) / (cardWidth + columnGap));
       const columns = Math.min(Math.max(1, fittingColumns), Math.max(1, cards.length));
@@ -75,9 +97,13 @@ export class SelectPuzzleScene extends Phaser.Scene {
       }
 
       this.cameras.main.setViewport(0, 0, width, height).setOrigin(0).setZoom(zoom);
-      listBounds.setTo(0, 0, listWidth, panelHeight);
+      headerBackground.setDisplaySize(panelWidth, panelTop);
+      title.setFontSize(header.narrow ? 20 : 34).setScale(1 / zoom)
+        .setPosition(headerInset / zoom, (header.narrow ? 87 : header.buttonY + settings.button.height / 2) / zoom);
+      settings.layout(width, zoom);
+      listBounds.setTo(0, panelTop, listWidth, panelHeight);
       const offset = panel.childOY;
-      panel.setMinSize(panelWidth, panelHeight).layout().setChildOY(offset, true);
+      panel.setPosition(0, panelTop).setMinSize(panelWidth, panelHeight).layout().setChildOY(offset, true);
     };
     this.scale.on(Phaser.Scale.Events.RESIZE, fitPicker);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
@@ -87,9 +113,13 @@ export class SelectPuzzleScene extends Phaser.Scene {
   }
 
   private makeCard(source: PuzzleSource, listBounds: Phaser.Geom.Rectangle, openOptions: () => void) {
-    const background = this.rexUI.add.roundRectangle(0, 0, cardWidth, cardHeight, 16, palette.surface).setOrigin(0);
+    const background = this.rexUI.add.roundRectangle(0, 0, cardWidth, cardHeight, 16).setOrigin(0);
     const title = this.add.text(24, 333, source.title, {
-      fontFamily: 'system-ui', fontSize: '23px', color: palette.text,
+      fontFamily: 'system-ui', fontSize: '23px',
+    });
+    styleWithTheme(background, (colors) => {
+      background.setFillStyle(colors.surface);
+      title.setColor(colors.text);
     });
     if (availablePuzzleSizes(source.maxViewport).length > 0) {
       this.rexUI.add.click(background, { threshold: scrollThreshold, clickInterval: 0 })

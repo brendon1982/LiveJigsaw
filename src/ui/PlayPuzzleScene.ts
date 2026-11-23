@@ -5,9 +5,11 @@ import { createPuzzle, type PuzzleSize } from '../domain/puzzleSizes';
 import { LivePuzzleCapture } from '../rendering/LivePuzzleCapture';
 import type { PuzzleSource } from '../puzzles/PuzzleSource';
 import { makeButton } from './button';
+import { headerInset, makeSettingsButton, puzzleHeader } from './puzzleHeader';
 import { PuzzleBoardView } from './PuzzleBoardView';
 import { SelectPuzzleScene } from './SelectPuzzleScene';
-import { palette } from './theme';
+import { openSettings } from './SettingsScene';
+import { styleWithTheme } from './theme';
 
 export type PuzzleSelection = { source: PuzzleSource; size: PuzzleSize; connectorStyle?: ConnectorStyleId; seed: number };
 
@@ -26,18 +28,32 @@ export class PlayPuzzleScene extends Phaser.Scene {
     const puzzle = createPuzzle(size, connectorStyle, seed);
     const capture = new LivePuzzleCapture(this, source, { ...puzzle.board.size, seed: puzzle.seed });
 
-    const backButton = makeButton(this, 24, 22, 'All puzzles', () => this.scene.start(SelectPuzzleScene.key), 150);
-    const title = this.add.text(196, 0, source.title, {
-      fontFamily: 'system-ui', fontSize: '34px', fontStyle: 'bold', color: palette.text,
+    const backButton = makeButton(this, headerInset, 0, 'All puzzles', () => this.scene.start(SelectPuzzleScene.key), 150);
+    const settings = makeSettingsButton(this, () => {
+      board.cancelInteraction();
+      openSettings(this);
+    });
+    const title = this.add.text(0, 0, source.title, {
+      fontFamily: 'system-ui', fontSize: '34px', fontStyle: 'bold',
     }).setOrigin(0, 0.5);
     const progress = this.add.text(0, 0, '', {
-      fontFamily: 'system-ui', fontSize: '17px', color: palette.mutedText,
+      fontFamily: 'system-ui', fontSize: '17px',
     }).setOrigin(0, 0.5);
+    styleWithTheme(title, (colors) => {
+      title.setColor(colors.text);
+      progress.setColor(colors.mutedText);
+    });
     const layoutHeader = () => {
-      const compact = this.scale.gameSize.width < 540;
-      const centerY = backButton.y + backButton.height / 2;
-      title.setFontSize(compact ? 20 : 34).setY(centerY - (compact ? 10 : 0));
-      progress.setPosition(compact ? title.x : title.x + title.width + 16, centerY + (compact ? 11 : 0));
+      const { width } = this.scale.gameSize;
+      const { narrow, buttonY } = puzzleHeader(width);
+      const stacked = !narrow && width < 700;
+      const centerY = narrow ? 87 : buttonY + backButton.height / 2;
+      backButton.setY(buttonY);
+      settings.layout(width);
+      title.setFontSize(narrow || stacked ? 20 : 34)
+        .setPosition(narrow ? headerInset : backButton.x + backButton.width + 22, centerY - (stacked ? 10 : 0));
+      progress.setFontSize(narrow || stacked ? 15 : 17)
+        .setPosition(stacked ? title.x : title.x + title.width + 12, centerY + (stacked ? 11 : 0));
     };
     this.scale.on(Phaser.Scale.Events.RESIZE, layoutHeader);
     layoutHeader();

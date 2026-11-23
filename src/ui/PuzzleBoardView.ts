@@ -7,7 +7,7 @@ import { PannableBoard } from './PannableBoard';
 import { PieceTray } from './PieceTray';
 import { playWorkspace } from './playLayout';
 import { PuzzlePieceView } from './PuzzlePieceView';
-import { palette } from './theme';
+import { styleWithTheme } from './theme';
 
 type Gesture = { pointerId: number } & (
   | { kind: 'tray-touch'; entry: PuzzlePieceView; start: Point }
@@ -53,17 +53,22 @@ export class PuzzleBoardView {
     this.pieces = Phaser.Math.RND.shuffle([...puzzle.pieces])
       .map((piece) => new PuzzlePieceView(scene, capture, piece));
 
-    this.trayPanel = scene.add.rectangle(0, 0, 1, 1, palette.tray);
-    const boardPanel = scene.add.rectangle(0, 0, 1, 1, palette.board);
+    this.trayPanel = scene.add.rectangle(0, 0, 1, 1);
+    const boardPanel = scene.add.rectangle(0, 0, 1, 1);
     const dividerWidth = 10;
     const divider = scene.add.rectangle(0, 0, dividerWidth, 1, 0, 0);
-    const dividerLine = scene.add.rectangle(0, 0, 1, 1, palette.border).setOrigin(0, 0.5);
+    const dividerLine = scene.add.rectangle(0, 0, 1, 1).setOrigin(0, 0.5);
     const grip = scene.add.graphics().setDepth(1);
-    grip.fillStyle(palette.dividerGrip).fillRoundedRect(-4, -16, 8, 32, 3);
-    grip.fillStyle(palette.dividerDots);
-    for (const y of [-8, -3, 3, 8]) {
-      grip.fillCircle(-2, y, 1).fillCircle(2, y, 1);
-    }
+    styleWithTheme(this.trayPanel, (colors) => {
+      this.trayPanel.setFillStyle(colors.tray);
+      boardPanel.setFillStyle(colors.board);
+      dividerLine.setFillStyle(colors.border);
+      grip.clear().fillStyle(colors.dividerGrip).fillRoundedRect(-4, -16, 8, 32, 3);
+      grip.fillStyle(colors.dividerDots);
+      for (const y of [-8, -3, 3, 8]) {
+        grip.fillCircle(-2, y, 1).fillCircle(2, y, 1);
+      }
+    });
     this.tray = new PieceTray(scene, this.pieces, puzzle.board.cellSize, trayPieceSize);
     this.board = new PannableBoard(scene, puzzle.board.size, capture);
     this.floatingPieces = scene.add.layer();
@@ -129,6 +134,13 @@ export class PuzzleBoardView {
     this.tray.destroy();
     this.board.destroy();
     for (const { mask } of this.pieces) this.scene.textures.remove(mask);
+  }
+
+  cancelInteraction() {
+    if (this.gesture?.kind === 'piece') this.tray.returnPiece(this.gesture.entry);
+    this.gesture = undefined;
+    this.pinch = undefined;
+    this.scene.input.setDefaultCursor('default');
   }
 
   private readonly startGesture = (pointer: Phaser.Input.Pointer) => {
@@ -244,9 +256,7 @@ export class PuzzleBoardView {
   private readonly cancelGesture = (pointer: Phaser.Input.Pointer) => {
     if (this.endPinch(pointer)) return;
     if (this.gesture?.pointerId !== pointer.id) return;
-    if (this.gesture.kind === 'piece') this.tray.returnPiece(this.gesture.entry);
-    this.gesture = undefined;
-    this.scene.input.setDefaultCursor('default');
+    this.cancelInteraction();
   };
 
   private endPinch(pointer: Phaser.Input.Pointer): boolean {

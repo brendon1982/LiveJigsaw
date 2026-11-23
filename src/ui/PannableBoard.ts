@@ -19,9 +19,10 @@ export class PannableBoard {
     this.camera = scene.cameras.add().setName('Puzzle board').setOrigin(0);
     this.camera.inputEnabled = false;
     const guide = scene.add.image(0, 0, capture.texture.key, '__BASE').setOrigin(0)
-      .setDisplaySize(size.width, size.height).setAlpha(0.24);
+      .setDisplaySize(size.width, size.height);
     let guideFilter: Phaser.Filters.ColorMatrix | undefined;
     const updateGuideFilter = (filter: PuzzleArtworkFilter | undefined) => {
+      guide.setAlpha(filter ? 1 : 0.24);
       if (!filter) {
         guideFilter?.setActive(false);
         return;

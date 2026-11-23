@@ -161,7 +161,11 @@ test('live pieces scroll, reflow, and snap to the pannable board', async (t) => 
   assert.notDeepEqual(trayPieceColor, [48, 72, 65, 255], 'The sample should be on a tray piece');
   const guidePixel = (screenshot) => pixelAt(page, screenshot, 990, 348);
   const originalGuide = await guidePixel(unfiltered);
-  const guideContribution = (pixel) => pixel.slice(0, 3).map((channel, i) => channel - 0.76 * panelBackground[i]);
+  const assertGuideColor = (actual, expected, message) => {
+    assert.ok(actual.every((channel, i) => Math.abs(channel - expected[i]) <= 1),
+      `${message}. Expected ${expected}, got ${actual}`);
+  };
+  assertGuideColor(originalGuide, [65, 88, 83, 255], 'The original guide should blend with the board at 24% opacity');
 
   const selectFilter = async (x, y, name) => {
     await page.evaluate(() => { window.paintedText = []; });
@@ -177,13 +181,9 @@ test('live pieces scroll, reflow, and snap to the pannable board', async (t) => 
     assert.deepEqual(await pixelAt(page, screenshot, 85, 140), trayPieceColor, 'The tray piece should keep its original color');
     return guidePixel(screenshot);
   };
-  const grayscale = guideContribution(await selectFilter(-65, 19, 'grayscale'));
-  assert.ok(Math.max(...grayscale) - Math.min(...grayscale) <= 2, 'Black and White should make the guide grayscale');
-  const [sepiaRed, sepiaGreen, sepiaBlue] = guideContribution(await selectFilter(88, 19, 'sepia'));
-  assert.ok(sepiaRed + 1 >= sepiaGreen && sepiaGreen > sepiaBlue, 'Sepia should give the guide a warm tint');
-  const [fadedRed, fadedGreen] = guideContribution(await selectFilter(-65, 81, 'faded'));
-  const [originalRed, originalGreen] = guideContribution(originalGuide);
-  assert.ok(fadedRed < fadedGreen && fadedGreen - fadedRed < originalGreen - originalRed, 'Faded should soften the guide colors');
+  assertGuideColor(await selectFilter(-65, 19, 'grayscale'), [211, 211, 211, 255], 'Black and White should be fully opaque');
+  assertGuideColor(await selectFilter(88, 19, 'sepia'), [255, 255, 199, 255], 'Sepia should be fully opaque');
+  assertGuideColor(await selectFilter(-65, 81, 'faded'), [179, 193, 192, 255], 'Faded should be fully opaque');
 
   await move(735, 348);
   await page.mouse.wheel(0, 200);

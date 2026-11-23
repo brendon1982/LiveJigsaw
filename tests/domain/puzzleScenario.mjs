@@ -7,9 +7,10 @@ export function givenPuzzle({
   rows = 2,
   cell = { width: 128, height: 144 },
   snapTolerance = 10,
+  connectorStyle,
 } = {}) {
   const board = new Board({ width: columns * cell.width, height: rows * cell.height }, columns, rows);
-  const puzzle = new Puzzle(board, snapTolerance);
+  const puzzle = new Puzzle(board, snapTolerance, connectorStyle);
 
   function pieceAt(column, row) {
     return puzzle.pieces[row * columns + column];

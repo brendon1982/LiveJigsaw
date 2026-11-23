@@ -3,7 +3,8 @@ import type RexUIPlugin from 'phaser4-rex-plugins/templates/ui/ui-plugin.js';
 import { availablePuzzleSizes, puzzleSizes } from '../domain/puzzleSizes';
 import { puzzleSources } from '../puzzles/catalog';
 import type { PuzzleSource } from '../puzzles/PuzzleSource';
-import { makeButton, textColor } from './button';
+import { textColor } from './button';
+import { showPuzzleOptions } from './puzzleOptions';
 
 const cardWidth = 560;
 const cardHeight = 392;
@@ -18,6 +19,7 @@ const scrollThreshold = 10;
 export class SelectPuzzleScene extends Phaser.Scene {
   static readonly key = 'SelectPuzzle';
   declare rexUI: RexUIPlugin;
+  private options?: HTMLDialogElement;
 
   constructor() {
     super(SelectPuzzleScene.key);
@@ -67,7 +69,11 @@ export class SelectPuzzleScene extends Phaser.Scene {
       panel.setMinSize(panelWidth, panelHeight).layout().setChildOY(offset, true);
     };
     this.scale.on(Phaser.Scale.Events.RESIZE, fitPicker);
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.scale.off(Phaser.Scale.Events.RESIZE, fitPicker));
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.scale.off(Phaser.Scale.Events.RESIZE, fitPicker);
+      this.options?.remove();
+      this.options = undefined;
+    });
     fitPicker();
   }
 
@@ -76,17 +82,22 @@ export class SelectPuzzleScene extends Phaser.Scene {
     const title = this.add.text(24, 333, source.title, {
       fontFamily: 'system-ui', fontSize: '23px', color: textColor,
     });
-    const buttons = availablePuzzleSizes(source.maxViewport).map((size, index) =>
-      makeButton(this, 228 + index * 158, 324, `${size.label} · ${size.columns * size.rows}`, (pointer) => {
-        const camera = this.cameras.main;
-        const start = camera.getWorldPoint(pointer.downX, pointer.downY);
-        const end = camera.getWorldPoint(pointer.x, pointer.y);
-        if (pointer.wasCanceled || pointer.getDistance() >= scrollThreshold
-          || !listBounds.contains(start.x, start.y) || !listBounds.contains(end.x, end.y)) return;
-        this.scene.start('PlayPuzzle', { source, size });
-      }, 150, scrollThreshold));
+    if (availablePuzzleSizes(source.maxViewport).length > 0) {
+      this.rexUI.add.click(background, { threshold: scrollThreshold, clickInterval: 0 })
+        .on('click', (_button: unknown, _object: unknown, pointer: Phaser.Input.Pointer) => {
+          const camera = this.cameras.main;
+          const start = camera.getWorldPoint(pointer.downX, pointer.downY);
+          const end = camera.getWorldPoint(pointer.x, pointer.y);
+          if (this.options?.open || pointer.wasCanceled || pointer.getDistance() >= scrollThreshold
+            || !listBounds.contains(start.x, start.y) || !listBounds.contains(end.x, end.y)) return;
+          this.options = showPuzzleOptions(source, (size, connectorStyle) => {
+            this.scene.start('PlayPuzzle', { source, size, connectorStyle });
+          });
+        });
+      background.input!.cursor = 'pointer';
+    }
     return this.rexUI.add.container(0, 0, cardWidth, cardHeight).setOrigin(0)
-      .addLocal([background, this.makePreview(source), title, ...buttons]);
+      .addLocal([background, this.makePreview(source), title]);
   }
 
   private makePreview(source: PuzzleSource) {

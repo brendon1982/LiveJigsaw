@@ -42,3 +42,31 @@ test('small pieces stay inside the board and their frames preserve the local out
     }
   }
 });
+
+test('varied connector profiles follow the same seam in reverse and shift along the edge', () => {
+  for (const connectorStyle of ['rounded', 'angular']) {
+    const game = givenPuzzle({ columns: 4, rows: 1, connectorStyle });
+    const seams = Array.from({ length: 3 }, (_, column) => {
+      const first = game.pieceAt(column, 0);
+      const second = game.pieceAt(column + 1, 0);
+      const inside = ({ y }) => y > 0 && y < game.board.cellSize.height;
+      const seam = sharedPoints(first, second).filter(inside);
+      assert.ok(seam.length > 2);
+      assert.deepEqual(seam, sharedPoints(second, first).filter(inside).reverse());
+      return seam;
+    });
+    assert.notEqual(seams[0].length, seams[1].length, 'Two seams should use different profiles');
+    assert.equal(seams[0].length, seams[2].length);
+    assert.notEqual(seams[0][0].y, seams[2][0].y, 'The same profile should appear at different offsets');
+  }
+});
+
+test('connector-free pieces follow the cell borders and still snap to their targets', () => {
+  const game = givenPuzzle({ connectorStyle: 'none' });
+  for (const [index, { outline }] of game.puzzle.pieces.entries()) {
+    assert.equal(outline.points.length, 4);
+    assert.deepEqual(outline.frame, game.board.cells[index].bounds);
+  }
+  assert.equal(game.whenPiece(0, 0).dropsOn(1, 0), 'missed');
+  assert.equal(game.whenPiece(0, 0).dropsOn(0, 0), 'placed');
+});

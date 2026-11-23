@@ -1,4 +1,5 @@
 import type { Board, Cell } from './Board.ts';
+import type { ConnectorStyleId } from './connectorStyles.ts';
 import type { Point } from './geometry.ts';
 import { PieceOutline } from './PieceOutline.ts';
 
@@ -7,10 +8,10 @@ export class PuzzlePiece {
   readonly target: Point;
   readonly outline: PieceOutline;
 
-  constructor(board: Board, cell: Cell) {
+  constructor(cell: Cell, outline: PieceOutline) {
     this.id = `piece-${cell.row}-${cell.column}`;
     this.target = cell.bounds.center;
-    this.outline = PieceOutline.forCell(board, cell);
+    this.outline = outline;
   }
 
   acceptsDrop(point: Point, tolerance: number): boolean {
@@ -27,13 +28,14 @@ export class Puzzle {
   private readonly piecesById: ReadonlyMap<string, PuzzlePiece>;
   private readonly placed = new Set<string>();
 
-  constructor(board: Board, snapTolerance: number) {
+  constructor(board: Board, snapTolerance: number, connectorStyle: ConnectorStyleId = 'classic') {
     if (!Number.isFinite(snapTolerance) || snapTolerance < 0) {
       throw new RangeError('Snap tolerance must be finite and non-negative');
     }
     this.board = board;
     this.snapTolerance = snapTolerance;
-    this.pieces = board.cells.map((cell) => new PuzzlePiece(board, cell));
+    const outlines = PieceOutline.forBoard(board, connectorStyle);
+    this.pieces = board.cells.map((cell, index) => new PuzzlePiece(cell, outlines[index]));
     this.piecesById = new Map(this.pieces.map((piece) => [piece.id, piece]));
   }
 

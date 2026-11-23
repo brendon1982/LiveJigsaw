@@ -1,4 +1,5 @@
 import { Board } from './Board.ts';
+import type { ConnectorStyleId } from './connectorStyles.ts';
 import type { Size } from './geometry.ts';
 import { Puzzle } from './Puzzle.ts';
 
@@ -17,8 +18,8 @@ export function availablePuzzleSizes(maximum: Size): readonly PuzzleSize[] {
   return puzzleSizes.filter((size) => fitsViewport(size, maximum));
 }
 
-export function createPuzzle(size: PuzzleSize): Puzzle {
-  return new Puzzle(new Board(size, size.columns, size.rows), 28);
+export function createPuzzle(size: PuzzleSize, connectorStyle: ConnectorStyleId = 'classic'): Puzzle {
+  return new Puzzle(new Board(size, size.columns, size.rows), 28, connectorStyle);
 }
 
 export function captureScale(size: Size, maximum: Size, textureLimit: number): number {

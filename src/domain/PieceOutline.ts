@@ -1,27 +1,6 @@
-import type { Board, Cell } from './Board.ts';
+import type { Board } from './Board.ts';
+import { connectorStyles, type ConnectorStyleId } from './connectorStyles.ts';
 import { Bounds, type Point } from './geometry.ts';
-
-export const tabDepth = 17;
-
-// Both sides of a seam use this profile, in opposite directions.
-const tabProfile = [
-  [-22, 0], [-10, 0], [-11, 4], [-14, 8], [-13, 12], [-9, 16],
-  [-4, tabDepth], [4, tabDepth], [9, 16], [13, 12], [14, 8],
-  [11, 4], [10, 0], [22, 0],
-];
-
-function edge(start: Point, end: Point, tab: number, scale: number): Point[] {
-  if (tab === 0) return [start];
-
-  const dx = Math.sign(end.x - start.x);
-  const dy = Math.sign(end.y - start.y);
-  const centerX = (start.x + end.x) / 2;
-  const centerY = (start.y + end.y) / 2;
-  return [start, ...tabProfile.map(([along, outward]) => ({
-    x: centerX + (dx * along + dy * outward * tab) * scale,
-    y: centerY + (dy * along - dx * outward * tab) * scale,
-  }))];
-}
 
 export class PieceOutline {
   readonly points: readonly Point[];
@@ -34,20 +13,46 @@ export class PieceOutline {
     this.localPoints = points.map((point) => this.frame.toLocal(point));
   }
 
-  static forCell(board: Board, cell: Cell): PieceOutline {
-    const { column, row, bounds: { x, y, width, height } } = cell;
-    const topLeft = { x, y };
-    const topRight = { x: x + width, y };
-    const bottomRight = { x: x + width, y: y + height };
-    const bottomLeft = { x, y: y + height };
-    const tab = (column + row) % 2 === 0 ? 1 : -1;
+  static forBoard(board: Board, styleId: ConnectorStyleId): PieceOutline[] {
+    const { rows, columns, cellSize: { width, height } } = board;
+    const { profiles, offsets, scaleBase } = connectorStyles[styleId];
+    const scale = Math.min(1, width / scaleBase, height / scaleBase);
+    const seams: { right: Point[]; bottom: Point[] }[] = [];
+    let seamIndex = 0;
 
-    const scale = Math.min(1, width / 64, height / 64);
-    return new PieceOutline([
-      ...edge(topLeft, topRight, row === 0 ? 0 : tab, scale),
-      ...edge(topRight, bottomRight, column === board.columns - 1 ? 0 : tab, scale),
-      ...edge(bottomRight, bottomLeft, row === board.rows - 1 ? 0 : tab, scale),
-      ...edge(bottomLeft, topLeft, column === 0 ? 0 : tab, scale),
-    ]);
+    // Seam points exclude the grid corners, so either piece can trace them in its own direction.
+    function cut(start: Point, end: Point, tab: number): Point[] {
+      if (profiles.length === 0) return [];
+
+      const profile = profiles[seamIndex % profiles.length];
+      const offset = offsets[Math.floor(seamIndex / profiles.length) % offsets.length];
+      seamIndex += 1;
+      const dx = Math.sign(end.x - start.x);
+      const dy = Math.sign(end.y - start.y);
+      const centerX = (start.x + end.x) / 2 + (end.x - start.x) * offset;
+      const centerY = (start.y + end.y) / 2 + (end.y - start.y) * offset;
+      return profile.map(([along, depth]) => ({
+        x: centerX + (dx * along + dy * depth * tab) * scale,
+        y: centerY + (dy * along - dx * depth * tab) * scale,
+      }));
+    }
+
+    return board.cells.map(({ row, column, bounds: { x, y } }, index) => {
+      const rightX = column + 1 === columns ? board.size.width : (column + 1) * width;
+      const bottomY = row + 1 === rows ? board.size.height : (row + 1) * height;
+      const topLeft = { x, y };
+      const topRight = { x: rightX, y };
+      const bottomRight = { x: rightX, y: bottomY };
+      const bottomLeft = { x, y: bottomY };
+      const tab = (column + row) % 2 === 0 ? 1 : -1;
+
+      const top = row === 0 ? [] : [...seams[index - columns].bottom].reverse();
+      const left = column === 0 ? [] : [...seams[index - 1].right].reverse();
+      const right = column + 1 === columns ? [] : cut(topRight, bottomRight, tab);
+      const bottom = row + 1 === rows ? [] : cut(bottomRight, bottomLeft, tab);
+      seams.push({ right, bottom });
+
+      return new PieceOutline([topLeft, ...top, topRight, ...right, bottomRight, ...bottom, bottomLeft, ...left]);
+    });
   }
 }

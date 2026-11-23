@@ -54,12 +54,21 @@ async function openPuzzle(t, options, path = '/') {
       throw error;
     }
   };
-  await waitForText('Classic · 8');
-  return { page, canvas, waitForText, errors };
+  await waitForText('Windmill');
+  const dialog = page.getByRole('dialog');
+  const playSelection = async ({ size, connectorStyle } = {}) => {
+    await dialog.waitFor();
+    if (size) await dialog.getByLabel('Puzzle size').selectOption({ label: size });
+    if (connectorStyle) await dialog.getByLabel('Connector style').selectOption({ label: connectorStyle });
+    const play = dialog.getByRole('button', { name: 'Play' });
+    if (options.hasTouch) await play.tap();
+    else await play.click();
+  };
+  return { page, canvas, waitForText, errors, dialog, playSelection };
 }
 
 test('live pieces scroll, reflow, and snap to the pannable board', async (t) => {
-  const { page, canvas, waitForText, errors } = await openPuzzle(t, { viewport: { width: 1320, height: 780 } });
+  const { page, canvas, waitForText, errors, playSelection } = await openPuzzle(t, { viewport: { width: 1320, height: 780 } });
   const bounds = await canvas.boundingBox();
   assert.equal(bounds.width, 1320);
   assert.equal(bounds.height, 780);
@@ -72,7 +81,8 @@ test('live pieces scroll, reflow, and snap to the pannable board', async (t) => 
     await page.mouse.up();
   };
 
-  await click(340, 361);
+  await click(340, 180);
+  await playSelection();
   await waitForText('0 of 8 placed');
   await waitForText('Drag to pan · Scroll to zoom');
   const initial = await canvas.screenshot();
@@ -145,8 +155,9 @@ test('live pieces scroll, reflow, and snap to the pannable board', async (t) => 
   await page.waitForFunction(() => document.querySelector('canvas').height === 780);
   await page.evaluate(() => { window.paintedText = []; });
   await click(99, 43);
-  await waitForText('Classic · 8');
-  await click(1160, 361);
+  await waitForText('Windmill');
+  await click(1160, 180);
+  await playSelection({ size: 'Large · 32' });
   await waitForText('0 of 32 placed');
   await drag(167, 320, 552, 320);
   const largeBefore = await canvas.screenshot();
@@ -162,8 +173,9 @@ test('live pieces scroll, reflow, and snap to the pannable board', async (t) => 
   await page.waitForFunction(() => document.querySelector('canvas').width === 900);
   await page.evaluate(() => { window.paintedText = []; });
   await click(99, 43);
-  await waitForText('Classic · 8');
-  await click(460, 361);
+  await waitForText('Windmill');
+  await click(460, 180);
+  await playSelection();
   await waitForText('0 of 8 placed');
   const replay = await canvas.screenshot();
   assert.deepEqual(await pixelAt(page, replay, 85, 196), sky);
@@ -172,7 +184,7 @@ test('live pieces scroll, reflow, and snap to the pannable board', async (t) => 
 });
 
 test('the four new artwork scenes animate on the board', async (t) => {
-  const { page, waitForText, errors } = await openPuzzle(t, { viewport: { width: 1320, height: 780 } });
+  const { page, waitForText, errors, playSelection } = await openPuzzle(t, { viewport: { width: 1320, height: 780 } });
   const selections = [
     { title: 'Mountains', x: 340, y: 529, scroll: 320 },
     { title: 'Meadow', x: 1003, y: 529, scroll: 320 },
@@ -186,6 +198,7 @@ test('the four new artwork scenes animate on the board', async (t) => {
     await page.mouse.wheel(0, scroll);
     await page.evaluate(() => { window.paintedText = []; });
     await page.mouse.click(x, y);
+    await playSelection({ connectorStyle: 'Angular' });
     await waitForText(title);
     await waitForText('0 of 8 placed');
     const before = await page.screenshot({ clip: board });
@@ -197,7 +210,7 @@ test('the four new artwork scenes animate on the board', async (t) => {
     assert.ok(!before.equals(after), `${title} should animate the captured artwork`);
     await page.evaluate(() => { window.paintedText = []; });
     await page.mouse.click(99, 43);
-    await waitForText('Classic · 8');
+    await waitForText('Windmill');
   }
   assert.deepEqual(errors, []);
 });
@@ -213,7 +226,7 @@ test('the picker scrolls past two cards and clips previews', async (t) => {
   const path = '/picker-fixture/tests/fixtures/puzzle-picker.html';
   const previewColor = [255, 0, 255, 255];
   await t.test('mouse wheel scrolls to a selectable third card', async (t) => {
-    const { page, canvas, waitForText, errors } = await openPuzzle(t, { viewport: { width: 1320, height: 540 } }, path);
+    const { page, canvas, waitForText, errors, dialog, playSelection } = await openPuzzle(t, { viewport: { width: 1320, height: 540 } }, path);
     const initial = await canvas.screenshot();
     assert.deepEqual(await pixelAt(page, initial, 120, 165), [192, 221, 219, 255]);
     assert.notDeepEqual(await pixelAt(page, initial, 800, 165), [38, 58, 54, 255], 'The second card should sit beside the first');
@@ -231,13 +244,19 @@ test('the picker scrolls past two cards and clips previews', async (t) => {
     for (const [x, y] of [[50, 165], [582, 165], [120, 148], [120, 452]]) {
       assert.notDeepEqual(await pixelAt(page, scrolled, x, y), previewColor, `Artwork should stay inside all four preview edges (${x}, ${y})`);
     }
-    await page.mouse.click(340, 477);
+    await page.mouse.click(340, 165);
+    await dialog.getByRole('heading', { name: 'Oversized preview' }).waitFor();
+    assert.deepEqual(await dialog.getByLabel('Puzzle size').locator('option').allTextContents(), ['Classic · 8']);
+    await dialog.getByRole('button', { name: 'Cancel' }).click();
+    await dialog.waitFor({ state: 'hidden' });
+    await page.mouse.click(340, 165);
+    await playSelection();
     await waitForText('0 of 8 placed');
     assert.deepEqual(errors, []);
   });
 
-  await t.test('touch can start scrolling on a card button and tap the third card', async (t) => {
-    const { page, canvas, waitForText, errors } = await openPuzzle(t, {
+  await t.test('touch can swipe from a preview and tap a different puzzle', async (t) => {
+    const { page, canvas, waitForText, errors, dialog, playSelection } = await openPuzzle(t, {
       viewport: { width: 768, height: 780 },
       hasTouch: true,
       isMobile: true,
@@ -253,19 +272,20 @@ test('the picker scrolls past two cards and clips previews', async (t) => {
     };
 
     const initial = await canvas.screenshot();
-    await swipeUp(400, 367, 145);
+    await swipeUp(400, 265, 43);
     assert.notDeepEqual(await pixelAt(page, await canvas.screenshot(), 140, 160), await pixelAt(page, initial, 140, 160));
-    assert.equal(await page.evaluate(() => window.paintedText.includes('0 of 8 placed')), false, 'A swipe should not activate the button');
+    assert.equal(await dialog.count(), 0, 'A swipe should keep the options closed');
     await swipeUp(170, 700, 180);
     assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 140, 410), previewColor, 'A swipe should reveal the third card');
-    await page.touchscreen.tap(400, 723);
+    await page.touchscreen.tap(400, 410);
+    await playSelection({ connectorStyle: 'None' });
     await waitForText('0 of 8 placed');
     assert.deepEqual(errors, []);
   });
 });
 
 test('tablet touch scrolls, resizes, zooms, cancels, and places pieces', async (t) => {
-  const { page, canvas, waitForText, errors } = await openPuzzle(t, {
+  const { page, canvas, waitForText, errors, playSelection } = await openPuzzle(t, {
     viewport: { width: 1024, height: 768 },
     hasTouch: true,
     isMobile: true,
@@ -282,7 +302,8 @@ test('tablet touch scrolls, resizes, zooms, cancels, and places pieces', async (
     await dispatch(end);
   };
 
-  await page.touchscreen.tap(522, 367);
+  await page.touchscreen.tap(522, 180);
+  await playSelection();
   await waitForText('0 of 8 placed');
   await waitForText('Drag to pan · Pinch to zoom');
   const startingPiece = await pixelAt(page, await canvas.screenshot(), 85, 196);
@@ -326,8 +347,9 @@ test('tablet touch scrolls, resizes, zooms, cancels, and places pieces', async (
   await page.waitForFunction(() => document.querySelector('canvas').height === 1024);
   await page.evaluate(() => { window.paintedText = []; });
   await page.touchscreen.tap(99, 43);
-  await waitForText('Classic · 8');
-  await page.touchscreen.tap(395, 367);
+  await waitForText('Windmill');
+  await page.touchscreen.tap(395, 180);
+  await playSelection({ connectorStyle: 'Rounded' });
   await waitForText('0 of 8 placed');
   assert.deepEqual(errors, []);
 });

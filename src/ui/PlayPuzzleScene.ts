@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import type RexUIPlugin from 'phaser4-rex-plugins/templates/ui/ui-plugin.js';
+import type { ConnectorStyleId } from '../domain/connectorStyles';
 import { createPuzzle, type PuzzleSize } from '../domain/puzzleSizes';
 import { LivePuzzleCapture } from '../rendering/LivePuzzleCapture';
 import type { PuzzleSource } from '../puzzles/PuzzleSource';
@@ -8,7 +9,7 @@ import { PuzzleBoardView } from './PuzzleBoardView';
 import { SelectPuzzleScene } from './SelectPuzzleScene';
 import { hasTouchTargets } from './touchLayout';
 
-type Selection = { source: PuzzleSource; size: PuzzleSize };
+type Selection = { source: PuzzleSource; size: PuzzleSize; connectorStyle?: ConnectorStyleId };
 
 export class PlayPuzzleScene extends Phaser.Scene {
   static readonly key = 'PlayPuzzle';
@@ -18,8 +19,8 @@ export class PlayPuzzleScene extends Phaser.Scene {
     super(PlayPuzzleScene.key);
   }
 
-  create({ source, size }: Selection) {
-    const puzzle = createPuzzle(size);
+  create({ source, size, connectorStyle }: Selection) {
+    const puzzle = createPuzzle(size, connectorStyle);
     const capture = new LivePuzzleCapture(this, source, puzzle.board.size);
 
     makeButton(this, 24, 22, 'All puzzles', () => this.scene.start(SelectPuzzleScene.key), 150);

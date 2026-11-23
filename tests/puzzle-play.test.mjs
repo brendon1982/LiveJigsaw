@@ -155,36 +155,50 @@ test('live pieces scroll, reflow, and snap to the pannable board', async (t) => 
   await page.waitForFunction(() => localStorage.getItem('live-jigsaw.theme') === 'Forest');
   await page.keyboard.press('Escape');
   await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
-  assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 1290, 100), panelBackground);
+  const unfiltered = await canvas.screenshot();
+  assert.deepEqual(await pixelAt(page, unfiltered, 1290, 100), panelBackground);
+  const trayPieceColor = await pixelAt(page, unfiltered, 85, 140);
+  assert.notDeepEqual(trayPieceColor, [48, 72, 65, 255], 'The sample should be on a tray piece');
+  const guidePixel = (screenshot) => pixelAt(page, screenshot, 990, 348);
+  const originalGuide = await guidePixel(unfiltered);
+  const guideContribution = (pixel) => pixel.slice(0, 3).map((channel, i) => channel - 0.76 * panelBackground[i]);
 
   const selectFilter = async (x, y, name) => {
     await page.evaluate(() => { window.paintedText = []; });
     await click(1246, 43);
     await waitForText('Black and White');
-    const before = await pixelAt(page, await canvas.screenshot(), 900, 348);
+    const before = await guidePixel(await canvas.screenshot());
     await clickDialog(x, y);
     await page.waitForFunction((expected) => localStorage.getItem('live-jigsaw.puzzle-filter') === expected, name);
-    assert.notDeepEqual(await pixelAt(page, await canvas.screenshot(), 900, 348), before, 'The guide should change while Settings is still open');
+    assert.notDeepEqual(await guidePixel(await canvas.screenshot()), before, 'The guide should change while Settings is still open');
     await clickDialog(101, 153);
-    return pixelAt(page, await canvas.screenshot(), 735, 348);
+    const screenshot = await canvas.screenshot();
+    assert.deepEqual(await pixelAt(page, screenshot, 735, 348), sky, 'The placed piece should keep its original color');
+    assert.deepEqual(await pixelAt(page, screenshot, 85, 140), trayPieceColor, 'The tray piece should keep its original color');
+    return guidePixel(screenshot);
   };
-  const grayscale = await selectFilter(-65, 19, 'grayscale');
-  assert.deepEqual(grayscale, [grayscale[0], grayscale[0], grayscale[0], 255]);
-  assert.ok(grayscale[0] > 180, 'The placed piece should still be visible');
-  const sepia = await selectFilter(88, 19, 'sepia');
-  assert.ok(sepia[0] >= sepia[1] && sepia[1] > sepia[2], 'Sepia should give the placed piece a warm tint');
-  const faded = await selectFilter(-65, 81, 'faded');
-  assert.ok(faded[0] < faded[1] && faded[1] - faded[0] < sky[1] - sky[0], 'Faded should soften the original colors');
-  assert.deepEqual(await selectFilter(88, 81, null), sky, 'Clearing the filter should restore the original artwork');
+  const grayscale = guideContribution(await selectFilter(-65, 19, 'grayscale'));
+  assert.ok(Math.max(...grayscale) - Math.min(...grayscale) <= 2, 'Black and White should make the guide grayscale');
+  const [sepiaRed, sepiaGreen, sepiaBlue] = guideContribution(await selectFilter(88, 19, 'sepia'));
+  assert.ok(sepiaRed + 1 >= sepiaGreen && sepiaGreen > sepiaBlue, 'Sepia should give the guide a warm tint');
+  const [fadedRed, fadedGreen] = guideContribution(await selectFilter(-65, 81, 'faded'));
+  const [originalRed, originalGreen] = guideContribution(originalGuide);
+  assert.ok(fadedRed < fadedGreen && fadedGreen - fadedRed < originalGreen - originalRed, 'Faded should soften the guide colors');
 
   await move(735, 348);
   await page.mouse.wheel(0, 200);
-  await drag(199, 253, 863, 348);
+  await move(199, 253);
+  await page.mouse.down();
+  await move(863, 348, 8);
+  assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 863, 348), sky, 'The dragged piece should keep its original color');
+  await page.mouse.up();
   await waitForText('2 of 8 placed');
   const joined = await canvas.screenshot();
+  assert.deepEqual(await pixelAt(page, joined, 863, 348), sky, 'A newly placed piece should keep its original color');
   for (const [x, y] of [[798, 337], [802, 339], [811, 342], [815, 348], [809, 357]]) {
     assert.deepEqual(await pixelAt(page, joined, x, y), sky, 'The live guide should not show through joined pieces');
   }
+  assert.deepEqual(await selectFilter(88, 81, null), originalGuide, 'Clearing the filter should restore the original guide');
 
   const assertCornerAtCenter = async (horizontal, vertical) => {
     const screenshot = await canvas.screenshot();

@@ -1,10 +1,10 @@
-import type { PuzzleArtworkFilter } from '../rendering/LivePuzzleCapture';
-
 export const puzzleFilters = {
   grayscale: 'Black and White',
   sepia: 'Sepia',
   faded: 'Faded',
-} satisfies Record<PuzzleArtworkFilter, string>;
+};
+
+export type PuzzleArtworkFilter = keyof typeof puzzleFilters;
 
 const storageKey = 'live-jigsaw.puzzle-filter';
 const listeners = new Set<(filter: PuzzleArtworkFilter | undefined) => void>();

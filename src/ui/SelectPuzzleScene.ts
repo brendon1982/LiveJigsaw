@@ -3,9 +3,9 @@ import type RexUIPlugin from 'phaser4-rex-plugins/templates/ui/ui-plugin.js';
 import { availablePuzzleSizes, puzzleSizes } from '../domain/puzzleSizes';
 import { puzzleSources } from '../puzzles/catalog';
 import type { PuzzleSource } from '../puzzles/PuzzleSource';
-import { textColor } from './button';
 import type { PuzzleSelection } from './PlayPuzzleScene';
 import { showPuzzleOptions } from './puzzleOptions';
+import { palette } from './theme';
 
 const cardWidth = 560;
 const cardHeight = 392;
@@ -49,8 +49,8 @@ export class SelectPuzzleScene extends Phaser.Scene {
       scroller: { threshold: scrollThreshold },
       mouseWheelScroller: { focus: 2, speed: 0.75 },
       slider: {
-        track: this.rexUI.add.roundRectangle(0, 0, 8, 10, 4, 0x35534b),
-        thumb: this.rexUI.add.roundRectangle(0, 0, scrollbarWidth, 36, 5, 0x9cb5a7),
+        track: this.rexUI.add.roundRectangle(0, 0, 8, 10, 4, palette.scrollbarTrack),
+        thumb: this.rexUI.add.roundRectangle(0, 0, scrollbarWidth, 36, 5, palette.scrollbarThumb),
         adaptThumbSize: true,
         minThumbSize: 36,
         hideUnscrollableSlider: true,
@@ -87,9 +87,9 @@ export class SelectPuzzleScene extends Phaser.Scene {
   }
 
   private makeCard(source: PuzzleSource, listBounds: Phaser.Geom.Rectangle, openOptions: () => void) {
-    const background = this.rexUI.add.roundRectangle(0, 0, cardWidth, cardHeight, 16, 0x30453f).setOrigin(0);
+    const background = this.rexUI.add.roundRectangle(0, 0, cardWidth, cardHeight, 16, palette.surface).setOrigin(0);
     const title = this.add.text(24, 333, source.title, {
-      fontFamily: 'system-ui', fontSize: '23px', color: textColor,
+      fontFamily: 'system-ui', fontSize: '23px', color: palette.text,
     });
     if (availablePuzzleSizes(source.maxViewport).length > 0) {
       this.rexUI.add.click(background, { threshold: scrollThreshold, clickInterval: 0 })

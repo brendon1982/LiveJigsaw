@@ -5,6 +5,8 @@ import type { Point, Size } from '../domain/geometry';
 import type { UIScene } from './button';
 import type { PuzzlePieceView } from './PuzzlePieceView';
 
+import { palette } from './theme';
+
 const scrollbarSpace = 24;
 
 export class PieceTray {
@@ -48,8 +50,8 @@ export class PieceTray {
       clampChildOY: true,
       mouseWheelScroller: { focus: 2, speed: 0.75 },
       slider: {
-        track: scene.rexUI.add.roundRectangle(0, 0, 6, 10, 3, 0x35534b),
-        thumb: scene.rexUI.add.roundRectangle(0, 0, 8, 36, 4, 0x9cb5a7),
+        track: scene.rexUI.add.roundRectangle(0, 0, 6, 10, 3, palette.scrollbarTrack),
+        thumb: scene.rexUI.add.roundRectangle(0, 0, 8, 36, 4, palette.scrollbarThumb),
         adaptThumbSize: true,
         minThumbSize: 36,
         hideUnscrollableSlider: true,

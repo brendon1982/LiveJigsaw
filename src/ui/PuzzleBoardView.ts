@@ -7,6 +7,7 @@ import { PannableBoard } from './PannableBoard';
 import { PieceTray } from './PieceTray';
 import { playWorkspace } from './playLayout';
 import { PuzzlePieceView } from './PuzzlePieceView';
+import { palette } from './theme';
 
 type Gesture = { pointerId: number } & (
   | { kind: 'tray-touch'; entry: PuzzlePieceView; start: Point }
@@ -52,14 +53,14 @@ export class PuzzleBoardView {
     this.pieces = Phaser.Math.RND.shuffle([...puzzle.pieces])
       .map((piece) => new PuzzlePieceView(scene, capture, piece));
 
-    this.trayPanel = scene.add.rectangle(0, 0, 1, 1, 0x304841);
-    const boardPanel = scene.add.rectangle(0, 0, 1, 1, 0x192e28);
+    this.trayPanel = scene.add.rectangle(0, 0, 1, 1, palette.tray);
+    const boardPanel = scene.add.rectangle(0, 0, 1, 1, palette.board);
     const dividerWidth = 10;
     const divider = scene.add.rectangle(0, 0, dividerWidth, 1, 0, 0);
-    const dividerLine = scene.add.rectangle(0, 0, 1, 1, 0x71897e).setOrigin(0, 0.5);
+    const dividerLine = scene.add.rectangle(0, 0, 1, 1, palette.border).setOrigin(0, 0.5);
     const grip = scene.add.graphics().setDepth(1);
-    grip.fillStyle(0x607b70).fillRoundedRect(-4, -16, 8, 32, 3);
-    grip.fillStyle(0xdce9e0);
+    grip.fillStyle(palette.dividerGrip).fillRoundedRect(-4, -16, 8, 32, 3);
+    grip.fillStyle(palette.dividerDots);
     for (const y of [-8, -3, 3, 8]) {
       grip.fillCircle(-2, y, 1).fillCircle(2, y, 1);
     }

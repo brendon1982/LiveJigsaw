@@ -4,9 +4,10 @@ import type { ConnectorStyleId } from '../domain/connectorStyles';
 import { createPuzzle, type PuzzleSize } from '../domain/puzzleSizes';
 import { LivePuzzleCapture } from '../rendering/LivePuzzleCapture';
 import type { PuzzleSource } from '../puzzles/PuzzleSource';
-import { makeButton, mutedColor, textColor } from './button';
+import { makeButton } from './button';
 import { PuzzleBoardView } from './PuzzleBoardView';
 import { SelectPuzzleScene } from './SelectPuzzleScene';
+import { palette } from './theme';
 
 export type PuzzleSelection = { source: PuzzleSource; size: PuzzleSize; connectorStyle?: ConnectorStyleId; seed: number };
 
@@ -27,10 +28,10 @@ export class PlayPuzzleScene extends Phaser.Scene {
 
     const backButton = makeButton(this, 24, 22, 'All puzzles', () => this.scene.start(SelectPuzzleScene.key), 150);
     const title = this.add.text(196, 0, source.title, {
-      fontFamily: 'system-ui', fontSize: '34px', fontStyle: 'bold', color: textColor,
+      fontFamily: 'system-ui', fontSize: '34px', fontStyle: 'bold', color: palette.text,
     }).setOrigin(0, 0.5);
     const progress = this.add.text(0, 0, '', {
-      fontFamily: 'system-ui', fontSize: '17px', color: mutedColor,
+      fontFamily: 'system-ui', fontSize: '17px', color: palette.mutedText,
     }).setOrigin(0, 0.5);
     const layoutHeader = () => {
       const compact = this.scale.gameSize.width < 540;

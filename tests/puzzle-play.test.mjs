@@ -64,7 +64,11 @@ async function openPuzzle(t, options, path = '/') {
     await waitForText('Connector style');
     // Phaser hit-tests the camera's render list, which updates on the first dialog frame.
     await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
-    if (size) await clickDialog(size === 'Large · 32' ? -52 : -156, -59);
+    if (size) {
+      const index = ['Classic · 8', 'Large · 32', 'Dense · 64', 'Expert · 128'].indexOf(size);
+      assert.ok(index >= 0);
+      await clickDialog(-156 + 104 * index, -59);
+    }
     if (connectorStyle) {
       const index = ['Classic', 'Rounded', 'Angular', 'None'].indexOf(connectorStyle);
       assert.ok(index >= 0);
@@ -188,6 +192,13 @@ test('live pieces scroll, reflow, and snap to the pannable board', async (t) => 
   const replay = await canvas.screenshot();
   assert.deepEqual(await pixelAt(page, replay, 85, 196), sky);
   assert.notDeepEqual(await pixelAt(page, initial, 85, 196), sky, 'Reopening the same puzzle should shuffle the tray again');
+  await page.evaluate(() => { window.paintedText = []; });
+  await click(99, 43);
+  await waitForText('Windmill');
+  await click(340, 180);
+  await playSelection({ size: 'Dense · 64' });
+  await waitForText('0 of 64 placed');
+  assert.notDeepEqual(await pixelAt(page, await canvas.screenshot(), 85, 196), [48, 72, 65, 255], 'The dense tray should render its thumbnails');
   assert.deepEqual(errors, []);
 });
 
@@ -375,7 +386,9 @@ test('tablet touch scrolls, resizes, zooms, cancels, and places pieces', async (
   await page.touchscreen.tap(99, 43);
   await waitForText('Windmill');
   await page.touchscreen.tap(395, 180);
-  await playSelection({ connectorStyle: 'Rounded' });
-  await waitForText('0 of 8 placed');
+  await playSelection({ size: 'Expert · 128', connectorStyle: 'Rounded' });
+  await waitForText('0 of 128 placed');
+  const expertTray = await canvas.screenshot();
+  assert.notDeepEqual(await pixelAt(page, expertTray, 105, 196), [48, 72, 65, 255], 'The smallest pieces should scale up to the tray target');
   assert.deepEqual(errors, []);
 });

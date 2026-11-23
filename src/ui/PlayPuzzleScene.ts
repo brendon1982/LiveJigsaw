@@ -11,6 +11,9 @@ import { hasTouchTargets } from './touchLayout';
 
 export type PuzzleSelection = { source: PuzzleSource; size: PuzzleSize; connectorStyle?: ConnectorStyleId; seed: number };
 
+// Target length in screen pixels for the shorter side of a tray piece's base cell.
+const trayPieceSize = 76.8;
+
 export class PlayPuzzleScene extends Phaser.Scene {
   static readonly key = 'PlayPuzzle';
   declare rexUI: RexUIPlugin;
@@ -44,7 +47,7 @@ export class PlayPuzzleScene extends Phaser.Scene {
         ? 'Puzzle complete'
         : `${puzzle.placedCount} of ${puzzle.pieces.length} placed`);
     };
-    const board = new PuzzleBoardView(this, puzzle, capture, updateProgress);
+    const board = new PuzzleBoardView(this, puzzle, capture, trayPieceSize, updateProgress);
     updateProgress();
     capture.start();
 

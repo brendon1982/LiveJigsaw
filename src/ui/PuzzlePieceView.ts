@@ -1,22 +1,33 @@
 import Phaser from 'phaser';
 import type { PuzzlePiece } from '../domain/Puzzle';
-import type { Point } from '../domain/geometry';
+import { Bounds, type Point } from '../domain/geometry';
 import type { LivePuzzleCapture } from '../rendering/LivePuzzleCapture';
 
 export class PuzzlePieceView {
   readonly mask: Phaser.Textures.CanvasTexture;
+  readonly frame: Bounds;
   private readonly image: Phaser.GameObjects.Image;
   private readonly hitArea: Phaser.Geom.Polygon;
   private scale = 1;
 
   constructor(scene: Phaser.Scene, capture: LivePuzzleCapture, readonly piece: PuzzlePiece) {
-    const { frame, localPoints } = piece.outline;
+    const { frame: outlineBounds, points } = piece.outline;
+    const { texture, scale } = capture;
+    // Round the crop outward in texture pixels and keep geometry in logical pixels.
+    const left = Math.floor(outlineBounds.x * scale);
+    const top = Math.floor(outlineBounds.y * scale);
+    const width = Math.ceil((outlineBounds.x + outlineBounds.width) * scale) - left;
+    const height = Math.ceil((outlineBounds.y + outlineBounds.height) * scale) - top;
+    const frame = new Bounds(left / scale, top / scale, width / scale, height / scale);
+    this.frame = frame;
+    const localPoints = points.map((point) => frame.toLocal(point));
     const maskKey = `live-puzzle-mask-${piece.id}`;
-    const mask = scene.textures.createCanvas(maskKey, frame.width, frame.height);
+    const mask = scene.textures.createCanvas(maskKey, width, height);
     if (!mask) throw new Error(`Could not create mask for ${piece.id}`);
     this.mask = mask;
 
     const context = mask.context;
+    context.scale(scale, scale);
     context.beginPath();
     context.moveTo(localPoints[0].x, localPoints[0].y);
     for (const point of localPoints.slice(1)) context.lineTo(point.x, point.y);
@@ -25,8 +36,7 @@ export class PuzzlePieceView {
     context.fill();
     mask.refresh();
 
-    const { texture, scale } = capture;
-    texture.add(piece.id, 0, frame.x * scale, frame.y * scale, frame.width * scale, frame.height * scale);
+    texture.add(piece.id, 0, left, top, width, height);
 
     const origin = frame.toLocal(piece.target);
     this.image = scene.add.image(0, 0, texture.key, piece.id)
@@ -34,8 +44,8 @@ export class PuzzlePieceView {
       .setDisplaySize(frame.width, frame.height);
     this.image.enableFilters().filters!.internal.addMask(maskKey);
 
-    const points = piece.outline.points.map(({ x, y }) => ({ x: x - piece.target.x, y: y - piece.target.y }));
-    this.hitArea = new Phaser.Geom.Polygon(points);
+    const hitPoints = points.map(({ x, y }) => ({ x: x - piece.target.x, y: y - piece.target.y }));
+    this.hitArea = new Phaser.Geom.Polygon(hitPoints);
   }
 
   get position(): Point {
@@ -53,7 +63,7 @@ export class PuzzlePieceView {
 
   setScale(scale: number) {
     this.scale = scale;
-    const { width, height } = this.piece.outline.frame;
+    const { width, height } = this.frame;
     this.image.setDisplaySize(width * scale, height * scale);
   }
 

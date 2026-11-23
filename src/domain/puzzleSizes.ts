@@ -3,12 +3,19 @@ import type { ConnectorStyleId } from './connectorStyles.ts';
 import type { Size } from './geometry.ts';
 import { Puzzle } from './Puzzle.ts';
 
-export const puzzleSizes = [
-  { label: 'Classic', width: 512, height: 288, columns: 4, rows: 2 },
-  { label: 'Large', width: 1024, height: 576, columns: 8, rows: 4 },
-] as const;
+export type PuzzleSize = Size & Readonly<{
+  label: string;
+  columns: number;
+  rows: number;
+  snapTolerance: number;
+}>;
 
-export type PuzzleSize = typeof puzzleSizes[number];
+export const puzzleSizes = [
+  { label: 'Classic', width: 512, height: 288, columns: 4, rows: 2, snapTolerance: 28 },
+  { label: 'Large', width: 1024, height: 576, columns: 8, rows: 4, snapTolerance: 28 },
+  { label: 'Dense', width: 1024, height: 576, columns: 8, rows: 8, snapTolerance: 18 },
+  { label: 'Expert', width: 1024, height: 576, columns: 16, rows: 8, snapTolerance: 16 },
+] as const satisfies readonly PuzzleSize[];
 
 function fitsViewport(size: Size, maximum: Size): boolean {
   return size.width <= maximum.width && size.height <= maximum.height;
@@ -19,7 +26,7 @@ export function availablePuzzleSizes(maximum: Size): readonly PuzzleSize[] {
 }
 
 export function createPuzzle(size: PuzzleSize, connectorStyle: ConnectorStyleId = 'classic', seed = 0): Puzzle {
-  return new Puzzle(new Board(size, size.columns, size.rows), 28, connectorStyle, seed);
+  return new Puzzle(new Board(size, size.columns, size.rows), size.snapTolerance, connectorStyle, seed);
 }
 
 export function captureScale(size: Size, maximum: Size, textureLimit: number): number {

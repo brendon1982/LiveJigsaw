@@ -1,16 +1,16 @@
 import Phaser from 'phaser';
 import type GridSizer from 'phaser4-rex-plugins/templates/ui/gridsizer/GridSizer.js';
 import type ScrollablePanel from 'phaser4-rex-plugins/templates/ui/scrollablepanel/ScrollablePanel.js';
-import type { Point } from '../domain/geometry';
+import type { Point, Size } from '../domain/geometry';
 import type { UIScene } from './button';
 import type { PuzzlePieceView } from './PuzzlePieceView';
 
-const thumbnailScale = 0.6;
 const scrollbarSpace = 24;
 
 export class PieceTray {
   readonly layer: Phaser.GameObjects.Layer;
   readonly minimumWidth: number;
+  readonly pieceScale: number;
   readonly camera: Phaser.Cameras.Scene2D.Camera;
   private readonly grid: GridSizer;
   private readonly panel: ScrollablePanel;
@@ -23,12 +23,19 @@ export class PieceTray {
   private lifted?: PuzzlePieceView;
   private lastOffset = 0;
 
-  constructor(private readonly scene: UIScene, entries: PuzzlePieceView[]) {
+  constructor(private readonly scene: UIScene, entries: PuzzlePieceView[], cellSize: Size, targetPieceSize: number) {
     this.entries = entries;
-    const widest = Math.max(...entries.map(({ piece }) => piece.outline.frame.width));
-    const tallest = Math.max(...entries.map(({ piece }) => piece.outline.frame.height));
-    this.cellWidth = Math.ceil(widest * thumbnailScale) + 16;
-    this.cellHeight = Math.ceil(tallest * thumbnailScale) + 16;
+    this.pieceScale = targetPieceSize / Math.min(cellSize.width, cellSize.height);
+    const slotSizes = entries.map(({ frame, piece }) => {
+      const { x, y } = frame.toLocal(piece.target);
+      // The base-cell center can be off-center in the image when only one side has a tab.
+      return {
+        width: Math.max(frame.width * this.pieceScale + 16, 2 * Math.max(x, frame.width - x) * this.pieceScale + 2),
+        height: Math.max(frame.height * this.pieceScale + 16, 2 * Math.max(y, frame.height - y) * this.pieceScale + 2),
+      };
+    });
+    this.cellWidth = Math.ceil(Math.max(...slotSizes.map(({ width }) => width)));
+    this.cellHeight = Math.ceil(Math.max(...slotSizes.map(({ height }) => height)));
     this.minimumWidth = this.cellWidth + scrollbarSpace;
     this.layer = scene.add.layer();
     this.camera = scene.cameras.add().setName('Piece tray');
@@ -87,7 +94,7 @@ export class PieceTray {
   returnPiece(entry: PuzzlePieceView) {
     this.lifted = undefined;
     entry.addTo(this.layer);
-    entry.setScale(thumbnailScale);
+    entry.setScale(this.pieceScale);
     this.syncPositions();
   }
 

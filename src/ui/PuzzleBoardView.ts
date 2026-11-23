@@ -46,6 +46,7 @@ export class PuzzleBoardView {
     private readonly scene: UIScene,
     private readonly puzzle: Puzzle,
     capture: LivePuzzleCapture,
+    trayPieceSize: number,
     private readonly onPlacement: () => void,
   ) {
     this.pieces = Phaser.Math.RND.shuffle([...puzzle.pieces])
@@ -62,7 +63,7 @@ export class PuzzleBoardView {
     for (const y of [-8, -3, 3, 8]) {
       grip.fillCircle(-2, y, 1).fillCircle(2, y, 1);
     }
-    this.tray = new PieceTray(scene, this.pieces);
+    this.tray = new PieceTray(scene, this.pieces, puzzle.board.cellSize, trayPieceSize);
     this.board = new PannableBoard(scene, puzzle.board.size, capture);
     this.floatingPieces = scene.add.layer();
     const dragCamera = scene.cameras.add().setName('Dragged piece');
@@ -156,7 +157,8 @@ export class PuzzleBoardView {
   };
 
   private startPieceDrag(pointer: Phaser.Input.Pointer, entry: PuzzlePieceView, grab: Point) {
-    const offset = { x: entry.position.x - grab.x, y: entry.position.y - grab.y };
+    const scale = this.board.zoom / this.tray.pieceScale;
+    const offset = { x: (entry.position.x - grab.x) * scale, y: (entry.position.y - grab.y) * scale };
     this.gesture = { kind: 'piece', pointerId: pointer.id, entry, offset };
     this.tray.lift(entry);
     entry.setScale(this.board.zoom);

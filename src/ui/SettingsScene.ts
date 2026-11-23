@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { makeButtonLabel, type UIScene } from './button';
+import { activePuzzleFilter, puzzleFilters, selectPuzzleFilter } from './puzzleFilter';
 import { activeTheme, palette, selectTheme, styleWithTheme, themes } from './theme';
 
 export function openSettings(owner: UIScene, onClose?: () => void) {
@@ -21,18 +22,41 @@ export class SettingsScene extends Phaser.Scene {
     const cover = this.add.rectangle(0, 0, 1, 1, palette.modalBackdrop, 0.72).setOrigin(0).setInteractive();
     const background = this.rexUI.add.roundRectangle(0, 0, 1, 1, 16);
     const title = this.add.text(0, 0, 'Settings', { fontFamily: 'system-ui', fontSize: '25px', fontStyle: 'bold' });
-    const heading = this.add.text(0, 0, 'Color theme', { fontFamily: 'system-ui', fontSize: '17px' });
-    const choices = this.rexUI.add.sizer({ orientation: 'x', space: { item: 8 } });
-    for (const theme of Object.keys(themes) as (keyof typeof themes)[]) {
-      const button = makeButtonLabel(this, theme, 108, 54, () => activeTheme === theme);
+    const headingStyle = { fontFamily: 'system-ui', fontSize: '17px' };
+    const themeHeading = this.add.text(0, 0, 'Color theme', headingStyle);
+    const filterHeading = this.add.text(0, 0, 'Puzzle filter', headingStyle);
+    const selectionUpdates: (() => void)[] = [];
+    const choice = (label: string, width: number, select: () => void, selected?: () => boolean) => {
+      const button = makeButtonLabel(this, label, width, 54);
+      if (selected) {
+        button.setData('selected', false);
+        const update = () => button.setData('selected', selected());
+        selectionUpdates.push(update);
+        update();
+      }
       this.rexUI.add.click(button).on('click', (_button: unknown, _object: unknown, pointer: Phaser.Input.Pointer) => {
-        if (!pointer.wasCanceled) selectTheme(theme);
+        if (pointer.wasCanceled) return;
+        select();
+        for (const update of selectionUpdates) update();
       });
       button.input!.cursor = 'pointer';
-      choices.add(button);
+      return button;
+    };
+    const row = () => this.rexUI.add.sizer({ orientation: 'x', space: { item: 8 } });
+    const themeChoices = row();
+    for (const theme of Object.keys(themes) as (keyof typeof themes)[]) {
+      themeChoices.add(choice(theme, 108, () => selectTheme(theme), () => activeTheme === theme));
     }
+    const filterChoice = (filter: keyof typeof puzzleFilters, width: number) =>
+      choice(puzzleFilters[filter], width, () => selectPuzzleFilter(filter), () => activePuzzleFilter === filter);
+    const filterChoices = this.rexUI.add.sizer({ orientation: 'y', space: { item: 8 } });
+    filterChoices.add(row().add(filterChoice('grayscale', 168)).add(filterChoice('sepia', 122)))
+      .add(row().add(filterChoice('faded', 168)).add(choice('Clear filter', 122, () => selectPuzzleFilter(undefined))));
     const content = this.rexUI.add.sizer({ orientation: 'y', space: { item: 8 } });
-    content.add(heading, { align: 'left' }).add(choices);
+    content.add(themeHeading, { align: 'left' })
+      .add(themeChoices, { align: 'left', padding: { bottom: 6 } })
+      .add(filterHeading, { align: 'left' })
+      .add(filterChoices, { align: 'left' });
     const done = makeButtonLabel(this, 'Done', 96, 54, true);
     const dialog = this.rexUI.add.dialog({
       background, title, content, actions: [done], align: { title: 'left', actions: 'right' },
@@ -47,7 +71,8 @@ export class SettingsScene extends Phaser.Scene {
       cover.setFillStyle(colors.modalBackdrop, 0.72);
       background.setFillStyle(colors.surface).setStrokeStyle(1, colors.border);
       title.setColor(colors.text);
-      heading.setColor(colors.mutedText);
+      themeHeading.setColor(colors.mutedText);
+      filterHeading.setColor(colors.mutedText);
     });
 
     const fit = () => {

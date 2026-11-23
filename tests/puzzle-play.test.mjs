@@ -143,19 +143,40 @@ test('live pieces scroll, reflow, and snap to the pannable board', async (t) => 
   assert.deepEqual(await pixelAt(page, placed, 735, 348), sky, 'Zooming at the drop target should keep it under the pointer');
   await click(1246, 43);
   await waitForText('Color theme');
-  await clickDialog(58, 0);
-  await clickDialog(64, 73);
+  await clickDialog(21, -80);
+  await clickDialog(101, 153);
   const slate = await canvas.screenshot();
   assert.deepEqual(await pixelAt(page, slate, 1290, 100), [31, 45, 64, 255], 'Settings should restyle the active board');
   assert.deepEqual(await pixelAt(page, slate, 735, 348), sky, 'The placed piece should stay at its zoomed position');
   await page.evaluate(() => { window.paintedText = []; });
   await click(1246, 43);
   await waitForText('Color theme');
-  await clickDialog(-58, 0);
+  await clickDialog(-95, -80);
   await page.waitForFunction(() => localStorage.getItem('live-jigsaw.theme') === 'Forest');
   await page.keyboard.press('Escape');
   await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 1290, 100), panelBackground);
+
+  const selectFilter = async (x, y, name) => {
+    await page.evaluate(() => { window.paintedText = []; });
+    await click(1246, 43);
+    await waitForText('Black and White');
+    const before = await pixelAt(page, await canvas.screenshot(), 900, 348);
+    await clickDialog(x, y);
+    await page.waitForFunction((expected) => localStorage.getItem('live-jigsaw.puzzle-filter') === expected, name);
+    assert.notDeepEqual(await pixelAt(page, await canvas.screenshot(), 900, 348), before, 'The guide should change while Settings is still open');
+    await clickDialog(101, 153);
+    return pixelAt(page, await canvas.screenshot(), 735, 348);
+  };
+  const grayscale = await selectFilter(-65, 19, 'grayscale');
+  assert.deepEqual(grayscale, [grayscale[0], grayscale[0], grayscale[0], 255]);
+  assert.ok(grayscale[0] > 180, 'The placed piece should still be visible');
+  const sepia = await selectFilter(88, 19, 'sepia');
+  assert.ok(sepia[0] >= sepia[1] && sepia[1] > sepia[2], 'Sepia should give the placed piece a warm tint');
+  const faded = await selectFilter(-65, 81, 'faded');
+  assert.ok(faded[0] < faded[1] && faded[1] - faded[0] < sky[1] - sky[0], 'Faded should soften the original colors');
+  assert.deepEqual(await selectFilter(88, 81, null), sky, 'Clearing the filter should restore the original artwork');
+
   await move(735, 348);
   await page.mouse.wheel(0, 200);
   await drag(199, 253, 863, 348);
@@ -254,7 +275,7 @@ test('the four new artwork scenes animate on the board', async (t) => {
   assert.deepEqual(errors, []);
 });
 
-test('picker Settings works on a narrow touch screen and remembers the theme', async (t) => {
+test('picker Settings remembers the theme and filter on a narrow touch screen', async (t) => {
   const { page, canvas, waitForText, errors, clickDialog } = await openPuzzle(t, {
     viewport: { width: 375, height: 640 }, hasTouch: true, isMobile: true,
   });
@@ -263,8 +284,9 @@ test('picker Settings works on a narrow touch screen and remembers the theme', a
   assert.deepEqual(await pixelAt(page, forest, 5, 105), [38, 58, 54, 255]);
   await page.touchscreen.tap(301, 39);
   await waitForText('Color theme');
-  await clickDialog(58, 0);
-  await clickDialog(64, 73);
+  await clickDialog(21, -80);
+  await clickDialog(-65, 81);
+  await clickDialog(101, 153);
   const slate = await canvas.screenshot();
   assert.deepEqual(await pixelAt(page, slate, 5, 105), [39, 51, 68, 255]);
   assert.deepEqual(await pixelAt(page, slate, 5, 130), [39, 51, 68, 255], 'The Phaser canvas background should change too');
@@ -272,6 +294,9 @@ test('picker Settings works on a narrow touch screen and remembers the theme', a
   await page.reload();
   await waitForText('Select a Puzzle');
   assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 5, 105), [39, 51, 68, 255]);
+  await page.touchscreen.tap(301, 39);
+  await waitForText('Faded');
+  assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 64, 400), [200, 222, 248, 255], 'The saved filter should be selected after reload');
   assert.deepEqual(errors, []);
 });
 

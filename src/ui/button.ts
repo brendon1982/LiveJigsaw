@@ -18,7 +18,7 @@ export function makeButton(
 }
 
 export function makeButtonLabel(
-  scene: UIScene, text: string, width: number, height: number, primary: boolean | (() => boolean) = false,
+  scene: UIScene, text: string, width: number, height: number, primary = false,
 ) {
   const background = scene.rexUI.add.roundRectangle(0, 0, 1, 1, 9);
   const caption = scene.add.text(0, 0, text, {
@@ -30,13 +30,14 @@ export function makeButtonLabel(
   });
   let hovered = false;
   const restyle = (colors: typeof palette) => {
-    const highlighted = typeof primary === 'function' ? primary() : primary;
+    const highlighted = primary || button.data?.get('selected') === true;
     const fill = highlighted ? colors.primaryButton : colors.button;
     const hover = highlighted ? colors.primaryButtonHover : colors.buttonHover;
     background.setFillStyle(hovered ? hover : fill);
     caption.setColor(highlighted ? colors.primaryButtonText : colors.text);
   };
   styleWithTheme(button, restyle);
+  button.on('changedata-selected', () => restyle(palette));
   button.on('pointerover', () => { hovered = true; restyle(palette); });
   button.on('pointerout', () => { hovered = false; restyle(palette); });
   return button;

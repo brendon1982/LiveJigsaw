@@ -6,4 +6,4 @@
 - [x] Vary the shape of piece connectors and where they sit along each edge.
 - [x] Add UI themes.
 - [ ] Add a loading screen.
-- [ ] Add colour filters for the image drawn on the board, such as black and white or sepia.
+- [x] Add colour filters for the image drawn on the board, such as black and white or sepia.

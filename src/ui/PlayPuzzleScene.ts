@@ -5,6 +5,7 @@ import { createPuzzle, type PuzzleSize } from '../domain/puzzleSizes';
 import { LivePuzzleCapture } from '../rendering/LivePuzzleCapture';
 import type { PuzzleSource } from '../puzzles/PuzzleSource';
 import { makeButton } from './button';
+import { activePuzzleFilter, onPuzzleFilterChange } from './puzzleFilter';
 import { headerInset, makeSettingsButton, puzzleHeader } from './puzzleHeader';
 import { PuzzleBoardView } from './PuzzleBoardView';
 import { SelectPuzzleScene } from './SelectPuzzleScene';
@@ -27,6 +28,8 @@ export class PlayPuzzleScene extends Phaser.Scene {
   create({ source, size, connectorStyle, seed }: PuzzleSelection) {
     const puzzle = createPuzzle(size, connectorStyle, seed);
     const capture = new LivePuzzleCapture(this, source, { ...puzzle.board.size, seed: puzzle.seed });
+    capture.setFilter(activePuzzleFilter);
+    const unsubscribeFilter = onPuzzleFilterChange((filter) => capture.setFilter(filter));
 
     const backButton = makeButton(this, headerInset, 0, 'All puzzles', () => this.scene.start(SelectPuzzleScene.key), 150);
     const settings = makeSettingsButton(this, () => {
@@ -66,6 +69,7 @@ export class PlayPuzzleScene extends Phaser.Scene {
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.scale.off(Phaser.Scale.Events.RESIZE, layoutHeader);
+      unsubscribeFilter();
       board.destroy();
       capture.destroy();
     });

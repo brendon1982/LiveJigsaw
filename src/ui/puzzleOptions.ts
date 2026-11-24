@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { connectorStyles, type ConnectorStyleId } from '../domain/connectorStyles';
 import { availablePuzzleSizes, type PuzzleSize } from '../domain/puzzleSizes';
-import type { PuzzleSource } from '../puzzles/PuzzleSource';
+import { puzzleAnimationSpeeds, type PuzzleAnimationSpeed, type PuzzleSource } from '../puzzles/PuzzleSource';
 import { makeButtonLabel, type UIScene } from './button';
 import { palette } from './theme';
 
@@ -14,13 +14,13 @@ const depth = { cover: 1, panel: 2, controls: 3, tileContents: 4 };
 type Option = {
   name: string;
   label: string;
-  drawIcon: () => Phaser.GameObjects.Container;
+  drawIcon?: () => Phaser.GameObjects.Container;
 };
 
 export function showPuzzleOptions(
   scene: UIScene,
   source: PuzzleSource,
-  play: (size: PuzzleSize, connectorStyle: ConnectorStyleId) => void,
+  play: (size: PuzzleSize, connectorStyle: ConnectorStyleId, animationSpeed: PuzzleAnimationSpeed) => void,
   onClose: () => void,
 ) {
   const sizes = availablePuzzleSizes(source.maxViewport);
@@ -37,9 +37,18 @@ export function showPuzzleOptions(
     label: connectorStyles[style].label,
     drawIcon: () => drawConnectorIcon(scene, style),
   })), 'classic');
+  const speedButtons = makeRadioButtons(scene, puzzleAnimationSpeeds.map((speed) => ({
+    name: speed,
+    label: speed,
+  })), 'Normal');
 
   const content = scene.rexUI.add.sizer({ orientation: 'y', width: contentWidth, space: { item: 14 } });
-  for (const [heading, buttons] of [['Puzzle size', sizeButtons], ['Connector style', styleButtons]] as const) {
+  const sections = [
+    ['Puzzle size', sizeButtons],
+    ['Connector style', styleButtons],
+    ['Animation speed', speedButtons],
+  ] as const;
+  for (const [heading, buttons] of sections) {
     const section = scene.rexUI.add.sizer({ orientation: 'y', space: { item: 6 } });
     section.add(scene.add.text(0, 0, heading, {
       fontFamily: 'system-ui', fontSize: '17px', color: palette.mutedText,
@@ -102,7 +111,8 @@ export function showPuzzleOptions(
 
     const size = sizes.find(({ label }) => label === sizeButtons.getSelectedButtonName());
     const style = styles.find((id) => id === styleButtons.getSelectedButtonName());
-    if (size && style) play(size, style);
+    const speed = puzzleAnimationSpeeds.find((name) => name === speedButtons.getSelectedButtonName());
+    if (size && style && speed) play(size, style, speed);
   });
 
   return dialog;
@@ -113,8 +123,8 @@ function makeRadioButtons(scene: UIScene, options: readonly Option[], selectedNa
     const background = scene.rexUI.add.roundRectangle(0, 0, 1, 1, 9, palette.background)
       .setStrokeStyle(1, palette.optionBorder).setDepth(depth.controls);
     const button = scene.rexUI.add.label({
-      name, width: optionWidth, height: 82, orientation: 'y', align: 'center', background,
-      icon: drawIcon().setDepth(depth.tileContents),
+      name, width: optionWidth, height: drawIcon ? 82 : 52, orientation: 'y', align: 'center', background,
+      icon: drawIcon?.().setDepth(depth.tileContents),
       text: scene.add.text(0, 0, label, { fontFamily: 'system-ui', fontSize: '15px', color: palette.text })
         .setDepth(depth.tileContents),
       space: { icon: 4 },

@@ -60,21 +60,26 @@ async function openPuzzle(t, options, path = '/') {
     const tap = options.hasTouch ? page.touchscreen.tap.bind(page.touchscreen) : page.mouse.click.bind(page.mouse);
     await tap(x + width / 2 + dx, y + height / 2 + dy);
   };
-  const playSelection = async ({ size, connectorStyle } = {}) => {
-    await waitForText('Connector style');
+  const playSelection = async ({ size, connectorStyle, animationSpeed } = {}) => {
+    await waitForText('Animation speed');
     // Phaser hit-tests the camera's render list, which updates on the first dialog frame.
     await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
     if (size) {
       const index = ['Classic · 8', 'Large · 32', 'Dense · 64', 'Expert · 128'].indexOf(size);
       assert.ok(index >= 0);
-      await clickDialog(-156 + 104 * index, -59);
+      await clickDialog(-156 + 104 * index, -107);
     }
     if (connectorStyle) {
       const index = ['Classic', 'Rounded', 'Angular', 'None'].indexOf(connectorStyle);
       assert.ok(index >= 0);
-      await clickDialog(-156 + 104 * index, 67);
+      await clickDialog(-156 + 104 * index, 19);
     }
-    await clickDialog(158, 152);
+    if (animationSpeed) {
+      const index = ['Slow', 'Normal', 'Fast'].indexOf(animationSpeed);
+      assert.ok(index >= 0);
+      await clickDialog(-156 + 104 * index, 130);
+    }
+    await clickDialog(158, 200);
   };
   return { page, canvas, waitForText, errors, clickDialog, playSelection };
 }
@@ -272,7 +277,7 @@ test('the four new artwork scenes animate on the board', async (t) => {
     await page.mouse.wheel(0, scroll);
     await page.evaluate(() => { window.paintedText = []; });
     await page.mouse.click(x, y);
-    await playSelection({ connectorStyle: 'Angular' });
+    await playSelection({ connectorStyle: 'Angular', animationSpeed: 'Fast' });
     await waitForText(title);
     await waitForText('0 of 8 placed');
     const before = await page.screenshot({ clip: board });
@@ -348,14 +353,14 @@ test('the picker scrolls past two cards and clips previews', async (t) => {
     assert.equal(await page.evaluate(() => window.paintedText.includes('Large · 32')), false);
     const selectedFill = [75, 108, 94, 255];
     const beforeSelection = await canvas.screenshot();
-    assert.deepEqual(await pixelAt(page, beforeSelection, 467, 337), selectedFill);
+    assert.deepEqual(await pixelAt(page, beforeSelection, 467, 289), selectedFill);
     const iconFill = [101, 135, 122, 255];
-    assert.deepEqual(await pixelAt(page, beforeSelection, 480, 190), iconFill, 'The size illustration should draw above the dialog and tile');
-    assert.deepEqual(await pixelAt(page, beforeSelection, 816, 330), iconFill, 'The connector illustration should draw above the dialog and tile');
-    await clickDialog(-52, 67);
+    assert.deepEqual(await pixelAt(page, beforeSelection, 480, 142), iconFill, 'The size illustration should draw above the dialog and tile');
+    assert.deepEqual(await pixelAt(page, beforeSelection, 816, 282), iconFill, 'The connector illustration should draw above the dialog and tile');
+    await clickDialog(-52, 19);
     const afterSelection = await canvas.screenshot();
-    assert.notDeepEqual(await pixelAt(page, afterSelection, 467, 337), selectedFill);
-    assert.deepEqual(await pixelAt(page, afterSelection, 571, 337), selectedFill);
+    assert.notDeepEqual(await pixelAt(page, afterSelection, 467, 289), selectedFill);
+    assert.deepEqual(await pixelAt(page, afterSelection, 571, 289), selectedFill);
     await page.setViewportSize({ width: 375, height: 540 });
     await page.waitForFunction(() => document.querySelector('canvas').width === 375);
     const [cornerRed] = await pixelAt(page, await canvas.screenshot(), 373, 538);
@@ -364,11 +369,21 @@ test('the picker scrolls past two cards and clips previews', async (t) => {
     await page.waitForFunction(() => document.querySelector('canvas').width === 1320);
     await page.mouse.move(340, 165);
     await page.mouse.wheel(0, -1000);
-    await clickDialog(58, 152);
+    await clickDialog(58, 200);
     assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 120, 165), previewColor, 'Cancel should preserve the picker scroll position');
     await page.mouse.click(340, 165);
     await playSelection();
     await waitForText('0 of 8 placed');
+    await page.waitForFunction(() => window.sourceAnimationSpeed === 'Normal');
+    await page.evaluate(() => { window.paintedText = []; });
+    await page.mouse.click(99, 43);
+    await waitForText('Select a Puzzle');
+    await page.mouse.move(340, 300);
+    await page.mouse.wheel(0, 1000);
+    assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 120, 165), previewColor);
+    await page.mouse.click(340, 165);
+    await playSelection({ animationSpeed: 'Slow' });
+    await page.waitForFunction(() => window.sourceAnimationSpeed === 'Slow');
     assert.deepEqual(errors, []);
   });
 
@@ -395,8 +410,9 @@ test('the picker scrolls past two cards and clips previews', async (t) => {
     await swipeUp(170, 700, 180);
     assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 140, 410), previewColor, 'A swipe should reveal the third card');
     await page.touchscreen.tap(400, 410);
-    await playSelection({ connectorStyle: 'None' });
+    await playSelection({ connectorStyle: 'None', animationSpeed: 'Fast' });
     await waitForText('0 of 8 placed');
+    await page.waitForFunction(() => window.sourceAnimationSpeed === 'Fast');
     assert.deepEqual(errors, []);
   });
 });

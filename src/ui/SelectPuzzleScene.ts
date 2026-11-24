@@ -33,9 +33,9 @@ export class SelectPuzzleScene extends Phaser.Scene {
     const cards = puzzleSources.map((source) => this.makeCard(source, listBounds, () => {
       if (options) return;
       panel.setScrollerEnable(false).setMouseWheelScrollerEnable(false);
-      options = showPuzzleOptions(this, source, (size, connectorStyle) => {
+      options = showPuzzleOptions(this, source, (size, connectorStyle, animationSpeed) => {
         const [seed] = crypto.getRandomValues(new Uint32Array(1));
-        this.scene.start('PlayPuzzle', { source, size, connectorStyle, seed } satisfies PuzzleSelection);
+        this.scene.start('PlayPuzzle', { source, size, connectorStyle, animationSpeed, seed } satisfies PuzzleSelection);
       }, () => {
         options = undefined;
         panel.setScrollerEnable(true).setMouseWheelScrollerEnable(true);

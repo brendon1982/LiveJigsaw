@@ -1,5 +1,8 @@
 import Phaser from 'phaser';
 import type { Size } from '../../domain/geometry';
+import type { PuzzleAnimationSpeed, PuzzleSourceSceneData } from '../PuzzleSource';
+
+const animationRate: Record<PuzzleAnimationSpeed, number> = { Slow: 0.5, Normal: 1, Fast: 2 };
 
 const artworkSize = { width: 512, height: 288 };
 
@@ -11,10 +14,10 @@ export class WindmillScene extends Phaser.Scene {
     super(WindmillScene.key);
   }
 
-  create(viewport: Size) {
+  create({ animationSpeed, ...viewport }: PuzzleSourceSceneData) {
     const { objects, animate } = drawWindmill(this, artworkSize);
     this.add.container(0, 0, objects).setScale(viewport.width / artworkSize.width, viewport.height / artworkSize.height);
-    this.animate = animate;
+    this.animate = (delta) => animate(delta * animationRate[animationSpeed]);
   }
 
   update(_time: number, delta: number) {

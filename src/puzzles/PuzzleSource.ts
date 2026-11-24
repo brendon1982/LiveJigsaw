@@ -1,12 +1,16 @@
 import type Phaser from 'phaser';
 import type { Size } from '../domain/geometry';
 
-/** Logical viewport and unsigned 32-bit seed for the selected puzzle. */
-export type PuzzleSourceSceneData = Size & Readonly<{ seed: number }>;
+export const puzzleAnimationSpeeds = ['Slow', 'Normal', 'Fast'] as const;
+export type PuzzleAnimationSpeed = typeof puzzleAnimationSpeeds[number];
+
+/** Settings passed to the source scene at the start of a puzzle. */
+export type PuzzleSourceSceneData = Size & Readonly<{ seed: number; animationSpeed: PuzzleAnimationSpeed }>;
 
 /**
- * Artwork for the puzzle. The host starts the scene with the viewport and seed
- * as its scene data and captures the scene's display list. Draw from (0, 0)
+ * Artwork for the puzzle. The host starts the scene with PuzzleSourceSceneData
+ * and captures the scene's display list. Each scene sets its own animation
+ * pacing for Slow, Normal, and Fast. Draw from (0, 0)
  * and let the host manage input, visibility, and the capture camera.
  * maxViewport caps both the logical artwork size and the capture resolution.
  * drawPreview creates objects from (0, 0). The picker snapshots them within

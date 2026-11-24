@@ -3,7 +3,7 @@ import type RexUIPlugin from 'phaser4-rex-plugins/templates/ui/ui-plugin.js';
 import type { ConnectorStyleId } from '../domain/connectorStyles';
 import { createPuzzle, type PuzzleSize } from '../domain/puzzleSizes';
 import { LivePuzzleCapture } from '../rendering/LivePuzzleCapture';
-import type { PuzzleSource } from '../puzzles/PuzzleSource';
+import type { PuzzleAnimationSpeed, PuzzleSource } from '../puzzles/PuzzleSource';
 import { makeButton } from './button';
 import { headerInset, makeSettingsButton, puzzleHeader } from './puzzleHeader';
 import { PuzzleBoardView } from './PuzzleBoardView';
@@ -11,7 +11,13 @@ import { SelectPuzzleScene } from './SelectPuzzleScene';
 import { openSettings } from './SettingsScene';
 import { styleWithTheme } from './theme';
 
-export type PuzzleSelection = { source: PuzzleSource; size: PuzzleSize; connectorStyle?: ConnectorStyleId; seed: number };
+export type PuzzleSelection = {
+  source: PuzzleSource;
+  size: PuzzleSize;
+  connectorStyle?: ConnectorStyleId;
+  animationSpeed?: PuzzleAnimationSpeed;
+  seed: number;
+};
 
 // Target length in screen pixels for the shorter side of a tray piece's base cell.
 const trayPieceSize = 76.8;
@@ -24,9 +30,11 @@ export class PlayPuzzleScene extends Phaser.Scene {
     super(PlayPuzzleScene.key);
   }
 
-  create({ source, size, connectorStyle, seed }: PuzzleSelection) {
+  create({ source, size, connectorStyle, animationSpeed = 'Normal', seed }: PuzzleSelection) {
     const puzzle = createPuzzle(size, connectorStyle, seed);
-    const capture = new LivePuzzleCapture(this, source, { ...puzzle.board.size, seed: puzzle.seed });
+    const capture = new LivePuzzleCapture(this, source, {
+      ...puzzle.board.size, seed: puzzle.seed, animationSpeed,
+    });
 
     const backButton = makeButton(this, headerInset, 0, 'All puzzles', () => this.scene.start(SelectPuzzleScene.key), 150);
     const settings = makeSettingsButton(this, () => {

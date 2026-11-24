@@ -1,5 +1,8 @@
 import Phaser from 'phaser';
 import type { Size } from '../../domain/geometry';
+import type { PuzzleAnimationSpeed, PuzzleSourceSceneData } from '../PuzzleSource';
+
+const animationRate: Record<PuzzleAnimationSpeed, number> = { Slow: 0.5, Normal: 1, Fast: 2 };
 
 const artworkSize = { width: 512, height: 288 };
 
@@ -11,8 +14,9 @@ export class MeadowScene extends Phaser.Scene {
     super(MeadowScene.key);
   }
 
-  create(viewport: Size) {
-    this.animate = drawMeadow(this, viewport).animate;
+  create({ animationSpeed, ...viewport }: PuzzleSourceSceneData) {
+    const { animate } = drawMeadow(this, viewport);
+    this.animate = (delta) => animate(delta * animationRate[animationSpeed]);
   }
 
   update(_time: number, delta: number) {

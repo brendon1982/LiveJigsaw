@@ -1,5 +1,8 @@
 import Phaser from 'phaser';
 import type { Size } from '../../domain/geometry';
+import type { PuzzleAnimationSpeed, PuzzleSourceSceneData } from '../PuzzleSource';
+
+const animationRate: Record<PuzzleAnimationSpeed, number> = { Slow: 0.5, Normal: 1, Fast: 2 };
 
 const artworkSize = { width: 512, height: 288 };
 const cycleDuration = 44_000;
@@ -13,8 +16,9 @@ export class DesertScene extends Phaser.Scene {
     super(DesertScene.key);
   }
 
-  create(viewport: Size) {
-    this.animate = drawDesert(this, viewport).animate;
+  create({ animationSpeed, ...viewport }: PuzzleSourceSceneData) {
+    const { animate } = drawDesert(this, viewport);
+    this.animate = (delta) => animate(delta * animationRate[animationSpeed]);
   }
 
   update(_time: number, delta: number) {

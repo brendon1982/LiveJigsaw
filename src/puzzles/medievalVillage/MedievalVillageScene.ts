@@ -9,6 +9,26 @@ const atlasKey = 'medieval-village-artwork';
 const animationRate: Record<PuzzleAnimationSpeed, number> = { Slow: 0.5, Normal: 1, Fast: 2 };
 const frameName = (kind: string, id: number) => `medieval${kind}_${String(id).padStart(2, '0')}.png`;
 
+function assembledBuilding(textures: Phaser.Textures.TextureManager, frames: readonly number[]) {
+  const key = `${atlasKey}-building-${frames.join('-')}`;
+  if (textures.exists(key)) return key;
+
+  // Join the atlas cuts at native size before linear filtering samples across the seam.
+  const parts = frames.map((id) => textures.getFrame(atlasKey, frameName('Structure', id)));
+  const width = Math.max(...parts.map((part) => part.realWidth));
+  const height = parts.reduce((sum, part) => sum + part.realHeight, 0);
+  const texture = textures.createCanvas(key, width, height);
+  if (!texture) throw new Error(`Could not assemble building ${key}`);
+
+  let bottom = height;
+  for (const part of parts) {
+    bottom -= part.realHeight;
+    texture.drawFrame(atlasKey, part.name, (width - part.realWidth) / 2, bottom, false);
+  }
+  texture.refresh();
+  return key;
+}
+
 export class MedievalVillageScene extends Phaser.Scene {
   static readonly key = 'MedievalVillage';
   private animate?: (delta: number) => void;
@@ -41,12 +61,10 @@ export class MedievalVillageScene extends Phaser.Scene {
       const scenery = this.add.container();
       village.add(scenery);
       for (const { x, y, kind, frames, scale } of props) {
-        let bottom = y;
-        for (const frame of frames) {
-          const part = sprite(x, bottom, kind, frame, scale).setOrigin(0.5, 1).setDepth(y);
-          scenery.add(part);
-          bottom -= part.displayHeight;
-        }
+        const image = frames.length === 1
+          ? sprite(x, y, kind, frames[0], scale)
+          : this.add.image(x, y, assembledBuilding(this.textures, frames)).setScale(scale);
+        scenery.add(image.setOrigin(0.5, 1).setDepth(y));
       }
       const bladeScale = mill.blades === 13 ? 0.51 : 0.45;
       const blades = sprite(mill.x, mill.y - mill.hub, 'Structure', mill.blades, bladeScale).setDepth(mill.y + 0.01);

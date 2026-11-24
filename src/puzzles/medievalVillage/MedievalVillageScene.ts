@@ -29,6 +29,25 @@ function assembledBuilding(textures: Phaser.Textures.TextureManager, frames: rea
   return key;
 }
 
+function windmillBlades(textures: Phaser.Textures.TextureManager, id: number) {
+  const key = `${atlasKey}-blades-${id}`;
+  if (textures.exists(key)) return key;
+
+  const frame = textures.getFrame(atlasKey, frameName('Structure', id));
+  const padding = 2;
+  const texture = textures.createCanvas(key, frame.realWidth + 2 * padding, frame.realHeight + 2 * padding);
+  if (!texture) throw new Error(`Could not isolate windmill blades ${id}`);
+
+  // Keep linear filtering clear of nearby atlas art as the blades rotate.
+  texture.drawFrame(atlasKey, frame.name, padding, padding, false);
+  if (id === 15) {
+    // This crop includes two rows of stray pixels above the blade tips.
+    texture.context.clearRect(padding, padding, frame.realWidth, 2);
+  }
+  texture.refresh();
+  return key;
+}
+
 export class MedievalVillageScene extends Phaser.Scene {
   static readonly key = 'MedievalVillage';
   private animate?: (delta: number) => void;
@@ -67,7 +86,8 @@ export class MedievalVillageScene extends Phaser.Scene {
         scenery.add(image.setOrigin(0.5, 1).setDepth(y));
       }
       const bladeScale = mill.blades === 13 ? 0.51 : 0.45;
-      const blades = sprite(mill.x, mill.y - mill.hub, 'Structure', mill.blades, bladeScale).setDepth(mill.y + 0.01);
+      const blades = this.add.image(mill.x, mill.y - mill.hub, windmillBlades(this.textures, mill.blades))
+        .setScale(bladeScale).setDepth(mill.y + 0.01);
       scenery.add(blades);
       const villagers = walks.map((walk) => {
         const image = sprite(0, 0, 'Unit', walk.front, 0.28).setOrigin(0.5, 1);

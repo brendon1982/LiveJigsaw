@@ -27,6 +27,10 @@ export class SelectPuzzleScene extends Phaser.Scene {
     super(SelectPuzzleScene.key);
   }
 
+  preload() {
+    for (const source of puzzleSources) source.preloadPreview?.(this);
+  }
+
   create() {
     const listBounds = new Phaser.Geom.Rectangle();
     let options: ReturnType<typeof showPuzzleOptions> | undefined;

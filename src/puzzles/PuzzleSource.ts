@@ -15,6 +15,7 @@ export type PuzzleSourceSceneData = Size & Readonly<{ seed: number; animationSpe
  * maxViewport caps both the logical artwork size and the capture resolution.
  * drawPreview creates objects from (0, 0). The picker snapshots them within
  * the requested viewport and destroys them after drawing.
+ * preloadPreview queues any assets needed by the picker.
  */
 export type PuzzleSource = Readonly<{
   title: string;
@@ -23,5 +24,6 @@ export type PuzzleSource = Readonly<{
     readonly key: string;
     new(): Phaser.Scene & { create(data: PuzzleSourceSceneData): void };
   };
+  preloadPreview?(scene: Phaser.Scene): void;
   drawPreview(scene: Phaser.Scene, viewport: Size): Phaser.GameObjects.GameObject[];
 }>;

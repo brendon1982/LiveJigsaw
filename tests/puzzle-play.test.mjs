@@ -267,8 +267,8 @@ test('the four new artwork scenes animate on the board', async (t) => {
   const selections = [
     { title: 'Mountains', x: 340, y: 613, scroll: 320 },
     { title: 'Meadow', x: 1003, y: 613, scroll: 320 },
-    { title: 'Desert', x: 340, y: 717, scroll: 1000 },
-    { title: 'Forest', x: 1003, y: 717, scroll: 1000 },
+    { title: 'Desert', x: 340, y: 500, scroll: 720 },
+    { title: 'Forest', x: 1003, y: 500, scroll: 720 },
   ];
   const board = { x: 435, y: 275, width: 590, height: 320 };
 
@@ -291,6 +291,56 @@ test('the four new artwork scenes animate on the board', async (t) => {
     await page.mouse.click(99, 43);
     await waitForText('Windmill');
   }
+  assert.deepEqual(errors, []);
+});
+
+test('the medieval village is captured during loading and animates after reopening', async (t) => {
+  const { page, canvas, waitForText, errors, playSelection } = await openPuzzle(t, {
+    viewport: { width: 1320, height: 780 },
+  });
+  const atlas = /medievalRTS_spritesheet[^/]*\.png(?:\?|$)/;
+  const loading = Promise.withResolvers();
+  const release = Promise.withResolvers();
+  await page.route(atlas, async (route) => {
+    loading.resolve();
+    await release.promise;
+    await route.abort();
+  });
+  t.after(() => release.resolve());
+
+  const openVillage = async () => {
+    await page.evaluate(() => { window.paintedText = []; });
+    await page.mouse.move(340, 300);
+    await page.mouse.wheel(0, 2200);
+    await page.mouse.click(340, 600);
+    await playSelection({ animationSpeed: 'Fast' });
+    await waitForText('Medieval Village');
+    await waitForText('0 of 8 placed');
+  };
+  await openVillage();
+  await loading.promise;
+  await waitForText('Loading village…');
+  const indicator = await canvas.screenshot();
+  assert.deepEqual(await pixelAt(page, indicator, 85, 140), [23, 57, 45, 255], 'The tray should show the loading backdrop');
+  assert.notDeepEqual(await pixelAt(page, indicator, 542, 348), [25, 46, 40, 255], 'The board guide should show the loading backdrop');
+
+  await page.mouse.click(99, 43);
+  await waitForText('Windmill');
+  // Returning to the picker can cancel the browser request before the held route resumes.
+  await page.unrouteAll({ behavior: 'ignoreErrors' });
+  release.resolve();
+  const loaded = page.waitForResponse((response) => atlas.test(response.url()) && response.ok());
+  await openVillage();
+  await loaded;
+  const board = { x: 435, y: 275, width: 590, height: 320 };
+  const artwork = await canvas.screenshot();
+  assert.notDeepEqual(await pixelAt(page, artwork, 85, 140), [23, 57, 45, 255], 'The artwork should replace the loading backdrop');
+  const before = await page.screenshot({ clip: board });
+  await page.evaluate(async () => {
+    for (let frame = 0; frame < 12; frame += 1) await new Promise(requestAnimationFrame);
+  });
+  const after = await page.screenshot({ clip: board });
+  assert.ok(!before.equals(after), 'The captured village should animate');
   assert.deepEqual(errors, []);
 });
 

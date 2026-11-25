@@ -62,7 +62,7 @@ export class PuzzleBoardView {
   private readonly board: PannableBoard;
   private readonly fitButton: ReturnType<typeof makeIconButton>;
   private readonly placementEffects: PlacementEffects;
-  private readonly seedDropFeedback?: SeedDropFeedback;
+  private seedDropFeedback?: SeedDropFeedback;
   private readonly floatingPieces: Phaser.GameObjects.Layer;
   private liftShadow?: Phaser.GameObjects.Image;
   private rejectedPiece?: PuzzlePieceView;
@@ -103,9 +103,6 @@ export class PuzzleBoardView {
     this.placementEffects = new PlacementEffects(scene, this.board.layer);
     this.floatingPieces = scene.add.layer();
     this.fitButton.addToLayer(this.floatingPieces);
-    if (puzzle.challengeMode === 'seed') {
-      this.seedDropFeedback = new SeedDropFeedback(scene, this.board.layer, this.floatingPieces);
-    }
     const dragCamera = scene.cameras.add().setName('Board overlay');
 
     // The panel cameras clip their own layers. The overlay draws above both panels.
@@ -387,12 +384,8 @@ export class PuzzleBoardView {
     const { piece } = entry;
     const result = this.board.contains(pointer)
       ? this.puzzle.drop(piece.id, this.board.toLocal(entry.position)) : 'missed';
-    if (result === 'disconnected-from-seed' && this.seedDropFeedback) {
-      this.rejectedPiece = entry;
-      entry.addTo(this.board.layer);
-      entry.setScale(1);
-      entry.moveTo(piece.target.x, piece.target.y);
-      this.seedDropFeedback.show(piece, () => this.returnRejectedPiece());
+    if (result === 'disconnected-from-seed') {
+      this.previewSeedRejection(entry);
       return;
     }
     if (result !== 'placed') {
@@ -406,6 +399,18 @@ export class PuzzleBoardView {
     this.updateTrayAvailability();
     this.onPlacement();
     this.placementEffects.play(piece, this.puzzle.joinedSeams(piece));
+  }
+
+  private previewSeedRejection(entry: PuzzlePieceView) {
+    const { piece } = entry;
+    this.rejectedPiece = entry;
+    entry.addTo(this.board.layer);
+    entry.setScale(1);
+    entry.moveTo(piece.target.x, piece.target.y);
+
+    const feedback = this.seedDropFeedback ??= new SeedDropFeedback(this.scene, this.board.layer, this.floatingPieces);
+    feedback.layout(this.scene.scale.gameSize);
+    feedback.show(piece, () => this.returnRejectedPiece());
   }
 
   private returnRejectedPiece() {

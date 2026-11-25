@@ -1,12 +1,14 @@
 import Phaser from 'phaser';
 import type RexUIPlugin from 'phaser4-rex-plugins/templates/ui/ui-plugin.js';
+import { challengeModes } from '../domain/challengeModes';
 import { createPuzzle } from '../domain/puzzleSizes';
 import { gameSave } from '../persistence';
 import type { PuzzleSetup } from '../persistence/GameSave';
 import { LivePuzzleCapture } from '../rendering/LivePuzzleCapture';
 import type { PuzzleSource } from '../puzzles/PuzzleSource';
 import { makeButton } from './button';
-import { headerControlGap, headerGap, headerInset, makeSettingsButton, puzzleHeader } from './puzzleHeader';
+import { playHeader } from './playLayout';
+import { headerControlGap, headerGap, headerInset, makeSettingsButton } from './puzzleHeader';
 import { PuzzleBoardView } from './PuzzleBoardView';
 import { SelectPuzzleScene } from './SelectPuzzleScene';
 import { openSettings } from './SettingsScene';
@@ -44,33 +46,49 @@ export class PlayPuzzleScene extends Phaser.Scene {
     const settings = makeSettingsButton(this, () => {
       board.cancelInteraction();
       openSettings(this, { onTrayPositionChange: (position) => board.setTrayPosition(position) });
-    });
+    }, playHeader);
     const title = this.add.text(0, 0, source.title, {
       fontFamily: 'system-ui', fontSize: '34px', fontStyle: 'bold',
     }).setOrigin(0, 0.5);
     const progress = this.add.text(0, 0, '', {
       fontFamily: 'system-ui', fontSize: '17px',
     }).setOrigin(0, 0.5);
+    const challenge = this.add.text(0, 0, `· ${challengeModes[puzzle.challengeMode].label}`, {
+      fontFamily: 'system-ui', fontSize: '17px',
+    }).setOrigin(0, 0.5);
     styleWithTheme(title, (colors) => {
       title.setColor(colors.text);
       progress.setColor(colors.mutedText);
+      challenge.setColor(colors.mutedText);
     });
     const layoutHeader = () => {
       const { width } = this.scale.gameSize;
-      const { narrow, buttonY } = puzzleHeader(width);
-      const stacked = !narrow && width < 700;
-      const centerY = narrow ? 87 : buttonY + backButton.height / 2;
+      const { narrow, buttonY } = playHeader(width);
       backButton.setY(buttonY);
       settings.layout(width);
-      title.setFontSize(narrow || stacked ? 20 : 34)
-        .setPosition(narrow ? headerInset : backButton.x + backButton.width + headerGap, centerY - (stacked ? 10 : 0));
-      progress.setFontSize(narrow || stacked ? 15 : 17)
-        .setPosition(stacked ? title.x : title.x + title.width + headerControlGap, centerY + (stacked ? 11 : 0));
+
+      const titleX = narrow ? headerInset : backButton.x + backButton.width + headerGap;
+      const centerY = narrow ? 87 : buttonY + backButton.height / 2;
+      title.setFontSize(narrow ? 20 : 34);
+      progress.setFontSize(narrow ? 14 : 17);
+      challenge.setFontSize(narrow ? 14 : 17);
+      const inlineRight = titleX + title.width + progress.width + challenge.width + 2 * headerControlGap;
+      const stacked = narrow || width < 700 || inlineRight + headerGap > settings.button.x;
+      if (stacked && !narrow) {
+        title.setFontSize(20);
+        progress.setFontSize(15);
+        challenge.setFontSize(15);
+      }
+
+      title.setPosition(titleX, centerY - (stacked ? 10 : 0));
+      const progressY = centerY + (stacked ? 11 : 0);
+      progress.setPosition(stacked ? titleX : titleX + title.width + headerControlGap, progressY);
+      challenge.setPosition(progress.x + progress.width + headerControlGap, progressY);
     };
     this.scale.on(Phaser.Scale.Events.RESIZE, layoutHeader);
-    layoutHeader();
     const updateProgress = () => {
       progress.setText(`${puzzle.placedCount} of ${puzzle.pieces.length} placed`);
+      layoutHeader();
     };
     let completionAction: Phaser.Time.TimerEvent | undefined;
     const onPlacement = () => {

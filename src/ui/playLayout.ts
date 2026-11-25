@@ -2,8 +2,12 @@ import { Bounds, type Size } from '../domain/geometry.ts';
 import type { TrayPosition } from '../persistence/GameSave';
 import { headerInset, puzzleHeader } from './puzzleHeader';
 
+export function playHeader(width: number) {
+  return puzzleHeader(width, 620);
+}
+
 export function playWorkspace({ width, height }: Size): Bounds {
-  const top = puzzleHeader(width).height;
+  const top = playHeader(width).height;
   return new Bounds(headerInset, top, Math.max(1, width - 2 * headerInset), Math.max(1, height - top - headerInset));
 }
 

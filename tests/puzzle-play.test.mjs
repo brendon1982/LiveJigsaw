@@ -206,6 +206,7 @@ test('live pieces scroll, reflow, and snap to the pannable board', async (t) => 
   await click(340, 180);
   await playSelection();
   await waitForText('0 of 8 placed');
+  await waitForText('· Standard');
   const header = await page.evaluate(() => window.paintedText);
   assert.ok(header.includes('All puzzles') && header.includes('Windmill'));
   assert.ok(!header.includes('Pieces') && !header.includes('Drag to pan · Scroll to zoom'));
@@ -934,6 +935,7 @@ test('No Guide progress resumes, resets, and records each completion', async (t)
   await page.evaluate(() => { window.paintedText = []; });
   await clickDialog(100, 44);
   await waitForText('1 of 8 placed');
+  await waitForText('· No Guide');
   await widenTray();
   assert.deepEqual(await pixelAt(page, await canvas.screenshot(), firstTarget.x, firstTarget.y), placedColor);
   for (let count = 1; count < targets.length; count += 1) await placeNextPiece();

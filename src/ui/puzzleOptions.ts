@@ -1,8 +1,9 @@
 import Phaser from 'phaser';
+import { challengeModes, type ChallengeMode } from '../domain/challengeModes';
 import { connectorStyles, type ConnectorStyleId } from '../domain/connectorStyles';
 import { availablePuzzleSizes, type PuzzleSize } from '../domain/puzzleSizes';
 import type { PuzzleOptions } from '../persistence/GameSave';
-import { puzzleAnimationSpeeds, type PuzzleAnimationSpeed, type PuzzleSource } from '../puzzles/PuzzleSource';
+import { puzzleAnimationSpeeds, type PuzzleSource } from '../puzzles/PuzzleSource';
 import { addPressFeedback, makeButtonLabel, type UIScene } from './button';
 import { palette } from './theme';
 
@@ -23,7 +24,7 @@ export function showPuzzleOptions(
   scene: UIScene,
   source: PuzzleSource,
   defaults: PuzzleOptions | undefined,
-  play: (size: PuzzleSize, connectorStyle: ConnectorStyleId, animationSpeed: PuzzleAnimationSpeed) => void,
+  play: (size: PuzzleSize, options: Omit<PuzzleOptions, 'sizeLabel'>) => void,
   onClose: () => void,
 ) {
   const sizes = availablePuzzleSizes(source.maxViewport);
@@ -43,12 +44,18 @@ export function showPuzzleOptions(
     name: speed,
     label: speed,
   })), defaults?.animationSpeed ?? 'Normal');
+  const modes = Object.keys(challengeModes) as ChallengeMode[];
+  const modeButtons = makeRadioButtons(scene, modes.map((mode) => ({
+    name: mode,
+    label: mode === 'sequential-window' ? 'Sequential\nWindow' : challengeModes[mode],
+  })), defaults?.challengeMode ?? 'standard', (contentWidth - 4 * optionGap) / 5, '14px');
 
   const content = scene.rexUI.add.sizer({ orientation: 'y', width: contentWidth, space: { item: 14 } });
   const sections = [
     ['Puzzle size', sizeButtons],
     ['Connector style', styleButtons],
     ['Animation speed', speedButtons],
+    ['Challenge mode', modeButtons],
   ] as const;
   for (const [heading, buttons] of sections) {
     const section = scene.rexUI.add.sizer({ orientation: 'y', space: { item: 6 } });
@@ -70,7 +77,10 @@ export function showPuzzleOptions(
     const size = sizes.find(({ label }) => label === sizeButtons.getSelectedButtonName());
     const style = styles.find((id) => id === styleButtons.getSelectedButtonName());
     const speed = puzzleAnimationSpeeds.find((name) => name === speedButtons.getSelectedButtonName());
-    if (size && style && speed) play(size, style, speed);
+    const challengeMode = modes.find((id) => id === modeButtons.getSelectedButtonName());
+    if (size && style && speed && challengeMode) {
+      play(size, { connectorStyle: style, animationSpeed: speed, challengeMode });
+    }
   });
 }
 
@@ -164,15 +174,17 @@ export function showPickerDialog(
   return dialog;
 }
 
-function makeRadioButtons(scene: UIScene, options: readonly Option[], selectedName: string) {
+function makeRadioButtons(
+  scene: UIScene, options: readonly Option[], selectedName: string, width = optionWidth, fontSize = '15px',
+) {
   const dragThreshold = 12;
   const tiles = options.map(({ name, label, drawIcon }) => {
     const background = scene.rexUI.add.roundRectangle(0, 0, 1, 1, 9, palette.background)
       .setStrokeStyle(1, palette.optionBorder).setDepth(depth.controls);
     const button = scene.rexUI.add.label({
-      name, width: optionWidth, height: drawIcon ? 82 : 52, orientation: 'y', align: 'center', background,
+      name, width, height: drawIcon ? 82 : 52, orientation: 'y', align: 'center', background,
       icon: drawIcon?.().setDepth(depth.tileContents),
-      text: scene.add.text(0, 0, label, { fontFamily: 'system-ui', fontSize: '15px', color: palette.text })
+      text: scene.add.text(0, 0, label, { fontFamily: 'system-ui', fontSize, align: 'center', color: palette.text })
         .setDepth(depth.tileContents),
       space: { icon: 4 },
     }).setDepth(depth.controls, true);

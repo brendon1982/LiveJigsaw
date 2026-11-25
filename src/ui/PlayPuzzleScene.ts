@@ -31,8 +31,8 @@ export class PlayPuzzleScene extends Phaser.Scene {
   }
 
   create({ source, setup, placedPieceIds = [] }: PuzzleSelection) {
-    const { size, connectorStyle, animationSpeed, seed } = setup;
-    const puzzle = createPuzzle(size, connectorStyle, seed);
+    const { size, connectorStyle, animationSpeed, seed, challengeMode } = setup;
+    const puzzle = createPuzzle(size, connectorStyle, seed, challengeMode);
     if (!puzzle.restorePlacements(placedPieceIds)) throw new Error('Invalid puzzle placements');
     const capture = new LivePuzzleCapture(this, source, {
       ...puzzle.board.size, seed: puzzle.seed, animationSpeed,

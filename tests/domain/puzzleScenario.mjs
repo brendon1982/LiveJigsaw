@@ -9,9 +9,10 @@ export function givenPuzzle({
   snapTolerance = 10,
   connectorStyle,
   seed,
+  challengeMode,
 } = {}) {
   const board = new Board({ width: columns * cell.width, height: rows * cell.height }, columns, rows);
-  const puzzle = new Puzzle(board, snapTolerance, connectorStyle, seed);
+  const puzzle = new Puzzle(board, snapTolerance, connectorStyle, seed, challengeMode);
 
   function pieceAt(column, row) {
     return puzzle.pieces[row * columns + column];
@@ -21,6 +22,14 @@ export function givenPuzzle({
     board,
     puzzle,
     pieceAt,
+    whenTrayPiece(index) {
+      const piece = puzzle.trayPieces[index];
+      return {
+        piece,
+        dropsOnTarget: () => puzzle.drop(piece.id, piece.target),
+        dropsNearTarget: (x) => puzzle.drop(piece.id, { x: piece.target.x + x, y: piece.target.y }),
+      };
+    },
     whenPiece(column, row) {
       const piece = pieceAt(column, row);
       return {

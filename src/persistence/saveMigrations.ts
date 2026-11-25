@@ -11,7 +11,26 @@ const migrations: readonly Migration[] = [
       trayFractions: { vertical: 0, horizontal: 0 },
     },
   }),
+  (document) => ({
+    ...document,
+    ...(isRecord(document.recentOptions) && { recentOptions: withStandardMode(document.recentOptions) }),
+    progress: mapSaveEntries(document.progress, withStandardSetup),
+    history: mapSaveEntries(document.history, (value) => Array.isArray(value) ? value.map(withStandardSetup) : value),
+  }),
 ];
+
+function withStandardMode(value: unknown): unknown {
+  return isRecord(value) ? { ...value, challengeMode: 'standard' } : value;
+}
+
+function withStandardSetup(value: unknown): unknown {
+  return isRecord(value) ? { ...value, setup: withStandardMode(value.setup) } : value;
+}
+
+function mapSaveEntries(value: unknown, transform: (entry: unknown) => unknown): unknown {
+  if (!isRecord(value)) return value;
+  return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, transform(entry)]));
+}
 
 export const saveVersion = migrations.length;
 

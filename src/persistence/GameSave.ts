@@ -1,3 +1,4 @@
+import type { ChallengeMode } from '../domain/challengeModes';
 import type { ConnectorStyleId } from '../domain/connectorStyles';
 import type { PuzzleSize } from '../domain/puzzleSizes';
 import type { PuzzleAnimationSpeed } from '../puzzles/PuzzleSource';
@@ -19,6 +20,7 @@ export type PuzzleOptions = Readonly<{
   sizeLabel: string;
   connectorStyle: ConnectorStyleId;
   animationSpeed: PuzzleAnimationSpeed;
+  challengeMode: ChallengeMode;
 }>;
 
 export type PuzzleSetup = Omit<PuzzleOptions, 'sizeLabel'> & Readonly<{ size: PuzzleSize; seed: number }>;

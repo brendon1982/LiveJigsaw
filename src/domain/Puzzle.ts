@@ -1,7 +1,9 @@
 import type { Board, Cell } from './Board.ts';
+import type { ChallengeMode } from './challengeModes.ts';
 import type { ConnectorStyleId } from './connectorStyles.ts';
 import type { Point } from './geometry.ts';
 import { PieceOutline } from './PieceOutline.ts';
+import { seededRandom } from './seededRandom.ts';
 
 function pieceIdAt(row: number, column: number): string {
   return `piece-${row}-${column}`;
@@ -28,26 +30,36 @@ export class PuzzlePiece {
   }
 }
 
-export type DropResult = 'placed' | 'missed' | 'already-placed';
+export type DropResult = 'placed' | 'missed' | 'already-placed' | 'blocked';
 
 export class Puzzle {
   readonly board: Board;
   readonly pieces: readonly PuzzlePiece[];
   readonly seed: number;
+  readonly challengeMode: ChallengeMode;
   private readonly snapTolerance: number;
   private readonly piecesById: ReadonlyMap<string, PuzzlePiece>;
+  private readonly trayOrder: readonly PuzzlePiece[];
   private readonly placedPieceIds = new Set<string>();
 
-  constructor(board: Board, snapTolerance: number, connectorStyle: ConnectorStyleId = 'classic', seed = 0) {
+  constructor(
+    board: Board,
+    snapTolerance: number,
+    connectorStyle: ConnectorStyleId = 'classic',
+    seed = 0,
+    challengeMode: ChallengeMode = 'standard',
+  ) {
     if (!Number.isFinite(snapTolerance) || snapTolerance < 0) {
       throw new RangeError('Snap tolerance must be finite and non-negative');
     }
     this.board = board;
     this.seed = seed;
+    this.challengeMode = challengeMode;
     this.snapTolerance = snapTolerance;
     const outlines = PieceOutline.forBoard(board, connectorStyle, seed);
     this.pieces = board.cells.map((cell, cellIndex) => new PuzzlePiece(cell, outlines[cellIndex]));
     this.piecesById = new Map(this.pieces.map((piece) => [piece.id, piece]));
+    this.trayOrder = shufflePieces(this.pieces, seed);
   }
 
   get placedCount(): number {
@@ -62,19 +74,37 @@ export class Puzzle {
     return this.placedPieceIds.has(pieceId);
   }
 
+  get trayPieces(): readonly PuzzlePiece[] {
+    return this.trayOrder.filter(({ id }) => !this.isPlaced(id));
+  }
+
+  canDrag(pieceId: string): boolean {
+    if (!this.piecesById.has(pieceId) || this.isPlaced(pieceId)) return false;
+    if (this.challengeMode !== 'sequential' && this.challengeMode !== 'sequential-window') return true;
+
+    const windowSize = this.challengeMode === 'sequential' ? 1 : 4;
+    let availableSlots = windowSize;
+    for (const piece of this.trayOrder) {
+      if (this.isPlaced(piece.id)) continue;
+      if (piece.id === pieceId) return true;
+      availableSlots -= 1;
+      if (availableSlots === 0) return false;
+    }
+    return false;
+  }
+
+  canPlace(pieceId: string): boolean {
+    if (!this.canDrag(pieceId)) return false;
+    if (this.challengeMode !== 'seed' || this.placedCount === 0) return true;
+    const piece = this.piecesById.get(pieceId)!;
+    return neighboringEdges(piece).some(({ id }) => this.isPlaced(id));
+  }
+
   joinedSeams(piece: PuzzlePiece): readonly (readonly Point[])[] {
     if (!this.isPlaced(piece.id)) return [];
 
-    const { row, column } = piece.cell;
-    const { top, right, bottom, left } = piece.outline.edges;
-    const neighbors = [
-      { row: row - 1, column, edge: top },
-      { row, column: column + 1, edge: right },
-      { row: row + 1, column, edge: bottom },
-      { row, column: column - 1, edge: left },
-    ];
-    return neighbors
-      .filter(({ row, column }) => this.isPlaced(pieceIdAt(row, column)))
+    return neighboringEdges(piece)
+      .filter(({ id }) => this.isPlaced(id))
       .map(({ edge }) => edge);
   }
 
@@ -95,9 +125,32 @@ export class Puzzle {
     const piece = this.piecesById.get(pieceId);
     if (!piece) throw new RangeError(`Unknown piece: ${pieceId}`);
     if (this.placedPieceIds.has(piece.id)) return 'already-placed';
+    if (!this.canPlace(piece.id)) return 'blocked';
     if (!piece.acceptsDrop(position, this.snapTolerance)) return 'missed';
 
     this.placedPieceIds.add(piece.id);
     return 'placed';
   }
+}
+
+function neighboringEdges(piece: PuzzlePiece) {
+  const { row, column } = piece.cell;
+  const { top, right, bottom, left } = piece.outline.edges;
+  return [
+    { id: pieceIdAt(row - 1, column), edge: top },
+    { id: pieceIdAt(row, column + 1), edge: right },
+    { id: pieceIdAt(row + 1, column), edge: bottom },
+    { id: pieceIdAt(row, column - 1), edge: left },
+  ];
+}
+
+function shufflePieces(pieces: readonly PuzzlePiece[], seed: number): readonly PuzzlePiece[] {
+  const order = [...pieces];
+  const random = seededRandom(seed);
+  // Shuffle the full list before removing placements so the saved seed restores the order.
+  for (let index = order.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(random() * (index + 1));
+    [order[index], order[swapIndex]] = [order[swapIndex], order[index]];
+  }
+  return order;
 }

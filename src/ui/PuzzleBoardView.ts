@@ -82,15 +82,14 @@ export class PuzzleBoardView {
     traySettings: TraySettings,
     private readonly onPlacement: () => void,
   ) {
-    const remainingPieces = puzzle.pieces.filter(({ id }) => !puzzle.isPlaced(id));
     const placedPieces = puzzle.pieces.filter(({ id }) => puzzle.isPlaced(id));
-    this.pieces = Phaser.Math.RND.shuffle(remainingPieces)
-      .map((piece) => new PuzzlePieceView(scene, capture, piece));
+    this.pieces = puzzle.trayPieces.map((piece) => new PuzzlePieceView(scene, capture, piece));
+    this.updateTrayAvailability();
 
     this.trayPosition = traySettings.position;
     this.side = resolveTraySide(this.trayPosition, scene.scale.gameSize);
     this.tray = new PieceTray(scene, this.pieces, puzzle.board.cellSize, trayPieceSize, trayScrollAxis(this.side));
-    this.board = new PannableBoard(scene, puzzle.board.size, capture);
+    this.board = new PannableBoard(scene, puzzle.board.size, capture, puzzle.challengeMode === 'no-guide');
     this.board.addPieces(placedPieces);
     this.fitButton = makeIconButton(scene, 'Fit board', drawFitBoardIcon, (pointer) => {
       if (pointer.wasCanceled) return;
@@ -245,7 +244,7 @@ export class PuzzleBoardView {
     }
     const entry = this.tray.pieceAt(pointer);
     const pointerId = pointer.id;
-    if (entry) {
+    if (entry && this.puzzle.canDrag(entry.piece.id)) {
       if (pointer.wasTouch) {
         this.gesture = { kind: 'tray-touch', pointerId, entry, start: { x: pointer.x, y: pointer.y } };
       } else {
@@ -377,12 +376,20 @@ export class PuzzleBoardView {
       this.board.addPieces([piece]);
       entry.hide();
       this.tray.remove(entry, this.trayBounds);
+      this.updateTrayAvailability();
       this.onPlacement();
       this.placementEffects.play(piece, this.puzzle.joinedSeams(piece));
     } else {
       this.tray.returnPiece(entry);
     }
   };
+
+  private updateTrayAvailability() {
+    for (const entry of this.pieces) {
+      const { id } = entry.piece;
+      if (!this.puzzle.isPlaced(id)) entry.setGrayscale(!this.puzzle.canDrag(id));
+    }
+  }
 
   private readonly cancelGesture = (pointer: Phaser.Input.Pointer) => {
     if (this.endPinch(pointer)) return;

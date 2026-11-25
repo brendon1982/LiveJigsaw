@@ -8,6 +8,7 @@ export class PuzzlePieceView {
   readonly frame: Bounds;
   private readonly image: Phaser.GameObjects.Image;
   private readonly hitArea: Phaser.Geom.Polygon;
+  private grayscale?: Phaser.Filters.ColorMatrix;
   private scale = 1;
 
   constructor(scene: Phaser.Scene, capture: LivePuzzleCapture, readonly piece: PuzzlePiece) {
@@ -73,5 +74,13 @@ export class PuzzlePieceView {
 
   hide() {
     this.image.setVisible(false);
+  }
+
+  setGrayscale(enabled: boolean) {
+    if (enabled && !this.grayscale) {
+      this.grayscale = this.image.filters!.internal.addColorMatrix();
+      this.grayscale.colorMatrix.grayscale();
+    }
+    this.grayscale?.setActive(enabled);
   }
 }

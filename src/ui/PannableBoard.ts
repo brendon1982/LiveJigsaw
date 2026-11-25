@@ -9,6 +9,7 @@ export class PannableBoard {
   readonly layer: Phaser.GameObjects.Layer;
   readonly camera: Phaser.Cameras.Scene2D.Camera;
   private readonly guide: Phaser.GameObjects.Image;
+  private readonly border?: Phaser.GameObjects.Rectangle;
   private readonly placedMask: Phaser.Textures.CanvasTexture;
   private readonly placedImage: Phaser.GameObjects.Image;
   private readonly placedPath = new Path2D();
@@ -17,7 +18,9 @@ export class PannableBoard {
   private usesFitZoom = false;
   private showingFinishedArtwork = false;
 
-  constructor(private readonly scene: Phaser.Scene, private readonly size: Size, capture: LivePuzzleCapture) {
+  constructor(
+    private readonly scene: Phaser.Scene, private readonly size: Size, capture: LivePuzzleCapture, hideGuide = false,
+  ) {
     this.offset = { x: -size.width / 2, y: -size.height / 2 };
     this.layer = scene.add.layer();
     this.camera = scene.cameras.add().setName('Puzzle board').setOrigin(0);
@@ -30,7 +33,6 @@ export class PannableBoard {
       const filtered = activePuzzleFilter === 'grayscale' || activePuzzleFilter === 'faded';
       guide.setAlpha(filtered ? colors.filteredGuideOpacity : colors.guideOpacity);
     };
-    styleWithTheme(guide, setGuideOpacity);
     let guideFilter: Phaser.Filters.ColorMatrix | undefined;
     const updateGuideFilter = (filter: PuzzleArtworkFilter | undefined) => {
       setGuideOpacity(palette);
@@ -59,8 +61,17 @@ export class PannableBoard {
           break;
       }
     };
-    updateGuideFilter(activePuzzleFilter);
-    guide.once(Phaser.GameObjects.Events.DESTROY, onPuzzleFilterChange(updateGuideFilter));
+    if (hideGuide) {
+      guide.setAlpha(0);
+      const border = scene.add.rectangle(0, 0, size.width, size.height).setOrigin(0);
+      styleWithTheme(border, (colors) => border.setStrokeStyle(2, colors.border));
+      this.border = border;
+      this.layer.add(border);
+    } else {
+      styleWithTheme(guide, setGuideOpacity);
+      updateGuideFilter(activePuzzleFilter);
+      guide.once(Phaser.GameObjects.Events.DESTROY, onPuzzleFilterChange(updateGuideFilter));
+    }
     const placedMask = scene.textures.createCanvas('live-puzzle-placed-mask', size.width, size.height);
     if (!placedMask) throw new Error('Could not create the placed pieces mask');
     this.placedMask = placedMask;
@@ -90,6 +101,7 @@ export class PannableBoard {
 
   revealFinishedArtwork() {
     this.showingFinishedArtwork = true;
+    this.border?.setVisible(false);
     const artwork = this.scene.add.image(0, 0, this.placedImage.texture, '__BASE').setOrigin(0)
       .setDisplaySize(this.size.width, this.size.height).setAlpha(0);
     this.layer.add(artwork);

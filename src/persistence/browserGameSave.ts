@@ -1,3 +1,4 @@
+import { challengeModes, type ChallengeMode } from '../domain/challengeModes';
 import { connectorStyles, type ConnectorStyleId } from '../domain/connectorStyles';
 import { createPuzzle, puzzleSizes, type PuzzleSize } from '../domain/puzzleSizes';
 import { puzzleAnimationSpeeds, type PuzzleAnimationSpeed } from '../puzzles/PuzzleSource';
@@ -117,11 +118,16 @@ function isAnimationSpeed(value: unknown): value is PuzzleAnimationSpeed {
   return puzzleAnimationSpeeds.some((speed) => speed === value);
 }
 
+function isChallengeMode(value: unknown): value is ChallengeMode {
+  return typeof value === 'string' && Object.hasOwn(challengeModes, value);
+}
+
 function readOptions(value: unknown): PuzzleOptions | undefined {
   if (!isRecord(value)) return;
-  const { sizeLabel, connectorStyle, animationSpeed } = value;
-  if (typeof sizeLabel === 'string' && isConnectorStyle(connectorStyle) && isAnimationSpeed(animationSpeed)) {
-    return { sizeLabel, connectorStyle, animationSpeed };
+  const { sizeLabel, connectorStyle, animationSpeed, challengeMode } = value;
+  if (typeof sizeLabel === 'string' && isConnectorStyle(connectorStyle)
+    && isAnimationSpeed(animationSpeed) && isChallengeMode(challengeMode)) {
+    return { sizeLabel, connectorStyle, animationSpeed, challengeMode };
   }
 }
 
@@ -144,10 +150,10 @@ function readSize(value: unknown): PuzzleSize | undefined {
 function readSetup(value: unknown): PuzzleSetup | undefined {
   if (!isRecord(value)) return;
   const size = readSize(value.size);
-  const { seed, connectorStyle, animationSpeed } = value;
+  const { seed, connectorStyle, animationSpeed, challengeMode } = value;
   if (!size || typeof seed !== 'number' || !Number.isInteger(seed) || seed < 0 || seed > 0xffffffff
-    || !isConnectorStyle(connectorStyle) || !isAnimationSpeed(animationSpeed)) return;
-  return { size, seed, connectorStyle, animationSpeed };
+    || !isConnectorStyle(connectorStyle) || !isAnimationSpeed(animationSpeed) || !isChallengeMode(challengeMode)) return;
+  return { size, seed, connectorStyle, animationSpeed, challengeMode };
 }
 
 function readProgress(value: unknown): PuzzleProgress | undefined {
@@ -157,7 +163,7 @@ function readProgress(value: unknown): PuzzleProgress | undefined {
   if (!setup || !Array.isArray(placedPieceIds) || placedPieceIds.length === 0
     || placedPieceIds.length >= setup.size.columns * setup.size.rows
     || !placedPieceIds.every((id): id is string => typeof id === 'string')) return;
-  const puzzle = createPuzzle(setup.size, setup.connectorStyle, setup.seed);
+  const puzzle = createPuzzle(setup.size, setup.connectorStyle, setup.seed, setup.challengeMode);
   if (puzzle.restorePlacements(placedPieceIds)) return { setup, placedPieceIds };
 }
 

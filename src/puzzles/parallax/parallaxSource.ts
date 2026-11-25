@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import type { Size } from '../../domain/geometry';
 import { seededRandom } from '../../domain/seededRandom';
 import { imagePreview } from '../imagePreview';
 import { puzzleAnimationRates, type PuzzleSource, type PuzzleSourceSceneData } from '../PuzzleSource';
@@ -22,6 +23,7 @@ type ParallaxArtwork = Readonly<{
   key: string;
   title: string;
   preview: string;
+  artworkSize?: Size;
   /** The compositing order, from back to front. */
   layers: readonly ParallaxLayer[];
 }>;
@@ -32,8 +34,11 @@ const oppositeEdge = 3 * Math.PI / 2;
 const minPause = 600;
 const maxPause = 1_800;
 const defaultPlacementRange = [-0.06, 1.06] as const;
+const standardArtworkSize = { width: 1920, height: 1080 };
 
-export function parallaxSource({ key, title, preview, layers }: ParallaxArtwork): PuzzleSource {
+export function parallaxSource({
+  key, title, preview, artworkSize = standardArtworkSize, layers,
+}: ParallaxArtwork): PuzzleSource {
   const textureKey = (name: string) => `parallax-${key}-${name}`;
   // Reserve the maximum layer travel on both sides, plus a margin for filtering.
   const overscan = 1 + 2 * Math.max(...layers.map(({ travel }) => travel)) + 0.02;
@@ -59,6 +64,9 @@ export function parallaxSource({ key, title, preview, layers }: ParallaxArtwork)
     }
 
     create({ width, height, seed, animationSpeed }: PuzzleSourceSceneData) {
+      const scale = Math.max(width / artworkSize.width, height / artworkSize.height) * overscan;
+      const displayWidth = artworkSize.width * scale;
+      const displayHeight = artworkSize.height * scale;
       const random = seededRandom(seed);
       // Assign positions front to back so new background placements preserve the foreground's seed.
       const restXFractions = [...layers].reverse().map(({ seededX }) => {
@@ -70,7 +78,7 @@ export function parallaxSource({ key, title, preview, layers }: ParallaxArtwork)
         const restX = width * restXFractions[index];
         const image = this.add.image(restX, height * anchorY, textureKey(name))
           .setOrigin(seededX?.origin ?? 0.5, anchorY)
-          .setDisplaySize(width * overscan, height * overscan);
+          .setDisplaySize(displayWidth, displayHeight);
         return { image, restX, travel: width * travel };
       });
 
@@ -101,7 +109,7 @@ export function parallaxSource({ key, title, preview, layers }: ParallaxArtwork)
 
   return {
     title,
-    maxViewport: { width: 1920, height: 1080 },
+    maxViewport: artworkSize,
     scene: ParallaxScene,
     ...imagePreview(textureKey('preview'), preview),
   };

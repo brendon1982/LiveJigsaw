@@ -1,6 +1,7 @@
 import { afterglowSource } from './afterglow/afterglowSource';
 import { amberWoodsSource } from './amberWoods/amberWoodsSource';
 import { birchGladeSource } from './birchGlade/birchGladeSource';
+import { blueMoonValleySource } from './blueMoonValley/blueMoonValleySource';
 import { canyonDriftSource } from './canyonDrift/canyonDriftSource';
 import { chocolateHillsSource } from './chocolateHills/chocolateHillsSource';
 import { crescentCryptSource } from './crescentCrypt/crescentCryptSource';
@@ -57,4 +58,5 @@ export const puzzleSources: readonly PuzzleSource[] = [
   thornwoodHollowSource,
   crescentCryptSource,
   witchlightHearthSource,
+  blueMoonValleySource,
 ];

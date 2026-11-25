@@ -14,6 +14,7 @@ import { forestSource } from './forest/forestSource';
 import { goldenPeaksSource } from './goldenPeaks/goldenPeaksSource';
 import { hexCoastSource } from './hexCoast/hexCoastSource';
 import { lanternManorSource } from './lanternManor/lanternManorSource';
+import { lavenderMesaSource } from './lavenderMesa/lavenderMesaSource';
 import { lighthouseSource } from './lighthouse/lighthouseSource';
 import { lollipopLaneSource } from './lollipopLane/lollipopLaneSource';
 import { meadowSource } from './meadow/meadowSource';
@@ -63,4 +64,5 @@ export const puzzleSources: readonly PuzzleSource[] = [
   blueMoonValleySource,
   spireCountrySource,
   goldenPeaksSource,
+  lavenderMesaSource,
 ];

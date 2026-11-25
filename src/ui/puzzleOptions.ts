@@ -4,7 +4,7 @@ import { connectorStyles, type ConnectorStyleId } from '../domain/connectorStyle
 import { availablePuzzleSizes, type PuzzleSize } from '../domain/puzzleSizes';
 import type { PuzzleOptions } from '../persistence/GameSave';
 import { puzzleAnimationSpeeds, type PuzzleSource } from '../puzzles/PuzzleSource';
-import { addPressFeedback, makeButtonLabel, type UIScene } from './button';
+import { makeButtonLabel, makeOptionTile, type UIScene } from './button';
 import { palette } from './theme';
 
 const optionWidth = 96;
@@ -178,25 +178,9 @@ function makeRadioButtons(
   scene: UIScene, options: readonly Option[], selectedName: string, width = optionWidth, fontSize = '15px',
 ) {
   const dragThreshold = 12;
-  const tiles = options.map(({ name, label, drawIcon }) => {
-    const background = scene.rexUI.add.roundRectangle(0, 0, 1, 1, 9, palette.background)
-      .setStrokeStyle(1, palette.optionBorder).setDepth(depth.controls);
-    const button = scene.rexUI.add.label({
-      name, width, height: drawIcon ? 82 : 52, orientation: 'y', align: 'center', background,
-      icon: drawIcon?.().setDepth(depth.tileContents),
-      text: scene.add.text(0, 0, label, { fontFamily: 'system-ui', fontSize, align: 'center', color: palette.text })
-        .setDepth(depth.tileContents),
-      space: { icon: 4 },
-    }).setDepth(depth.controls, true);
-    let selected = false;
-    let pressed = false;
-    const restyle = () => {
-      background.setFillStyle(pressed ? palette.buttonPressed : selected ? palette.selectedOption : palette.background)
-        .setStrokeStyle(selected ? 2 : 1, selected ? palette.primaryButton : palette.optionBorder);
-    };
-    addPressFeedback(button, (value) => { pressed = value; restyle(); }, dragThreshold);
-    return { button, setSelected(value: boolean) { selected = value; restyle(); } };
-  });
+  const tiles = options.map((option) => makeOptionTile(scene, {
+    ...option, width, fontSize, depth: depth.controls, contentDepth: depth.tileContents, dragThreshold,
+  }));
 
   const buttons = scene.rexUI.add.buttons({
     orientation: 'x', type: 'radio', buttons: tiles.map(({ button }) => button),

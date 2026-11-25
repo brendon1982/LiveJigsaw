@@ -81,6 +81,46 @@ export function makeButtonLabel(
   return button;
 }
 
+type OptionTile = {
+  name?: string;
+  label: string;
+  width: number;
+  height?: number;
+  fontSize?: string;
+  drawIcon?: () => Phaser.GameObjects.Container;
+  depth?: number;
+  contentDepth?: number;
+  dragThreshold?: number;
+  onClick?: (pointer: Phaser.Input.Pointer) => void;
+};
+
+export function makeOptionTile(scene: UIScene, {
+  name, label, width, drawIcon, height = drawIcon ? 82 : 52, fontSize = '15px',
+  depth = 0, contentDepth = depth, dragThreshold, onClick,
+}: OptionTile) {
+  const background = scene.rexUI.add.roundRectangle(0, 0, 1, 1, 9).setDepth(depth);
+  const text = scene.add.text(0, 0, label, { fontFamily: 'system-ui', fontSize, align: 'center' })
+    .setDepth(contentDepth);
+  const button = scene.rexUI.add.label({
+    name, width, height, orientation: 'y', align: 'center', background, text,
+    icon: drawIcon?.().setDepth(contentDepth),
+    space: { icon: 4 },
+  }).setDepth(depth, true);
+  let selected = false;
+  let pressed = false;
+  const restyle = (colors: typeof palette) => {
+    background.setFillStyle(pressed ? colors.buttonPressed : selected ? colors.selectedOption : colors.background)
+      .setStrokeStyle(selected ? 2 : 1, selected ? colors.primaryButton : colors.optionBorder);
+    text.setColor(colors.text);
+  };
+  styleWithTheme(button, restyle);
+  addPressFeedback(button, (value) => { pressed = value; restyle(palette); }, dragThreshold);
+  if (onClick) {
+    bindClick(scene, button, (pointer) => { if (!pointer.wasCanceled) onClick(pointer); }, dragThreshold);
+  }
+  return { button, setSelected(value: boolean) { selected = value; restyle(palette); } };
+}
+
 function styleButton(
   button: ButtonLabel, background: ButtonBackground, setContentColor: (color: string) => void,
   primary = false, dragThreshold?: number,
@@ -89,7 +129,7 @@ function styleButton(
   let hovered = false;
   let pressed = false;
   const restyle = (colors: typeof palette) => {
-    const highlighted = button.getData('primary') === true || button.getData('selected') === true;
+    const highlighted = button.getData('primary') === true;
     const fill = highlighted ? colors.primaryButton : colors.button;
     const hover = highlighted ? colors.primaryButtonHover : colors.buttonHover;
     const press = highlighted ? colors.primaryButtonPressed : colors.buttonPressed;
@@ -98,7 +138,6 @@ function styleButton(
   };
   styleWithTheme(button, restyle);
   button.on('changedata-primary', () => restyle(palette));
-  button.on('changedata-selected', () => restyle(palette));
   button.on('pointerover', (pointer: Phaser.Input.Pointer) => { hovered = !pointer.wasTouch; restyle(palette); });
   button.on('pointerout', () => { hovered = false; restyle(palette); });
   addPressFeedback(button, (value) => { pressed = value; restyle(palette); }, dragThreshold);

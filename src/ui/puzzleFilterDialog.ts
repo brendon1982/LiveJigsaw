@@ -1,12 +1,11 @@
 import type Phaser from 'phaser';
 import { puzzleThemes, puzzleTypes } from '../puzzles/PuzzleTags';
-import { makeButton, makeButtonLabel, type UIScene } from './button';
+import { makeButtonLabel, makeOptionTile, type UIScene } from './button';
 import { completionFilters, noPuzzleFilters, type PuzzleFilters } from './puzzleFilters';
 import { pickerControlDepth, showPickerDialog } from './puzzleOptions';
 import { palette } from './theme';
 
 const contentWidth = 326;
-const choiceHeight = 52;
 const gap = 6;
 
 function toggleChoice<T>(choices: readonly T[], choice: T): T[] {
@@ -35,18 +34,16 @@ export function showPuzzleFilters(
     for (let start = 0; start < choices.length; start += widths.length) {
       const row = scene.rexUI.add.sizer({ orientation: 'x', space: { item: gap } });
       choices.slice(start, start + widths.length).forEach((choice, column) => {
-        const button = makeButton(scene, 0, 0, choice, (pointer) => {
-          if (pointer.wasCanceled || !isInsideBody(pointer)) return;
-          select(choice);
-          refreshButtons.forEach((refresh) => refresh());
-        }, widths[column], 10).setMinHeight(choiceHeight).setDepth(pickerControlDepth, true);
-        const label = button.getElement('text') as Phaser.GameObjects.Text;
-        label.setFontSize(14);
-        button.space.left = 6;
-        button.space.right = 6;
-        button.setData('selected', false);
-        refreshButtons.push(() => { button.setData('selected', isSelected(choice)); });
-        row.add(button);
+        const tile = makeOptionTile(scene, {
+          label: choice, width: widths[column], fontSize: '14px', depth: pickerControlDepth, dragThreshold: 10,
+          onClick: (pointer) => {
+            if (!isInsideBody(pointer)) return;
+            select(choice);
+            refreshButtons.forEach((refresh) => refresh());
+          },
+        });
+        refreshButtons.push(() => tile.setSelected(isSelected(choice)));
+        row.add(tile.button);
       });
       content.add(row, { align: 'left' });
     }

@@ -164,6 +164,7 @@ test('the startup indicator stays visible until the picker renders', async (t) =
     await page.goto(origin, { waitUntil: 'commit' });
     await status.waitFor({ state: 'visible' });
     assert.equal(await status.textContent().then((text) => text.trim()), 'Loading Live Jigsaw…');
+    assert.equal(await status.evaluate((element) => getComputedStyle(element).backgroundColor), 'rgb(0, 0, 0)');
     assert.equal(await canvas.count(), 0);
 
     const spinner = status.locator('[aria-hidden="true"]');
@@ -645,7 +646,7 @@ test('picker Settings remembers the theme and filter on a narrow touch screen', 
   assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 5, 105), [39, 51, 68, 255]);
   await page.touchscreen.tap(301, 39);
   await waitForText('Faded');
-  assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 64, 321), [200, 222, 248, 255], 'The saved filter should be selected after reload');
+  assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 64, 321), [76, 102, 135, 255], 'The saved filter should use the Slate selected tile fill after reload');
   await clickDialog(102, settingsY.theme);
   await page.waitForFunction(() => JSON.parse(localStorage.getItem('live-jigsaw.save')).settings.theme === 'Dark');
   await clickDialog(101, settingsY.done);
@@ -1053,6 +1054,10 @@ test('picker tag and completion filters combine and refresh after play', async (
   await openFilters();
   await clickDialog(93, -180); // Coast
   await clickDialog(-119, -118); // Countryside
+  const selectedTiles = await canvas.screenshot();
+  const selectedFill = [75, 108, 94, 255];
+  assert.deepEqual(await pixelAt(page, selectedTiles, 753, 195), selectedFill, 'Coast should use the selected tile fill');
+  assert.deepEqual(await pixelAt(page, selectedTiles, 541, 257), selectedFill, 'Countryside should stay selected alongside Coast');
   await clickDialog(-109, 96); // Flat Illustration
   await clickDialog(-66, 187); // Completed
   await clickDialog(125, 257);
@@ -1457,7 +1462,7 @@ test('tray settings move the live tray and rotate touch gestures with it', async
   const { dispatch, moveFinger } = await touchController(page);
   const trayColor = [52, 66, 62, 255];
   const boardColor = [32, 46, 42, 255];
-  const selectedColor = [199, 225, 209, 255];
+  const selectedColor = [75, 108, 94, 255];
   const layout = {
     Left: { choice: [-102, settingsY.firstTray], first: [75, 136], scroll: [0, -52], lift: [85, 0] },
     Right: { choice: [0, settingsY.firstTray], first: [590, 136], scroll: [0, -52], lift: [-85, 0] },

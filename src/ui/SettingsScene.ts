@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { gameSave } from '../persistence';
 import { trayPositions, type TrayPosition } from '../persistence/GameSave';
-import { makeButtonLabel, type UIScene } from './button';
+import { makeButtonLabel, makeOptionTile, type UIScene } from './button';
 import { activePuzzleFilter, puzzleFilters, selectPuzzleFilter } from './puzzleFilter';
 import { activeTheme, palette, selectTheme, styleWithTheme, themes } from './theme';
 
@@ -34,21 +34,16 @@ export class SettingsScene extends Phaser.Scene {
     const filterHeading = this.add.text(0, 0, 'Puzzle filter', headingStyle);
     const trayHeading = this.add.text(0, 0, 'Puzzle tray', headingStyle);
     const selectionUpdates: (() => void)[] = [];
-    const choice = (label: string, width: number, select: () => void, selected?: () => boolean) => {
-      const button = makeButtonLabel(this, label, width, 54);
-      if (selected) {
-        button.setData('selected', false);
-        const update = () => button.setData('selected', selected());
-        selectionUpdates.push(update);
-        update();
-      }
-      this.rexUI.add.click(button).on('click', (_button: unknown, _object: unknown, pointer: Phaser.Input.Pointer) => {
-        if (pointer.wasCanceled) return;
-        select();
-        for (const update of selectionUpdates) update();
+    const refreshSelections = () => { for (const update of selectionUpdates) update(); };
+    const choice = (label: string, width: number, select: () => void, selected: () => boolean) => {
+      const tile = makeOptionTile(this, {
+        label, width, height: 54,
+        onClick: () => { select(); refreshSelections(); },
       });
-      button.input!.cursor = 'pointer';
-      return button;
+      const update = () => tile.setSelected(selected());
+      selectionUpdates.push(update);
+      update();
+      return tile.button;
     };
     const row = () => this.rexUI.add.sizer({ orientation: 'x', space: { item: 8 } });
     const themeChoices = row();
@@ -57,9 +52,16 @@ export class SettingsScene extends Phaser.Scene {
     }
     const filterChoice = (filter: keyof typeof puzzleFilters, width: number) =>
       choice(puzzleFilters[filter], width, () => selectPuzzleFilter(filter), () => activePuzzleFilter === filter);
+    const clearFilter = makeButtonLabel(this, 'Clear filter', 122, 54);
+    this.rexUI.add.click(clearFilter).on('click', (_button: unknown, _object: unknown, pointer: Phaser.Input.Pointer) => {
+      if (pointer.wasCanceled) return;
+      selectPuzzleFilter(undefined);
+      refreshSelections();
+    });
+    clearFilter.input!.cursor = 'pointer';
     const filterChoices = this.rexUI.add.sizer({ orientation: 'y', space: { item: 8 } });
     filterChoices.add(row().add(filterChoice('grayscale', 168)).add(filterChoice('sepia', 122)))
-      .add(row().add(filterChoice('faded', 168)).add(choice('Clear filter', 122, () => selectPuzzleFilter(undefined))));
+      .add(row().add(filterChoice('faded', 168)).add(clearFilter));
     const trayChoices = this.rexUI.add.sizer({ orientation: 'y', space: { item: 8 } });
     for (const positions of [trayPositions.slice(0, 3), trayPositions.slice(3)]) {
       const choices = row();

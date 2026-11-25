@@ -9,7 +9,7 @@ const columns = 17;
 const rows = 14;
 type Random = ReturnType<typeof seededRandom>;
 type Biome = 'water' | 'sand' | 'grass' | 'autumn' | 'rock' | 'snow';
-type Tile = { id: number; x: number; y: number; level: number; biome: Biome; wooded: boolean };
+export type CoastTile = { id: number; x: number; y: number; level: number; biome: Biome; wooded: boolean };
 type Building = { wall: string; upper: string; roof: string; floors: number };
 
 const grid = Array.from({ length: columns * rows }, (_, id) => {
@@ -36,11 +36,11 @@ function distance(from: number, to: number) {
   return Math.max(Math.abs(row), Math.abs(column), Math.abs(row + column));
 }
 
-function buildable({ level, x, y }: Tile) {
+function buildable({ level, x, y }: CoastTile) {
   return level === 1 && x >= 56 && x <= 968 && y >= 110 && y <= 523;
 }
 
-function terrain(random: Random): Tile[] {
+function terrain(random: Random): CoastTile[] {
   const side = random() < 0.5 ? -1 : 1;
   const main = { x: 512 + side * (118 + random() * 62), y: 240 + random() * 80 };
   const island = { x: 512 - side * (266 + random() * 45), y: 155 + random() * 245 };
@@ -78,8 +78,8 @@ function terrain(random: Random): Tile[] {
   });
 }
 
-function develop(tiles: Tile[], random: Random) {
-  const availableLots = (tile: Tile) => neighbors[tile.id].filter(({ id }) => buildable(tiles[id])).length;
+function develop(tiles: CoastTile[], random: Random) {
+  const availableLots = (tile: CoastTile) => neighbors[tile.id].filter(({ id }) => buildable(tiles[id])).length;
   const sites = tiles.filter((tile) => buildable(tile) && availableLots(tile) >= 3);
   const harbors = sites.filter((tile) => neighbors[tile.id].some(({ id }) => tiles[id].level === 0))
     .map((tile) => ({ tile, score: availableLots(tile) + random() * 4 }));
@@ -102,7 +102,7 @@ function develop(tiles: Tile[], random: Random) {
   }
 }
 
-function buildSettlements(tiles: Tile[], road: number[], harbor: Tile, village: Tile, random: Random) {
+function buildSettlements(tiles: CoastTile[], road: number[], harbor: CoastTile, village: CoastTile, random: Random) {
   const occupied = new Set(road);
   const roadside = new Set(road.flatMap((id) => neighbors[id].map((neighbor) => neighbor.id)));
   const buildings = new Map<number, Building>();

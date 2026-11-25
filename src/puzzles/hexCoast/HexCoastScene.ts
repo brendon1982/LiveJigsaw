@@ -9,7 +9,8 @@ import terrainImage from './assets/fullTiles.png';
 import terrainAtlas from './assets/fullTiles.xml?url';
 import treeImage from './assets/trees.png';
 import treeAtlas from './assets/trees.xml?url';
-import { coastSize, generateHexCoast, shoreHeight, terraceHeight } from './hexCoastLayout';
+import { coastSize, generateHexCoast, shoreHeight, terraceHeight, type CoastTile } from './hexCoastLayout';
+import { scatterHexScenery } from './hexCoastScenery';
 
 const sheets = [
   ['terrain', terrainImage, terrainAtlas],
@@ -27,6 +28,32 @@ const tileOriginY = 32 / 89;
 const wallHeight = 23;
 
 type Wave = { image: Phaser.GameObjects.Image; x: number; y: number; phase: number };
+type RoadPoint = Pick<CoastTile, 'x' | 'y'>;
+
+function roadStrokes(road: CoastTile[]) {
+  const rows = new Map<number, { from: RoadPoint; to: RoadPoint }[]>();
+  const add = (from: RoadPoint, to: RoadPoint) => {
+    const row = rows.get(from.y);
+    if (row) row.push({ from, to });
+    else rows.set(from.y, [{ from, to }]);
+  };
+  const halfStroke = (from: RoadPoint, to: RoadPoint) => {
+    // Extend just past the midpoint so the diagonal halves cover their seam.
+    add(from, { x: from.x + (to.x - from.x) * 0.52, y: from.y + (to.y - from.y) * 0.52 });
+  };
+
+  for (let index = 1; index < road.length; index += 1) {
+    const from = road[index - 1];
+    if (road[index].y === from.y) {
+      while (road[index + 1]?.y === from.y) index += 1;
+      add(from, road[index]);
+    } else {
+      halfStroke(from, road[index]);
+      halfStroke(road[index], from);
+    }
+  }
+  return rows;
+}
 
 export class HexCoastScene extends Phaser.Scene {
   static readonly key = 'HexCoast';
@@ -52,7 +79,6 @@ export class HexCoastScene extends Phaser.Scene {
     const { tiles, road, towns, buildings } = generateHexCoast(seed);
     const land = tiles.filter((tile) => tile.biome !== 'water');
     const random = seededRandom((seed ^ 0x5d3b6c17) >>> 0);
-    const choose = (frames: string[]) => frames[Math.floor(random() * frames.length)];
     const map = this.add.container().setScale(width / coastSize.width, height / coastSize.height);
     map.add(this.add.rectangle(0, 0, coastSize.width, coastSize.height, 0x6ebacf).setOrigin(0));
     const sprite = (sheet: Sheet, frame: string, x: number, y: number, scale = 1, originY = 1) => {
@@ -76,60 +102,68 @@ export class HexCoastScene extends Phaser.Scene {
       }
     }
 
-    const roadIndex = new Map(road.map((id, index) => [id, index]));
+    const landRows = new Map<number, typeof land>();
     for (const tile of land) {
-      const { id, x, y, level, biome, wooded } = tile;
-      for (let below = 0; below < level - 1; below += 1) {
-        ground('tileRock_full', x, y - shoreHeight - below * terraceHeight);
+      const row = landRows.get(tile.y);
+      if (row) row.push(tile);
+      else landRows.set(tile.y, [tile]);
+    }
+    const strokes = roadStrokes(road.map((id) => tiles[id]));
+    const roadIds = new Set(road);
+    for (const [rowY, row] of landRows) {
+      for (const { x, y, level, biome } of row) {
+        for (let below = 0; below < level - 1; below += 1) {
+          ground('tileRock_full', x, y - shoreHeight - below * terraceHeight);
+        }
+        ground(groundFrames[biome], x, y - shoreHeight - (level - 1) * terraceHeight);
       }
-      const surface = y - shoreHeight - (level - 1) * terraceHeight;
-      ground(groundFrames[biome], x, surface);
 
-      const index = roadIndex.get(id);
-      if (index !== undefined) {
-        const paths = [road[index - 1], road[index + 1]].filter((neighbor) => neighbor !== undefined);
+      // Paint the whole row's ground first, then draw straight streets as single strokes.
+      const streets = strokes.get(rowY);
+      if (streets) {
         const street = this.add.graphics();
         for (const [width, color] of [[10, 0xb18756], [7, 0xe0bd78]]) {
           street.lineStyle(width, color);
           street.beginPath();
-          for (const neighbor of paths) {
-            street.moveTo(x, surface);
-            street.lineTo((x + tiles[neighbor].x) / 2, (y + tiles[neighbor].y) / 2 - shoreHeight);
+          for (const { from, to } of streets) {
+            street.moveTo(from.x, from.y - shoreHeight);
+            street.lineTo(to.x, to.y - shoreHeight);
           }
           street.strokePath();
-          street.fillStyle(color).fillCircle(x, surface, towns.includes(id) ? width * 0.9 : width / 2);
+          street.fillStyle(color);
+          for (const { id, x, y } of row) {
+            if (roadIds.has(id)) street.fillCircle(x, y - shoreHeight, towns.includes(id) ? width * 0.9 : width / 2);
+          }
         }
         map.add(street);
-        continue;
       }
 
-      const building = buildings.get(id);
-      if (building) {
-        const scale = building.floors === 2 ? 0.75 : 0.66;
-        const shadow = this.add.ellipse(x + 4, surface + 9, 43, 22, 0x465c3c, 0.28);
-        map.add(shadow);
-        for (let floor = 1; floor <= building.floors; floor += 1) {
-          sprite('buildings', floor === 1 ? building.wall : building.upper,
-            x, surface - floor * wallHeight * scale, scale, tileOriginY);
+      const scenery: { y: number; draw: () => void }[] = [];
+      for (const tile of row) {
+        const { id, x, y, level } = tile;
+        if (roadIds.has(id)) continue;
+        const surface = y - shoreHeight - (level - 1) * terraceHeight;
+        const building = buildings.get(id);
+        if (building) {
+          scenery.push({ y: surface, draw: () => {
+            const scale = building.floors === 2 ? 0.75 : 0.66;
+            map.add(this.add.ellipse(x + 4, surface + 9, 43, 22, 0x465c3c, 0.28));
+            for (let floor = 1; floor <= building.floors; floor += 1) {
+              sprite('buildings', floor === 1 ? building.wall : building.upper,
+                x, surface - floor * wallHeight * scale, scale, tileOriginY);
+            }
+            sprite('buildings', building.roof, x, surface + (32 - building.floors * wallHeight) * scale, scale);
+          } });
+          continue;
         }
-        sprite('buildings', building.roof, x, surface + (32 - building.floors * wallHeight) * scale, scale);
-        continue;
-      }
-
-      if (wooded && random() < 0.87) {
-        const season = biome === 'autumn' ? 'Autumn' : 'Green';
-        sprite('trees', `pine${season}_${choose(['high', 'mid', 'low'])}`, x - 8, surface + 3, 0.4 + random() * 0.2);
-        if (random() < 0.61) {
-          sprite('trees', `tree${season}_${choose(['high', 'mid', 'low'])}`, x + 12, surface + 13, 0.36 + random() * 0.16);
+        for (const detail of scatterHexScenery(tile, random)) {
+          const footY = surface + detail.y;
+          scenery.push({ y: footY, draw: () =>
+            sprite(detail.sheet, detail.frame, x + detail.x, footY, detail.scale) });
         }
-      } else if ((biome === 'rock' || biome === 'snow') && random() < 0.65) {
-        sprite('details', biome === 'snow' ? 'smallRockSnow' : 'smallRockStone', x + 4, surface + 12, 0.72);
-      } else if ((biome === 'grass' || biome === 'autumn') && random() < 0.64) {
-        const flower = choose(['flowerYellow', 'flowerWhite', 'flowerRed']);
-        sprite('details', flower, x - 12, surface + 8, 0.86);
-        sprite('details', flower, x + 3, surface + 16, 0.7);
-        if (random() < 0.38) sprite('details', 'bushGrass', x + 12, surface, 0.87);
       }
+      scenery.sort((a, b) => a.y - b.y);
+      for (const feature of scenery) feature.draw();
     }
     this.update(0, 0);
   }

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { chromium } from 'playwright-core';
+import { PNG } from 'pngjs';
 import { build, preview } from 'vite';
 
 async function pixelAt(page, png, x, y) {
@@ -345,7 +346,7 @@ test('the medieval village is captured during loading and animates after reopeni
   assert.deepEqual(errors, []);
 });
 
-test('Hex Coast loads both tilesets and animates the captured water', async (t) => {
+test('Hex Coast captures continuous roads and animated water', async (t) => {
   const { page, waitForText, errors, playSelection } = await openPuzzle(t, {
     viewport: { width: 1320, height: 780 },
   });
@@ -355,6 +356,17 @@ test('Hex Coast loads both tilesets and animates the captured water', async (t) 
   await page.mouse.move(935, 300);
   await page.mouse.wheel(0, 2200);
   await page.mouse.click(935, 600);
+  await waitForText('Animation speed');
+  await page.evaluate(() => {
+    // Seed the selection itself, after picker and renderer startup have finished.
+    const getRandomValues = crypto.getRandomValues.bind(crypto);
+    crypto.getRandomValues = (values) => {
+      if (!(values instanceof Uint32Array) || values.length !== 1) return getRandomValues(values);
+      crypto.getRandomValues = getRandomValues;
+      values[0] = 1_011_889;
+      return values;
+    };
+  });
   await playSelection({ animationSpeed: 'Fast' });
   const [[terrain]] = await Promise.all([atlases, waitForText('0 of 8 placed')]);
   const atlas = readFileSync(new URL('../src/puzzles/hexCoast/assets/fullTiles.xml', import.meta.url), 'utf8');
@@ -391,6 +403,15 @@ test('Hex Coast loads both tilesets and animates the captured water', async (t) 
   await page.waitForFunction(() => window.paintedText.filter((text) => text === 'Hex Coast').length >= 2);
   await page.waitForTimeout(200);
   const before = await page.screenshot({ clip: board });
+  const { width, data } = PNG.sync.read(before);
+  // Use the part of the fixed seed's horizontal road that is visible between foreground trees.
+  const roadY = 358 - board.y;
+  for (let screenX = 690; screenX <= 770; screenX += 1) {
+    const pixel = (roadY * width + screenX - board.x) * 4;
+    const [red, green, blue] = data.subarray(pixel, pixel + 3);
+    assert.ok(Math.abs(red - 73) <= 2 && Math.abs(green - 80) <= 2 && Math.abs(blue - 59) <= 2,
+      `Horizontal road should cover x=${screenX}, got ${red},${green},${blue}`);
+  }
   await page.evaluate(async () => {
     for (let frame = 0; frame < 12; frame += 1) await new Promise(requestAnimationFrame);
   });

@@ -1,5 +1,6 @@
 import type { Size } from '../../domain/geometry.ts';
 import { seededRandom } from '../../domain/seededRandom.ts';
+import { findRoute } from '../procgen/findRoute.ts';
 import { planWalk, type VillagePoint, type Villager } from './villageWalks.ts';
 
 export const cellSize = 32;
@@ -376,30 +377,12 @@ function followRoad(from: number, to: number, roads: Map<number, number>): Villa
 }
 
 function routeRoad(from: Cell, to: Cell, costs: number[], blocked?: RoadNetwork): Cell[] | undefined {
-  type Step = { cell: Cell; heading: number; cost: number; estimate: number; previous?: Step };
-  const frontier: Step[] = [{ cell: from, heading: -1, cost: 0, estimate: distance(from, to) }];
-  const best = new Map<number, number>();
-  const target = cellId(to);
-
-  while (frontier.length) {
-    frontier.sort((a, b) => b.estimate - a.estimate);
-    const step = frontier.pop()!;
-    if (cellId(step.cell) === target) {
-      const path: Cell[] = [];
-      for (let current: Step | undefined = step; current; current = current.previous) path.push(current.cell);
-      return path.reverse();
-    }
-    for (const [heading, direction] of directions.entries()) {
-      const cell = offset(step.cell, direction);
-      if (!roadInterior(cell) && (cell.column !== to.column || cell.row !== to.row)) continue;
+  const path = findRoute(cellId(from), cellId(to), (current) =>
+    directions.flatMap((direction, heading) => {
+      const cell = offset(cellAt(current), direction);
+      if (!roadInterior(cell) && (cell.column !== to.column || cell.row !== to.row)) return [];
       const id = cellId(cell);
-      if (blocked?.has(id)) continue;
-      const turns = step.heading !== -1 && step.heading !== heading;
-      const cost = step.cost + costs[id] + (turns ? 0.6 : 0);
-      const state = id * directions.length + heading;
-      if (cost >= (best.get(state) ?? Infinity)) continue;
-      best.set(state, cost);
-      frontier.push({ cell, heading, cost, estimate: cost + distance(cell, to), previous: step });
-    }
-  }
+      return blocked?.has(id) ? [] : [{ id, heading, cost: costs[id] }];
+    }), (id, target) => distance(cellAt(id), cellAt(target)), 0.6);
+  return path?.map(cellAt);
 }

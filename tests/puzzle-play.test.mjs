@@ -344,6 +344,31 @@ test('the medieval village is captured during loading and animates after reopeni
   assert.deepEqual(errors, []);
 });
 
+test('Hex Coast loads both tilesets and animates the captured water', async (t) => {
+  const { page, waitForText, errors, playSelection } = await openPuzzle(t, {
+    viewport: { width: 1320, height: 780 },
+  });
+  const atlasLoaded = (name) => page.waitForResponse((response) =>
+    new RegExp(`/${name}-[^/]+\\.png$`).test(response.url()) && response.ok());
+  const atlases = Promise.all([atlasLoaded('fullTiles'), atlasLoaded('buildings')]);
+  await page.mouse.move(935, 300);
+  await page.mouse.wheel(0, 2200);
+  await page.mouse.click(935, 600);
+  await playSelection({ animationSpeed: 'Fast' });
+  await Promise.all([atlases, waitForText('0 of 8 placed')]);
+
+  const board = { x: 435, y: 275, width: 590, height: 320 };
+  await page.waitForFunction(() => window.paintedText.filter((text) => text === 'Hex Coast').length >= 2);
+  await page.waitForTimeout(200);
+  const before = await page.screenshot({ clip: board });
+  await page.evaluate(async () => {
+    for (let frame = 0; frame < 12; frame += 1) await new Promise(requestAnimationFrame);
+  });
+  const after = await page.screenshot({ clip: board });
+  assert.ok(!before.equals(after), 'Water movement should change the captured puzzle');
+  assert.deepEqual(errors, []);
+});
+
 test('picker Settings remembers the theme and filter on a narrow touch screen', async (t) => {
   const { page, canvas, waitForText, errors, clickDialog } = await openPuzzle(t, {
     viewport: { width: 375, height: 640 }, hasTouch: true, isMobile: true,

@@ -1,5 +1,6 @@
 import { desertSource } from './desert/desertSource';
 import { forestSource } from './forest/forestSource';
+import { hexCoastSource } from './hexCoast/hexCoastSource';
 import { lighthouseSource } from './lighthouse/lighthouseSource';
 import { meadowSource } from './meadow/meadowSource';
 import { medievalVillageSource } from './medievalVillage/medievalVillageSource';
@@ -15,4 +16,5 @@ export const puzzleSources: readonly PuzzleSource[] = [
   desertSource,
   forestSource,
   medievalVillageSource,
+  hexCoastSource,
 ];

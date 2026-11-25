@@ -30,6 +30,7 @@ import { peppermintGladeSource } from './peppermintGlade/peppermintGladeSource';
 import { pineHighlandsSource } from './pineHighlands/pineHighlandsSource';
 import { pinnacleValleySource } from './pinnacleValley/pinnacleValleySource';
 import type { PuzzleSource } from './PuzzleSource';
+import { sapphireLagoonSource } from './sapphireLagoon/sapphireLagoonSource';
 import { seafoamCoveSource } from './seafoamCove/seafoamCoveSource';
 import { seaOfCloudsSource } from './seaOfClouds/seaOfCloudsSource';
 import { silverCloudbankSource } from './silverCloudbank/silverCloudbankSource';
@@ -81,4 +82,5 @@ export const puzzleSources: readonly PuzzleSource[] = [
   coralGardenSource,
   seafoamCoveSource,
   sunsetReefSource,
+  sapphireLagoonSource,
 ];

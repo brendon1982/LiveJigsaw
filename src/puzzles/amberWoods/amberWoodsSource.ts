@@ -14,7 +14,7 @@ export const amberWoodsSource = parallaxSource({
   preview,
   layers: [
     { name: 'sky', url: sky, travel: 0, anchorY: 0.5 },
-    { name: 'distant-oaks', url: distantOaks, travel: 0.008, anchorY: 0.5 },
+    { name: 'distant-oaks', url: distantOaks, travel: 0.008, anchorY: 0.5, seededX: { origin: 0.5, range: [0.43, 0.57] } },
     { name: 'middle-oaks', url: middleOaks, travel: 0.016, anchorY: 0.5 },
     { name: 'glade-grasses', url: gladeGrasses, travel: 0.022, anchorY: 0.5 },
     { name: 'canopy-and-grass', url: canopyAndGrass, travel: 0.031, anchorY: 0.5 },

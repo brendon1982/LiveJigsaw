@@ -14,7 +14,7 @@ export const birchGladeSource = parallaxSource({
   preview,
   layers: [
     { name: 'sky', url: sky, travel: 0, anchorY: 0.5 },
-    { name: 'mist', url: mist, travel: 0.006, anchorY: 0.5 },
+    { name: 'mist', url: mist, travel: 0.006, anchorY: 0.5, seededX: { origin: 0.5, range: [0.4, 0.6] } },
     { name: 'distant-canopy', url: distantCanopy, travel: 0.012, anchorY: 0.5 },
     { name: 'distant-birches', url: distantBirches, travel: 0.02, anchorY: 0.5 },
     { name: 'misty-birches', url: mistyBirches, travel: 0.031 },

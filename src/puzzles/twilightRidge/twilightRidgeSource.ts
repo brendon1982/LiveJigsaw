@@ -17,7 +17,7 @@ export const twilightRidgeSource = parallaxSource({
   preview,
   layers: [
     { name: 'sky', url: sky, travel: 0 },
-    { name: 'stars', url: stars, travel: 0, anchorY: 0 },
+    { name: 'stars', url: stars, travel: 0, anchorY: 0, seededX: { origin: 0.5, range: [0.37, 0.63] } },
     { name: 'distant-clouds', url: distantClouds, travel: 0.005 },
     { name: 'distant-mountains', url: distantMountains, travel: 0.012 },
     { name: 'near-clouds', url: nearClouds, travel: 0.009 },
@@ -25,6 +25,6 @@ export const twilightRidgeSource = parallaxSource({
     { name: 'foothills', url: foothills, travel: 0.028 },
     { name: 'air', url: air, travel: 0.013 },
     { name: 'ground', url: ground, travel: 0.039 },
-    { name: 'tree', url: tree, travel: 0.05, foregroundOriginX: 0.683 },
+    { name: 'tree', url: tree, travel: 0.05, seededX: { origin: 0.683 } },
   ],
 });

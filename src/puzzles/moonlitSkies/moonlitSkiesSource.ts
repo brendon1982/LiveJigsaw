@@ -15,8 +15,8 @@ export const moonlitSkiesSource = parallaxSource({
   layers: [
     { name: 'sky', url: sky, travel: 0, anchorY: 0.5 },
     { name: 'haze', url: haze, travel: 0, anchorY: 0.5 },
-    { name: 'stars', url: stars, travel: 0, anchorY: 0 },
-    { name: 'moon', url: moon, travel: 0.002, anchorY: 0.5 },
+    { name: 'stars', url: stars, travel: 0, anchorY: 0, seededX: { origin: 0.5, range: [0.37, 0.63] } },
+    { name: 'moon', url: moon, travel: 0.002, anchorY: 0.5, seededX: { origin: 0.596, range: [0, 1] } },
     { name: 'distant-clouds', url: distantClouds, travel: 0.013, anchorY: 0.5 },
     { name: 'low-clouds', url: lowClouds, travel: 0.027 },
     { name: 'near-clouds', url: nearClouds, travel: 0.05, anchorY: 0 },

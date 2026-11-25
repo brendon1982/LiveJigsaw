@@ -17,7 +17,7 @@ export const emberMesaSource = parallaxSource({
   layers: [
     { name: 'sky', url: sky, travel: 0 },
     { name: 'distant-clouds', url: distantClouds, travel: 0.005, anchorY: 0 },
-    { name: 'sun', url: sun, travel: 0.002 },
+    { name: 'sun', url: sun, travel: 0.002, seededX: { origin: 0.336, range: [0, 1] } },
     { name: 'near-cloud', url: nearCloud, travel: 0.008 },
     { name: 'distant-mesas', url: distantMesas, travel: 0.012 },
     { name: 'middle-mesas', url: middleMesas, travel: 0.022 },

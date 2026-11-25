@@ -12,8 +12,8 @@ export const silverCloudbankSource = parallaxSource({
   preview,
   layers: [
     { name: 'sky', url: sky, travel: 0, anchorY: 0.5 },
-    { name: 'high-clouds', url: highClouds, travel: 0.006, anchorY: 0 },
-    { name: 'distant-clouds', url: distantClouds, travel: 0.012, anchorY: 0.5 },
+    { name: 'high-clouds', url: highClouds, travel: 0.006, anchorY: 0, seededX: { origin: 0.5, range: [0.39, 0.61] } },
+    { name: 'distant-clouds', url: distantClouds, travel: 0.012, anchorY: 0.5, seededX: { origin: 0.5, range: [0.39, 0.61] } },
     { name: 'towering-clouds', url: toweringClouds, travel: 0.026, anchorY: 0.5 },
     { name: 'near-clouds', url: nearClouds, travel: 0.05 },
   ],

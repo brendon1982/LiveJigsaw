@@ -342,13 +342,13 @@ test('the landscape scenes animate on the board', async (t) => {
   assert.deepEqual(errors, []);
 });
 
-test('Canyon Drift places its foreground cactus from the puzzle seed', async (t) => {
+test('parallax seeds place both foreground and background artwork', async (t) => {
   const { page, waitForText, errors, playSelection } = await openPuzzle(t, { viewport: { width: 1320, height: 780 } });
 
-  const cactusPosition = async (seed) => {
+  const artworkPosition = async ({ name, cardX, scroll, rowY, matches }, seed) => {
     await page.mouse.move(340, 300);
-    await page.mouse.wheel(0, 1750);
-    await page.mouse.click(340, 600);
+    await page.mouse.wheel(0, scroll);
+    await page.mouse.click(cardX, 600);
     await waitForText('Animation speed');
     await page.evaluate((seed) => {
       const getRandomValues = crypto.getRandomValues.bind(crypto);
@@ -365,16 +365,15 @@ test('Canyon Drift places its foreground cactus from the puzzle seed', async (t)
       for (let frame = 0; frame < 12; frame += 1) await new Promise(requestAnimationFrame);
     });
 
-    // Sample the lower edge of the guide where the cactus stem meets the rust-colored ground.
-    const row = await page.screenshot({ clip: { x: 478, y: 552, width: 512, height: 1 } });
+    const row = await page.screenshot({ clip: { x: 478, y: rowY, width: 512, height: 1 } });
     const { width, data } = PNG.sync.read(row);
-    const stem = [];
+    const artworkPixels = [];
     for (let x = 0; x < width; x += 1) {
       const [red, green, blue] = data.subarray(x * 4, x * 4 + 3);
-      if (green > red + 10 && green > blue + 5) stem.push(x);
+      if (matches(red, green, blue)) artworkPixels.push(x);
     }
-    assert.ok(stem.length > 0, `The cactus should be visible for seed ${seed}`);
-    const position = (stem[0] + stem.at(-1)) / 2 / width;
+    assert.ok(artworkPixels.length > 0, `The ${name} should be visible for seed ${seed}`);
+    const position = (artworkPixels[0] + artworkPixels.at(-1)) / 2 / width;
 
     await page.evaluate(() => { window.paintedText = []; });
     await page.mouse.click(99, 43);
@@ -382,11 +381,23 @@ test('Canyon Drift places its foreground cactus from the puzzle seed', async (t)
     return position;
   };
 
-  const left = await cactusPosition(0);
-  const right = await cactusPosition(2);
-  const repeated = await cactusPosition(0);
-  assert.ok(left < 0.35 && right > 0.65, 'Different seeds should place the cactus on different sides of the board');
-  assert.ok(Math.abs(left - repeated) < 0.05, 'The same seed should place the cactus at the same spot, allowing for the pan');
+  const seededArtwork = [
+    {
+      name: 'cactus', cardX: 340, scroll: 1750, rowY: 552,
+      matches: (red, green, blue) => green > red + 10 && green > blue + 5,
+    },
+    {
+      name: 'sun', cardX: 935, scroll: 2400, rowY: 331,
+      matches: (red, green) => red >= 75 && green >= 75,
+    },
+  ];
+  for (const artwork of seededArtwork) {
+    const left = await artworkPosition(artwork, 0);
+    const right = await artworkPosition(artwork, 2);
+    const repeated = await artworkPosition(artwork, 0);
+    assert.ok(left < 0.35 && right > 0.65, `Different seeds should move the ${artwork.name} to opposite sides`);
+    assert.ok(Math.abs(left - repeated) < 0.05, `The same seed should restore the ${artwork.name}'s position within its pan range`);
+  }
   assert.deepEqual(errors, []);
 });
 

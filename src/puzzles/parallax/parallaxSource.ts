@@ -10,8 +10,12 @@ type ParallaxLayer = Readonly<{
   travel: number;
   /** Vertical point to keep in frame when enlarging the artwork. Defaults to the bottom. */
   anchorY?: number;
-  /** Horizontal ground contact in the source image. Supplying it enables seeded foreground placement. */
-  foregroundOriginX?: number;
+  seededX?: Readonly<{
+    /** Horizontal anchor in the source image, as a fraction of its width. */
+    origin: number;
+    /** Range for the anchor in the viewport. By default it may start slightly outside either edge. */
+    range?: readonly [min: number, max: number];
+  }>;
 }>;
 
 type ParallaxArtwork = Readonly<{
@@ -27,7 +31,7 @@ const firstEdge = Math.PI / 2;
 const oppositeEdge = 3 * Math.PI / 2;
 const minPause = 600;
 const maxPause = 1_800;
-const foregroundOverhang = 0.06;
+const defaultPlacementRange = [-0.06, 1.06] as const;
 
 export function parallaxSource({ key, title, preview, layers }: ParallaxArtwork): PuzzleSource {
   const textureKey = (name: string) => `parallax-${key}-${name}`;
@@ -56,13 +60,16 @@ export function parallaxSource({ key, title, preview, layers }: ParallaxArtwork)
 
     create({ width, height, seed, animationSpeed }: PuzzleSourceSceneData) {
       const random = seededRandom(seed);
-      const movingLayers = layers.map(({ name, travel, anchorY = 1, foregroundOriginX }) => {
-        const position = foregroundOriginX === undefined
-          ? 0.5
-          : Phaser.Math.Linear(-foregroundOverhang, 1 + foregroundOverhang, random());
-        const restX = width * position;
+      // Assign positions front to back so new background placements preserve the foreground's seed.
+      const restXFractions = [...layers].reverse().map(({ seededX }) => {
+        if (!seededX) return 0.5;
+        const [min, max] = seededX.range ?? defaultPlacementRange;
+        return Phaser.Math.Linear(min, max, random());
+      }).reverse();
+      const movingLayers = layers.map(({ name, travel, anchorY = 1, seededX }, index) => {
+        const restX = width * restXFractions[index];
         const image = this.add.image(restX, height * anchorY, textureKey(name))
-          .setOrigin(foregroundOriginX ?? 0.5, anchorY)
+          .setOrigin(seededX?.origin ?? 0.5, anchorY)
           .setDisplaySize(width * overscan, height * overscan);
         return { image, restX, travel: width * travel };
       });

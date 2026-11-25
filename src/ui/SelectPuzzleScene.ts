@@ -102,7 +102,7 @@ export class SelectPuzzleScene extends Phaser.Scene {
     const settings = makeSettingsButton(this, () => {
       if (dialog) return;
       setPickerScrolling(false);
-      openSettings(this, () => setPickerScrolling(true));
+      openSettings(this, { onClose: () => setPickerScrolling(true) });
     });
 
     let currentColumns = 0;

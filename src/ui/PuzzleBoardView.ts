@@ -1,13 +1,14 @@
 import Phaser from 'phaser';
 import type { Point } from '../domain/geometry';
 import type { Puzzle } from '../domain/Puzzle';
+import type { TrayPosition } from '../persistence/GameSave';
 import type { LivePuzzleCapture } from '../rendering/LivePuzzleCapture';
 import type { UIScene } from './button';
 import { PannableBoard } from './PannableBoard';
 import { PieceTray } from './PieceTray';
-import { playWorkspace } from './playLayout';
+import { playWorkspace, resolveTraySide, trayScrollAxis, type TrayScrollAxis, type TraySide } from './playLayout';
+import { PuzzlePanels } from './PuzzlePanels';
 import { PuzzlePieceView } from './PuzzlePieceView';
-import { styleWithTheme } from './theme';
 
 type Gesture = { pointerId: number } & (
   | { kind: 'tray-touch'; entry: PuzzlePieceView; start: Point }
@@ -25,6 +26,7 @@ type Pinch = {
 const pieceDragThreshold = 8;
 const pieceDragSlope = Math.tan(70 * Math.PI / 180);
 const trayScrollThreshold = 20;
+const boardDirection: Record<TraySide, number> = { Left: 1, Right: -1, Top: 1, Bottom: -1 };
 
 function measurePinch(a: Point, b: Point) {
   return {
@@ -37,8 +39,11 @@ export class PuzzleBoardView {
   private readonly tray: PieceTray;
   private readonly board: PannableBoard;
   private readonly floatingPieces: Phaser.GameObjects.Layer;
-  private readonly trayPanel: Phaser.GameObjects.Rectangle;
   private readonly pieces: PuzzlePieceView[];
+  private readonly trayFractions: Partial<Record<TrayScrollAxis, number>> = {};
+  private trayBounds = new Phaser.Geom.Rectangle();
+  private side: TraySide;
+  private panels?: PuzzlePanels;
   private readonly resize: () => void;
   private gesture?: Gesture;
   private pinch?: Pinch;
@@ -48,6 +53,7 @@ export class PuzzleBoardView {
     private readonly puzzle: Puzzle,
     capture: LivePuzzleCapture,
     trayPieceSize: number,
+    private trayPosition: TrayPosition,
     private readonly onPlacement: () => void,
   ) {
     const remainingPieces = puzzle.pieces.filter(({ id }) => !puzzle.isPlaced(id));
@@ -55,56 +61,13 @@ export class PuzzleBoardView {
     this.pieces = Phaser.Math.RND.shuffle(remainingPieces)
       .map((piece) => new PuzzlePieceView(scene, capture, piece));
 
-    this.trayPanel = scene.add.rectangle(0, 0, 1, 1);
-    const boardPanel = scene.add.rectangle(0, 0, 1, 1);
-    const dividerWidth = 10;
-    const divider = scene.add.rectangle(0, 0, dividerWidth, 1, 0, 0);
-    const dividerLine = scene.add.rectangle(0, 0, 1, 1).setOrigin(0, 0.5);
-    const grip = scene.add.graphics().setDepth(1);
-    styleWithTheme(this.trayPanel, (colors) => {
-      this.trayPanel.setFillStyle(colors.tray);
-      boardPanel.setFillStyle(colors.board);
-      dividerLine.setFillStyle(colors.border);
-      grip.clear().fillStyle(colors.dividerGrip).fillRoundedRect(-4, -16, 8, 32, 3);
-      grip.fillStyle(colors.dividerDots);
-      for (const y of [-8, -3, 3, 8]) {
-        grip.fillCircle(-2, y, 1).fillCircle(2, y, 1);
-      }
-    });
-    this.tray = new PieceTray(scene, this.pieces, puzzle.board.cellSize, trayPieceSize);
+    this.side = resolveTraySide(trayPosition, scene.scale.gameSize);
+    this.tray = new PieceTray(scene, this.pieces, puzzle.board.cellSize, trayPieceSize, trayScrollAxis(this.side));
     this.board = new PannableBoard(scene, puzzle.board.size, capture);
     this.board.addPieces(placedPieces);
     this.floatingPieces = scene.add.layer();
     const dragCamera = scene.cameras.add().setName('Dragged piece');
     dragCamera.inputEnabled = false;
-
-    const split = scene.rexUI.add.splitPanels({
-      leftPanel: this.trayPanel, rightPanel: boardPanel, splitter: divider,
-      splitRatio: 0,
-    }).setOrigin(0);
-    if (divider.input) divider.input.cursor = 'ew-resize';
-
-    const layoutPanels = () => {
-      dividerLine.setPosition(Math.floor(divider.x), divider.y).setDisplaySize(1, divider.displayHeight);
-      grip.setPosition(divider.x, divider.y);
-      this.tray.layout(this.trayPanel.getBounds());
-      this.board.layout(boardPanel.getBounds());
-    };
-    split.on('splitter.drag', layoutPanels);
-    this.resize = () => {
-      const { gameSize } = scene.scale;
-      const { x, y, width, height } = playWorkspace(gameSize);
-      const usableWidth = Math.max(2, width - dividerWidth);
-      const minLeft = Math.min(this.tray.minimumWidth, usableWidth / 2);
-      const minRight = Math.min(260, usableWidth - minLeft);
-      split.setMinLeftPanelWidth(minLeft).setMinRightPanelWidth(minRight)
-        .setSplitRatio(Phaser.Math.Clamp(split.splitRatio, minLeft / usableWidth, 1 - minRight / usableWidth))
-        .setPosition(x, y).setMinSize(width, height).layout();
-      dragCamera.setViewport(0, 0, gameSize.width, gameSize.height);
-      layoutPanels();
-    };
-    scene.scale.on(Phaser.Scale.Events.RESIZE, this.resize);
-    this.resize();
 
     // The panel cameras clip their own layers. The drag camera draws above both panels.
     scene.cameras.main.ignore([this.tray.layer, this.board.layer, this.floatingPieces]);
@@ -113,17 +76,41 @@ export class PuzzleBoardView {
       [this.board.camera, this.board.layer],
       [dragCamera, this.floatingPieces],
     ] as const;
-    for (const [camera, layer] of layers) {
-      for (const object of scene.children.getChildren()) {
-        if (object !== layer) object.cameraFilter |= camera.id;
+    const clipLayers = () => {
+      for (const [camera, layer] of layers) {
+        for (const object of scene.children.getChildren()) {
+          if (object !== layer) object.cameraFilter |= camera.id;
+        }
       }
-    }
+    };
+
+    this.resize = () => {
+      this.cancelInteraction();
+      const { gameSize } = scene.scale;
+      const side = resolveTraySide(this.trayPosition, gameSize);
+      const axis = trayScrollAxis(side);
+      if (!this.panels || side !== this.side) {
+        this.panels?.destroy();
+        this.side = side;
+        this.tray.setScrollAxis(axis);
+        this.panels = new PuzzlePanels(scene, side, (trayBounds, boardBounds) => {
+          this.trayBounds = trayBounds;
+          this.tray.layout(trayBounds);
+          this.board.layout(boardBounds);
+        }, (fraction) => { this.trayFractions[axis] = fraction; });
+        clipLayers();
+      }
+      this.panels.layout(playWorkspace(gameSize), this.tray.minimumSize, this.trayFractions[axis]);
+      dragCamera.setViewport(0, 0, gameSize.width, gameSize.height);
+    };
+    scene.scale.on(Phaser.Scale.Events.RESIZE, this.resize);
+    this.resize();
 
     scene.input.on('pointerdown', this.startGesture);
     scene.input.on('pointermove', this.moveGesture);
     scene.input.on('pointerup', this.endGesture);
     scene.input.on('pointerupoutside', this.cancelGesture);
-    scene.input.on(Phaser.Input.Events.POINTER_WHEEL, this.zoomWithWheel);
+    scene.input.on(Phaser.Input.Events.POINTER_WHEEL, this.handleWheel);
   }
 
   destroy() {
@@ -132,11 +119,17 @@ export class PuzzleBoardView {
     this.scene.input.off('pointermove', this.moveGesture);
     this.scene.input.off('pointerup', this.endGesture);
     this.scene.input.off('pointerupoutside', this.cancelGesture);
-    this.scene.input.off(Phaser.Input.Events.POINTER_WHEEL, this.zoomWithWheel);
+    this.scene.input.off(Phaser.Input.Events.POINTER_WHEEL, this.handleWheel);
     this.scene.input.setDefaultCursor('default');
     this.tray.destroy();
     this.board.destroy();
     for (const { mask } of this.pieces) this.scene.textures.remove(mask);
+  }
+
+  setTrayPosition(position: TrayPosition) {
+    if (this.trayPosition === position) return;
+    this.trayPosition = position;
+    this.resize();
   }
 
   cancelInteraction() {
@@ -182,7 +175,12 @@ export class PuzzleBoardView {
     entry.moveTo(pointer.x + offset.x, pointer.y + offset.y);
   }
 
-  private readonly zoomWithWheel = (pointer: Phaser.Input.Pointer, _over: Phaser.GameObjects.GameObject[], _dx: number, dy: number) => {
+  private readonly handleWheel = (pointer: Phaser.Input.Pointer, _over: Phaser.GameObjects.GameObject[], dx: number, dy: number) => {
+    if (this.trayBounds.contains(pointer.x, pointer.y)) {
+      const delta = trayScrollAxis(this.side) === 'x' ? dx || dy : dy;
+      this.tray.scrollBy(-0.75 * delta);
+      return;
+    }
     if (!dy || this.pinch || !this.board.contains(pointer)) return;
     const { deltaMode } = pointer.event as WheelEvent;
     const pixelsPerUnit = deltaMode === WheelEvent.DOM_DELTA_PAGE ? this.board.camera.height
@@ -214,12 +212,15 @@ export class PuzzleBoardView {
     if (gesture.kind === 'tray-touch') {
       const dx = pointer.x - gesture.start.x;
       const dy = pointer.y - gesture.start.y;
+      const verticalTray = trayScrollAxis(this.side) === 'y';
+      const alongTray = verticalTray ? dy : dx;
+      const towardBoard = (verticalTray ? dx : dy) * boardDirection[this.side];
       const distance = Math.hypot(dx, dy);
-      if (dx > 0 && Math.abs(dy) <= dx * pieceDragSlope) {
+      if (towardBoard > 0 && Math.abs(alongTray) <= towardBoard * pieceDragSlope) {
         if (distance >= pieceDragThreshold) this.startPieceDrag(pointer, gesture.entry, gesture.start);
-      } else if (Math.abs(dy) >= trayScrollThreshold) {
+      } else if (Math.abs(alongTray) >= trayScrollThreshold) {
         this.gesture = { kind: 'scroll', pointerId: pointer.id, previous: { x: pointer.x, y: pointer.y } };
-        this.tray.scrollBy(dy);
+        this.tray.scrollBy(alongTray);
       }
     } else if (gesture.kind === 'piece') {
       gesture.entry.moveTo(pointer.x + gesture.offset.x, pointer.y + gesture.offset.y);
@@ -227,7 +228,7 @@ export class PuzzleBoardView {
       const dx = pointer.x - gesture.previous.x;
       const dy = pointer.y - gesture.previous.y;
       if (gesture.kind === 'pan') this.board.pan(dx, dy);
-      else this.tray.scrollBy(dy);
+      else this.tray.scrollBy(trayScrollAxis(this.side) === 'y' ? dy : dx);
       gesture.previous = { x: pointer.x, y: pointer.y };
     }
   };
@@ -249,7 +250,7 @@ export class PuzzleBoardView {
     if (this.board.contains(pointer) && this.puzzle.drop(entry.piece.id, this.board.toLocal(entry.position)) === 'placed') {
       this.board.addPieces([entry.piece]);
       entry.hide();
-      this.tray.remove(entry, this.trayPanel.getBounds());
+      this.tray.remove(entry, this.trayBounds);
       this.onPlacement();
     } else {
       this.tray.returnPiece(entry);

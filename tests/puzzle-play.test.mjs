@@ -5,6 +5,8 @@ import { chromium } from 'playwright-core';
 import { PNG } from 'pngjs';
 import { build, preview } from 'vite';
 
+const settingsY = { theme: -159, firstFilter: -60, secondFilter: 2, firstTray: 98, secondTray: 160, done: 232 };
+
 function readSave(page) {
   return page.evaluate(() => JSON.parse(localStorage.getItem('live-jigsaw.save')));
 }
@@ -20,6 +22,21 @@ async function pixelAt(page, png, x, y) {
     context.drawImage(image, x, y, 1, 1, 0, 0, 1, 1);
     return Array.from(context.getImageData(0, 0, 1, 1).data);
   }, { png: png.toString('base64'), x, y });
+}
+
+async function touchController(page) {
+  const touch = await page.context().newCDPSession(page);
+  const dispatch = (type, ...points) => touch.send('Input.dispatchTouchEvent', {
+    type, touchPoints: points.map(([x, y], id) => ({ x, y, id })),
+  });
+  const moveFinger = async (x, y, endX, endY, end = 'touchEnd') => {
+    await dispatch('touchStart', [x, y]);
+    for (let step = 1; step <= 8; step += 1) {
+      await dispatch('touchMove', [x + (endX - x) * step / 8, y + (endY - y) * step / 8]);
+    }
+    await dispatch(end);
+  };
+  return { dispatch, moveFinger };
 }
 
 async function openPuzzle(t, options, path = '/') {
@@ -154,15 +171,15 @@ test('live pieces scroll, reflow, and snap to the pannable board', async (t) => 
   assert.deepEqual(await pixelAt(page, placed, 735, 348), sky, 'Zooming at the drop target should keep it under the pointer');
   await click(1246, 43);
   await waitForText('Color theme');
-  await clickDialog(21, -80);
-  await clickDialog(101, 153);
+  await clickDialog(21, settingsY.theme);
+  await clickDialog(101, settingsY.done);
   const slate = await canvas.screenshot();
   assert.deepEqual(await pixelAt(page, slate, 1290, 100), [31, 45, 64, 255], 'Settings should restyle the active board');
   assert.deepEqual(await pixelAt(page, slate, 735, 348), sky, 'The placed piece should stay at its zoomed position');
   await page.evaluate(() => { window.paintedText = []; });
   await click(1246, 43);
   await waitForText('Color theme');
-  await clickDialog(-95, -80);
+  await clickDialog(-95, settingsY.theme);
   await page.waitForFunction(() => JSON.parse(localStorage.getItem('live-jigsaw.save')).settings.theme === 'Forest');
   await page.keyboard.press('Escape');
   await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
@@ -188,16 +205,16 @@ test('live pieces scroll, reflow, and snap to the pannable board', async (t) => 
       return (JSON.parse(localStorage.getItem('live-jigsaw.save')).settings.filter ?? null) === expected;
     }, name);
     assert.notDeepEqual(await guidePixel(await canvas.screenshot()), before, 'The guide should change while Settings is still open');
-    await clickDialog(101, 153);
+    await clickDialog(101, settingsY.done);
     const screenshot = await canvas.screenshot();
     assert.deepEqual(await pixelAt(page, screenshot, 1290, 100), panelBackground, 'The area outside the guide should keep the theme color');
     assert.deepEqual(await pixelAt(page, screenshot, 735, 348), sky, 'The placed piece should keep its original color');
     assert.deepEqual(await pixelAt(page, screenshot, 85, 140), trayPieceColor, 'The tray piece should keep its original color');
     return guidePixel(screenshot);
   };
-  assertGuideColor(await selectFilter(-65, 19, 'grayscale'), [118, 129, 126, 255], 'Black and White should blend with the board at 50% opacity');
-  assertGuideColor(await selectFilter(88, 19, 'sepia'), [88, 96, 78, 255], 'Sepia should blend with the board at 24% opacity');
-  assertGuideColor(await selectFilter(-65, 81, 'faded'), [102, 120, 116, 255], 'Faded should blend with the board at 50% opacity');
+  assertGuideColor(await selectFilter(-65, settingsY.firstFilter, 'grayscale'), [118, 129, 126, 255], 'Black and White should blend with the board at 50% opacity');
+  assertGuideColor(await selectFilter(88, settingsY.firstFilter, 'sepia'), [88, 96, 78, 255], 'Sepia should blend with the board at 24% opacity');
+  assertGuideColor(await selectFilter(-65, settingsY.secondFilter, 'faded'), [102, 120, 116, 255], 'Faded should blend with the board at 50% opacity');
 
   await move(735, 348);
   await page.mouse.wheel(0, 200);
@@ -212,7 +229,7 @@ test('live pieces scroll, reflow, and snap to the pannable board', async (t) => 
   for (const [x, y] of [[798, 337], [802, 339], [811, 342], [815, 348], [809, 357]]) {
     assert.deepEqual(await pixelAt(page, joined, x, y), sky, 'The live guide should not show through joined pieces');
   }
-  assert.deepEqual(await selectFilter(88, 81, null), originalGuide, 'Clearing the filter should restore the original guide');
+  assert.deepEqual(await selectFilter(88, settingsY.secondFilter, null), originalGuide, 'Clearing the filter should restore the original guide');
 
   const assertCornerAtCenter = async (horizontal, vertical) => {
     const screenshot = await canvas.screenshot();
@@ -438,9 +455,9 @@ test('picker Settings remembers the theme and filter on a narrow touch screen', 
   assert.deepEqual(await pixelAt(page, forest, 5, 105), [38, 58, 54, 255]);
   await page.touchscreen.tap(301, 39);
   await waitForText('Color theme');
-  await clickDialog(21, -80);
-  await clickDialog(-65, 81);
-  await clickDialog(101, 153);
+  await clickDialog(21, settingsY.theme);
+  await clickDialog(-65, settingsY.secondFilter);
+  await clickDialog(101, settingsY.done);
   const slate = await canvas.screenshot();
   assert.deepEqual(await pixelAt(page, slate, 5, 105), [39, 51, 68, 255]);
   assert.deepEqual(await pixelAt(page, slate, 5, 130), [39, 51, 68, 255], 'The Phaser canvas background should change too');
@@ -450,10 +467,10 @@ test('picker Settings remembers the theme and filter on a narrow touch screen', 
   assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 5, 105), [39, 51, 68, 255]);
   await page.touchscreen.tap(301, 39);
   await waitForText('Faded');
-  assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 64, 400), [200, 222, 248, 255], 'The saved filter should be selected after reload');
-  await clickDialog(102, -80);
+  assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 64, 321), [200, 222, 248, 255], 'The saved filter should be selected after reload');
+  await clickDialog(102, settingsY.theme);
   await page.waitForFunction(() => JSON.parse(localStorage.getItem('live-jigsaw.save')).settings.theme === 'Dark');
-  await clickDialog(101, 153);
+  await clickDialog(101, settingsY.done);
   const dark = await canvas.screenshot();
   assert.deepEqual(await pixelAt(page, dark, 5, 105), [33, 33, 33, 255]);
   assert.deepEqual(await pixelAt(page, dark, 75, 170), await pixelAt(page, forest, 75, 170), 'Dark should preserve preview artwork');
@@ -730,17 +747,7 @@ test('tablet touch scrolls, resizes, zooms, cancels, and places pieces', async (
     hasTouch: true,
     isMobile: true,
   });
-  const touch = await page.context().newCDPSession(page);
-  const dispatch = (type, ...points) => touch.send('Input.dispatchTouchEvent', {
-    type, touchPoints: points.map(([x, y], id) => ({ x, y, id })),
-  });
-  const moveFinger = async (x, y, endX, endY, end = 'touchEnd') => {
-    await dispatch('touchStart', [x, y]);
-    for (let step = 1; step <= 8; step += 1) {
-      await dispatch('touchMove', [x + (endX - x) * step / 8, y + (endY - y) * step / 8]);
-    }
-    await dispatch(end);
-  };
+  const { dispatch, moveFinger } = await touchController(page);
 
   await page.touchscreen.tap(522, 180);
   await playSelection();
@@ -800,6 +807,152 @@ test('tablet touch scrolls, resizes, zooms, cancels, and places pieces', async (
   await playSelection({ size: 'Expert · 128', connectorStyle: 'Rounded' });
   await waitForText('0 of 128 placed');
   const expertTray = await canvas.screenshot();
-  assert.notDeepEqual(await pixelAt(page, expertTray, 105, 140), [48, 72, 65, 255], 'The smallest pieces should scale up to the tray target');
+  assert.notDeepEqual(await pixelAt(page, expertTray, 85, 929), [48, 72, 65, 255], 'The smallest pieces should scale up to the bottom tray target');
+  assert.deepEqual(errors, []);
+});
+
+test('tray settings move the live tray and rotate touch gestures with it', async (t) => {
+  const portrait = { width: 680, height: 860 };
+  const landscape = { width: 1024, height: 768 };
+  const { page, canvas, waitForText, errors, clickDialog, playSelection } = await openPuzzle(t, {
+    viewport: portrait, hasTouch: true, isMobile: true,
+  });
+  const { dispatch, moveFinger } = await touchController(page);
+  const trayColor = [48, 72, 65, 255];
+  const boardColor = [25, 46, 40, 255];
+  const selectedColor = [199, 225, 209, 255];
+  const layout = {
+    Left: { choice: [-102, settingsY.firstTray], first: [75, 136], scroll: [0, -52], lift: [85, 0] },
+    Right: { choice: [0, settingsY.firstTray], first: [590, 136], scroll: [0, -52], lift: [-85, 0] },
+    Bottom: { choice: [102, settingsY.firstTray], first: [71, 765], scroll: [-46, 0], lift: [0, -90] },
+    Top: { choice: [-102, settingsY.secondTray], first: [71, 140], scroll: [-46, 0], lift: [0, 95] },
+    Auto: { choice: [0, settingsY.secondTray] },
+  };
+  const sample = async (...point) => pixelAt(page, await canvas.screenshot(), ...point);
+  const assertSide = async (side) => {
+    const { width, height } = page.viewportSize();
+    const points = {
+      Left: [[26, 100], [width - 26, 100]],
+      Right: [[width - 26, 100], [26, 100]],
+      Bottom: [[26, height - 26], [26, 86]],
+      Top: [[26, 86], [26, height - 26]],
+    };
+    const [trayPoint, boardPoint] = points[side];
+    const frame = await canvas.screenshot();
+    assert.deepEqual(await pixelAt(page, frame, ...trayPoint), trayColor, `Expected tray on the ${side}`);
+    assert.deepEqual(await pixelAt(page, frame, ...boardPoint), boardColor, `Expected board opposite the ${side} tray`);
+  };
+  const openTraySettings = async () => {
+    await page.evaluate(() => { window.paintedText = []; });
+    await page.touchscreen.tap(page.viewportSize().width - 74, 43);
+    await waitForText('Puzzle tray');
+  };
+  const closeSettings = () => clickDialog(101, settingsY.done);
+  const selectSide = async (side) => {
+    await openTraySettings();
+    await clickDialog(...layout[side].choice);
+    assert.equal((await readSave(page)).settings.trayPosition, side);
+    await closeSettings();
+  };
+  const resize = async (viewport) => {
+    await page.setViewportSize(viewport);
+    await page.waitForFunction(({ width, height }) => {
+      const canvas = document.querySelector('canvas');
+      return canvas.width === width && canvas.height === height;
+    }, viewport);
+  };
+
+  await page.touchscreen.tap(350, 180);
+  await playSelection({ connectorStyle: 'None' });
+  await waitForText('0 of 8 placed');
+  await assertSide('Bottom');
+  await openTraySettings();
+  assert.deepEqual(await sample(365, 591), selectedColor, 'Auto should be selected without a saved setting');
+  await closeSettings();
+
+  for (const side of ['Left', 'Right', 'Top', 'Bottom']) {
+    await selectSide(side);
+    await assertSide(side);
+    const { first: [x, y], scroll: [scrollX, scrollY], lift: [liftX, liftY] } = layout[side];
+    assert.notDeepEqual(await sample(x, y), trayColor, `Expected a piece at the start of the ${side} tray`);
+    await moveFinger(x, y, x + scrollX, y + scrollY);
+    assert.deepEqual(await sample(x, y), trayColor, `A swipe along the ${side} tray should scroll from a piece`);
+    await moveFinger(x, y, x - scrollX, y - scrollY);
+    assert.notDeepEqual(await sample(x, y), trayColor);
+    await dispatch('touchStart', [x, y]);
+    await dispatch('touchMove', [x + liftX, y + liftY]);
+    assert.deepEqual(await sample(x, y), trayColor, `Pulling toward the board should lift from the ${side} tray`);
+    await dispatch('touchCancel');
+    assert.notDeepEqual(await sample(x, y), trayColor, 'Cancellation should return the piece to its slot');
+  }
+
+  const [trayX, trayY] = layout.Bottom.first;
+  await page.mouse.move(trayX, trayY);
+  for (const [dx, dy] of [[62, 0], [0, 62]]) {
+    await page.mouse.wheel(dx, dy);
+    assert.deepEqual(await sample(trayX, trayY), trayColor, 'Wheel input should scroll a horizontal tray');
+    await page.mouse.wheel(-dx, -dy);
+    assert.notDeepEqual(await sample(trayX, trayY), trayColor);
+  }
+
+  await dispatch('touchStart', [280, 392]);
+  await dispatch('touchStart', [280, 392], [400, 392]);
+  await dispatch('touchMove', [265, 392], [415, 392]);
+  await dispatch('touchEnd');
+  let placedAt;
+  for (const y of [302, 482]) {
+    for (const x of [100, 260, 420, 580]) {
+      await dispatch('touchStart', [trayX, trayY]);
+      await dispatch('touchMove', [trayX, trayY - 24]);
+      await dispatch('touchMove', [x, y]);
+      await dispatch('touchEnd');
+      await canvas.screenshot();
+      if ((await readSave(page)).progress.Windmill) {
+        placedAt = [x, y];
+        break;
+      }
+    }
+    if (placedAt) break;
+  }
+  assert.ok(placedAt, 'A piece from the bottom tray should snap after pinch zoom');
+  const placedColor = await sample(...placedAt);
+  const savedProgress = (await readSave(page)).progress.Windmill;
+
+  await selectSide('Auto');
+  await dispatch('touchStart', [trayX, trayY]);
+  await dispatch('touchMove', [trayX, trayY - 90]);
+  assert.deepEqual(await sample(trayX, trayY), trayColor, 'The drag should be active before rotating');
+  await resize(landscape);
+  await dispatch('touchEnd');
+  await assertSide('Left');
+  assert.notDeepEqual(await sample(75, 136), trayColor, 'Rotation should return the lifted piece to the tray');
+  await resize(portrait);
+  await assertSide('Bottom');
+  assert.deepEqual(await sample(...placedAt), placedColor, 'Rotating back should keep the placed piece and zoom');
+  assert.deepEqual((await readSave(page)).progress.Windmill, savedProgress);
+
+  await selectSide('Left');
+  await moveFinger(146, 460, 245, 460);
+  assert.deepEqual(await sample(200, 86), trayColor);
+  await selectSide('Top');
+  await moveFinger(340, 216, 340, 340);
+  assert.deepEqual(await sample(26, 300), trayColor);
+  await selectSide('Bottom');
+  assert.deepEqual(await sample(26, 630), trayColor, 'Top and Bottom should share the adjusted tray size');
+  await selectSide('Right');
+  assert.deepEqual(await sample(500, 86), trayColor, 'Right should restore the adjusted side tray size');
+  await resize(landscape);
+  await assertSide('Right');
+
+  await page.reload();
+  await waitForText('Windmill');
+  await openTraySettings();
+  assert.deepEqual(await sample(537, 489), selectedColor, 'Right should remain selected after reload');
+  await closeSettings();
+  await page.touchscreen.tap(522, 180);
+  await waitForText('Resume');
+  await clickDialog(100, 44);
+  await waitForText('1 of 8 placed');
+  await assertSide('Right');
   assert.deepEqual(errors, []);
 });

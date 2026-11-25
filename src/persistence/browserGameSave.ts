@@ -1,6 +1,7 @@
 import { connectorStyles, type ConnectorStyleId } from '../domain/connectorStyles';
 import { createPuzzle, puzzleSizes, type PuzzleSize } from '../domain/puzzleSizes';
 import { puzzleAnimationSpeeds, type PuzzleAnimationSpeed } from '../puzzles/PuzzleSource';
+import { trayPositions } from './GameSave';
 import type { PuzzleCompletion, PuzzleOptions, PuzzleProgress, PuzzleSetup, SaveData, SaveStorage } from './GameSave';
 
 const storageKey = 'live-jigsaw.save';
@@ -72,6 +73,7 @@ function readSave(data: Record<string, unknown>): SaveData {
     settings: {
       theme: typeof settings.theme === 'string' ? settings.theme : undefined,
       filter: typeof settings.filter === 'string' ? settings.filter : undefined,
+      trayPosition: trayPositions.find((position) => position === settings.trayPosition),
     },
     recentOptions: readOptions(data.recentOptions),
     progress: readEntries(data.progress, readProgress),

@@ -1,11 +1,18 @@
 import Phaser from 'phaser';
+import { gameSave } from '../persistence';
+import { trayPositions, type TrayPosition } from '../persistence/GameSave';
 import { makeButtonLabel, type UIScene } from './button';
 import { activePuzzleFilter, puzzleFilters, selectPuzzleFilter } from './puzzleFilter';
 import { activeTheme, palette, selectTheme, styleWithTheme, themes } from './theme';
 
-export function openSettings(owner: UIScene, onClose?: () => void) {
+type SettingsCallbacks = {
+  onClose?: () => void;
+  onTrayPositionChange?: (position: TrayPosition) => void;
+};
+
+export function openSettings(owner: UIScene, callbacks: SettingsCallbacks = {}) {
   owner.input.enabled = false;
-  owner.scene.launch(SettingsScene.key, { owner, onClose });
+  owner.scene.launch(SettingsScene.key, { owner, ...callbacks });
   owner.scene.bringToTop(SettingsScene.key);
 }
 
@@ -17,7 +24,7 @@ export class SettingsScene extends Phaser.Scene {
     super(SettingsScene.key);
   }
 
-  create({ owner, onClose }: { owner: UIScene; onClose?: () => void }) {
+  create({ owner, onClose, onTrayPositionChange }: { owner: UIScene } & SettingsCallbacks) {
     const close = () => this.scene.stop();
     const cover = this.add.rectangle(0, 0, 1, 1, palette.modalBackdrop, 0.72).setOrigin(0).setInteractive();
     const background = this.rexUI.add.roundRectangle(0, 0, 1, 1, 16);
@@ -25,6 +32,7 @@ export class SettingsScene extends Phaser.Scene {
     const headingStyle = { fontFamily: 'system-ui', fontSize: '17px' };
     const themeHeading = this.add.text(0, 0, 'Color theme', headingStyle);
     const filterHeading = this.add.text(0, 0, 'Puzzle filter', headingStyle);
+    const trayHeading = this.add.text(0, 0, 'Puzzle tray', headingStyle);
     const selectionUpdates: (() => void)[] = [];
     const choice = (label: string, width: number, select: () => void, selected?: () => boolean) => {
       const button = makeButtonLabel(this, label, width, 54);
@@ -52,11 +60,24 @@ export class SettingsScene extends Phaser.Scene {
     const filterChoices = this.rexUI.add.sizer({ orientation: 'y', space: { item: 8 } });
     filterChoices.add(row().add(filterChoice('grayscale', 168)).add(filterChoice('sepia', 122)))
       .add(row().add(filterChoice('faded', 168)).add(choice('Clear filter', 122, () => selectPuzzleFilter(undefined))));
+    const trayChoices = this.rexUI.add.sizer({ orientation: 'y', space: { item: 8 } });
+    for (const positions of [trayPositions.slice(0, 3), trayPositions.slice(3)]) {
+      const choices = row();
+      for (const position of positions) {
+        choices.add(choice(position, 94, () => {
+          gameSave.updateSettings({ trayPosition: position });
+          onTrayPositionChange?.(position);
+        }, () => (gameSave.settings.trayPosition ?? 'Auto') === position));
+      }
+      trayChoices.add(choices, { align: 'left' });
+    }
     const content = this.rexUI.add.sizer({ orientation: 'y', space: { item: 8 } });
     content.add(themeHeading, { align: 'left' })
       .add(themeChoices, { align: 'left', padding: { bottom: 6 } })
       .add(filterHeading, { align: 'left' })
-      .add(filterChoices, { align: 'left' });
+      .add(filterChoices, { align: 'left', padding: { bottom: 6 } })
+      .add(trayHeading, { align: 'left' })
+      .add(trayChoices, { align: 'left' });
     const done = makeButtonLabel(this, 'Done', 96, 54, true);
     const dialog = this.rexUI.add.dialog({
       background, title, content, actions: [done], align: { title: 'left', actions: 'right' },
@@ -73,6 +94,7 @@ export class SettingsScene extends Phaser.Scene {
       title.setColor(colors.text);
       themeHeading.setColor(colors.mutedText);
       filterHeading.setColor(colors.mutedText);
+      trayHeading.setColor(colors.mutedText);
     });
 
     const fit = () => {

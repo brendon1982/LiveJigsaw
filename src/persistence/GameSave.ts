@@ -2,7 +2,10 @@ import type { ConnectorStyleId } from '../domain/connectorStyles';
 import type { PuzzleSize } from '../domain/puzzleSizes';
 import type { PuzzleAnimationSpeed } from '../puzzles/PuzzleSource';
 
-export type SavedSettings = Readonly<{ theme?: string; filter?: string }>;
+export const trayPositions = ['Left', 'Right', 'Bottom', 'Top', 'Auto'] as const;
+export type TrayPosition = typeof trayPositions[number];
+
+export type SavedSettings = Readonly<{ theme?: string; filter?: string; trayPosition?: TrayPosition }>;
 
 export type PuzzleOptions = Readonly<{
   sizeLabel: string;

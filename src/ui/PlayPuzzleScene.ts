@@ -40,7 +40,7 @@ export class PlayPuzzleScene extends Phaser.Scene {
     const backButton = makeButton(this, headerInset, 0, 'All puzzles', () => this.scene.start(SelectPuzzleScene.key), 150);
     const settings = makeSettingsButton(this, () => {
       board.cancelInteraction();
-      openSettings(this);
+      openSettings(this, { onTrayPositionChange: (position) => board.setTrayPosition(position) });
     });
     const title = this.add.text(0, 0, source.title, {
       fontFamily: 'system-ui', fontSize: '34px', fontStyle: 'bold',
@@ -77,7 +77,8 @@ export class PlayPuzzleScene extends Phaser.Scene {
         gameSave.saveProgress(source.scene.key, { setup, placedPieceIds: puzzle.snapshotPlacements() });
       }
     };
-    const board = new PuzzleBoardView(this, puzzle, capture, trayPieceSize, onPlacement);
+    const trayPosition = gameSave.settings.trayPosition ?? 'Auto';
+    const board = new PuzzleBoardView(this, puzzle, capture, trayPieceSize, trayPosition, onPlacement);
     updateProgress();
     capture.start();
 

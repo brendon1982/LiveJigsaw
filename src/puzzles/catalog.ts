@@ -24,6 +24,7 @@ import { pineHighlandsSource } from './pineHighlands/pineHighlandsSource';
 import type { PuzzleSource } from './PuzzleSource';
 import { seaOfCloudsSource } from './seaOfClouds/seaOfCloudsSource';
 import { silverCloudbankSource } from './silverCloudbank/silverCloudbankSource';
+import { spireCountrySource } from './spireCountry/spireCountrySource';
 import { thornwoodHollowSource } from './thornwoodHollow/thornwoodHollowSource';
 import { twilightRidgeSource } from './twilightRidge/twilightRidgeSource';
 import { windmillSource } from './windmill/windmillSource';
@@ -59,4 +60,5 @@ export const puzzleSources: readonly PuzzleSource[] = [
   crescentCryptSource,
   witchlightHearthSource,
   blueMoonValleySource,
+  spireCountrySource,
 ];

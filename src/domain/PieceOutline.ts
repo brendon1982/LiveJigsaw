@@ -1,6 +1,6 @@
-import type { Board } from './Board.ts';
+import type { Board, Cell } from './Board.ts';
 import { connectorStyles, type ConnectorStyleId } from './connectorStyles.ts';
-import { Bounds, type Point } from './geometry.ts';
+import { Bounds, type Point, type Size } from './geometry.ts';
 import { seededRandom } from './seededRandom.ts';
 
 export class PieceOutline {
@@ -15,46 +15,71 @@ export class PieceOutline {
   }
 
   static forBoard(board: Board, styleId: ConnectorStyleId, seed: number): PieceOutline[] {
-    const { rows, columns, cellSize: { width, height } } = board;
-    const { profiles, offsets, scaleBase } = connectorStyles[styleId];
-    const scale = Math.min(1, width / scaleBase, height / scaleBase);
-    const seams: { right: Point[]; bottom: Point[] }[] = [];
-    const random = seededRandom(seed);
-    let seamIndex = 0;
+    const cutSeam = createSeamCutter(styleId, board.cellSize, seed);
+    const previousSeams: { right: Point[]; bottom: Point[] }[] = [];
 
-    // Seam points exclude the grid corners, so either piece can trace them in its own direction.
-    function cut(start: Point, end: Point, tab: number): Point[] {
-      if (profiles.length === 0) return [];
+    // Cells arrive in row order, so the neighbors above and to the left have already cut their seams.
+    return board.cells.map((cell, cellIndex) => {
+      const { row, column } = cell;
+      const { topLeft, topRight, bottomRight, bottomLeft } = cellCorners(board, cell);
+      const tabDirection = (column + row) % 2 === 0 ? 1 : -1;
 
-      const profile = profiles[seamIndex % profiles.length];
-      const offset = offsets[Math.floor(random() * offsets.length)];
-      seamIndex += 1;
-      const dx = Math.sign(end.x - start.x);
-      const dy = Math.sign(end.y - start.y);
-      const centerX = (start.x + end.x) / 2 + (end.x - start.x) * offset;
-      const centerY = (start.y + end.y) / 2 + (end.y - start.y) * offset;
-      return profile.map(([along, depth]) => ({
-        x: centerX + (dx * along + dy * depth * tab) * scale,
-        y: centerY + (dy * along - dx * depth * tab) * scale,
-      }));
-    }
+      const topSeam = row === 0 ? [] : [...previousSeams[cellIndex - board.columns].bottom].reverse();
+      const leftSeam = column === 0 ? [] : [...previousSeams[cellIndex - 1].right].reverse();
+      const rightSeam = column === board.columns - 1 ? [] : cutSeam(topRight, bottomRight, tabDirection);
+      const bottomSeam = row === board.rows - 1 ? [] : cutSeam(bottomRight, bottomLeft, tabDirection);
+      previousSeams.push({ right: rightSeam, bottom: bottomSeam });
 
-    return board.cells.map(({ row, column, bounds: { x, y } }, index) => {
-      const rightX = column + 1 === columns ? board.size.width : (column + 1) * width;
-      const bottomY = row + 1 === rows ? board.size.height : (row + 1) * height;
-      const topLeft = { x, y };
-      const topRight = { x: rightX, y };
-      const bottomRight = { x: rightX, y: bottomY };
-      const bottomLeft = { x, y: bottomY };
-      const tab = (column + row) % 2 === 0 ? 1 : -1;
-
-      const top = row === 0 ? [] : [...seams[index - columns].bottom].reverse();
-      const left = column === 0 ? [] : [...seams[index - 1].right].reverse();
-      const right = column + 1 === columns ? [] : cut(topRight, bottomRight, tab);
-      const bottom = row + 1 === rows ? [] : cut(bottomRight, bottomLeft, tab);
-      seams.push({ right, bottom });
-
-      return new PieceOutline([topLeft, ...top, topRight, ...right, bottomRight, ...bottom, bottomLeft, ...left]);
+      const clockwisePoints = [
+        topLeft, ...topSeam,
+        topRight, ...rightSeam,
+        bottomRight, ...bottomSeam,
+        bottomLeft, ...leftSeam,
+      ];
+      return new PieceOutline(clockwisePoints);
     });
   }
+}
+
+function cellCorners(board: Board, { row, column, bounds }: Cell) {
+  const { x: left, y: top } = bounds;
+  // Use the board dimensions at its outer edges to avoid rounding past the boundary.
+  const right = column === board.columns - 1 ? board.size.width : (column + 1) * board.cellSize.width;
+  const bottom = row === board.rows - 1 ? board.size.height : (row + 1) * board.cellSize.height;
+  return {
+    topLeft: { x: left, y: top },
+    topRight: { x: right, y: top },
+    bottomRight: { x: right, y: bottom },
+    bottomLeft: { x: left, y: bottom },
+  };
+}
+
+function createSeamCutter(styleId: ConnectorStyleId, cellSize: Size, seed: number) {
+  const { profiles, offsets, scaleBase } = connectorStyles[styleId];
+  const profileScale = Math.min(1, cellSize.width / scaleBase, cellSize.height / scaleBase);
+  const random = seededRandom(seed);
+  let seamIndex = 0;
+
+  // A seam contains the points between its corners, so both pieces can trace it in opposite directions.
+  return function cutSeam(start: Point, end: Point, tabDirection: number): Point[] {
+    if (profiles.length === 0) return [];
+
+    const profile = profiles[seamIndex % profiles.length];
+    const offsetIndex = Math.floor(random() * offsets.length);
+    const centerOffset = offsets[offsetIndex];
+    seamIndex += 1;
+
+    const edgeX = end.x - start.x;
+    const edgeY = end.y - start.y;
+    const directionX = Math.sign(edgeX);
+    const directionY = Math.sign(edgeY);
+    const centerX = (start.x + end.x) / 2 + edgeX * centerOffset;
+    const centerY = (start.y + end.y) / 2 + edgeY * centerOffset;
+
+    return profile.map(([along, depth]) => {
+      const offsetX = directionX * along + directionY * depth * tabDirection;
+      const offsetY = directionY * along - directionX * depth * tabDirection;
+      return { x: centerX + offsetX * profileScale, y: centerY + offsetY * profileScale };
+    });
+  };
 }

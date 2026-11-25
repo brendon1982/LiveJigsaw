@@ -15,7 +15,10 @@ export class PuzzlePiece {
   }
 
   acceptsDrop(point: Point, tolerance: number): boolean {
-    return Math.hypot(point.x - this.target.x, point.y - this.target.y) <= tolerance;
+    const offsetX = point.x - this.target.x;
+    const offsetY = point.y - this.target.y;
+    const distanceToTarget = Math.hypot(offsetX, offsetY);
+    return distanceToTarget <= tolerance;
   }
 }
 
@@ -27,7 +30,7 @@ export class Puzzle {
   readonly seed: number;
   private readonly snapTolerance: number;
   private readonly piecesById: ReadonlyMap<string, PuzzlePiece>;
-  private readonly placed = new Set<string>();
+  private readonly placedPieceIds = new Set<string>();
 
   constructor(board: Board, snapTolerance: number, connectorStyle: ConnectorStyleId = 'classic', seed = 0) {
     if (!Number.isFinite(snapTolerance) || snapTolerance < 0) {
@@ -37,12 +40,12 @@ export class Puzzle {
     this.seed = seed;
     this.snapTolerance = snapTolerance;
     const outlines = PieceOutline.forBoard(board, connectorStyle, seed);
-    this.pieces = board.cells.map((cell, index) => new PuzzlePiece(cell, outlines[index]));
+    this.pieces = board.cells.map((cell, cellIndex) => new PuzzlePiece(cell, outlines[cellIndex]));
     this.piecesById = new Map(this.pieces.map((piece) => [piece.id, piece]));
   }
 
   get placedCount(): number {
-    return this.placed.size;
+    return this.placedPieceIds.size;
   }
 
   get isComplete(): boolean {
@@ -52,10 +55,10 @@ export class Puzzle {
   drop(pieceId: string, position: Point): DropResult {
     const piece = this.piecesById.get(pieceId);
     if (!piece) throw new RangeError(`Unknown piece: ${pieceId}`);
-    if (this.placed.has(piece.id)) return 'already-placed';
+    if (this.placedPieceIds.has(piece.id)) return 'already-placed';
     if (!piece.acceptsDrop(position, this.snapTolerance)) return 'missed';
 
-    this.placed.add(piece.id);
+    this.placedPieceIds.add(piece.id);
     return 'placed';
   }
 }

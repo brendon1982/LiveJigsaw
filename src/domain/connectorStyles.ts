@@ -3,7 +3,9 @@ type ConnectorProfile = readonly (readonly [along: number, depth: number])[];
 type ConnectorStyle = Readonly<{
   label: string;
   profiles: readonly ConnectorProfile[];
+  // Fractions of the seam length measured from its midpoint.
   offsets: readonly number[];
+  // Cell span at which the profile reaches its full size in board pixels.
   scaleBase: number;
 }>;
 

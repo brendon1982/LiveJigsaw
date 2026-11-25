@@ -15,11 +15,13 @@ export class Bounds {
   }
 
   static around(points: readonly Point[]): Bounds {
-    const xs = points.map(({ x }) => x);
-    const ys = points.map(({ y }) => y);
-    const left = Math.min(...xs);
-    const top = Math.min(...ys);
-    return new Bounds(left, top, Math.max(...xs) - left, Math.max(...ys) - top);
+    const xCoordinates = points.map(({ x }) => x);
+    const yCoordinates = points.map(({ y }) => y);
+    const left = Math.min(...xCoordinates);
+    const top = Math.min(...yCoordinates);
+    const right = Math.max(...xCoordinates);
+    const bottom = Math.max(...yCoordinates);
+    return new Bounds(left, top, right - left, bottom - top);
   }
 
   get center(): Point {

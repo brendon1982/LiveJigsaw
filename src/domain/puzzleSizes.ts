@@ -26,11 +26,17 @@ export function availablePuzzleSizes(maximum: Size): readonly PuzzleSize[] {
 }
 
 export function createPuzzle(size: PuzzleSize, connectorStyle: ConnectorStyleId = 'classic', seed = 0): Puzzle {
-  return new Puzzle(new Board(size, size.columns, size.rows), size.snapTolerance, connectorStyle, seed);
+  const board = new Board(size, size.columns, size.rows);
+  return new Puzzle(board, size.snapTolerance, connectorStyle, seed);
 }
 
 export function captureScale(size: Size, maximum: Size, textureLimit: number): number {
-  const limit = { width: Math.min(maximum.width, textureLimit), height: Math.min(maximum.height, textureLimit) };
-  if (!fitsViewport(size, limit)) throw new RangeError('The puzzle exceeds the available texture size');
-  return fitsViewport({ width: size.width * 2, height: size.height * 2 }, limit) ? 2 : 1;
+  const captureLimit = {
+    width: Math.min(maximum.width, textureLimit),
+    height: Math.min(maximum.height, textureLimit),
+  };
+  if (!fitsViewport(size, captureLimit)) throw new RangeError('The puzzle exceeds the available texture size');
+
+  const supersampledSize = { width: size.width * 2, height: size.height * 2 };
+  return fitsViewport(supersampledSize, captureLimit) ? 2 : 1;
 }

@@ -9,7 +9,7 @@
     "check": "tsc --noEmit",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "test": "node --experimental-strip-types --disable-warning=ExperimentalWarning --test \"tests/domain/*.test.mjs\"",
+    "test": "node --experimental-strip-types --disable-warning=ExperimentalWarning --test \"tests/domain/*.test.mjs\" \"tests/puzzles/*.test.mjs\"",
     "test:browser": "pnpm build && node --experimental-strip-types --disable-warning=ExperimentalWarning --test tests/puzzle-play.test.mjs"
   },
   "dependencies": {

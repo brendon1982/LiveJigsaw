@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import type { PuzzleAnimationSpeed, PuzzleSourceSceneData } from '../PuzzleSource';
 import atlasImage from './assets/medievalRTS_spritesheet@2.png';
 import atlasData from './assets/medievalRTS_spritesheet@2.xml?url';
-import { cellSize, generateVillage, villageSize } from './villageLayout';
+import { bladePadding, cellSize, generateVillage, villageSize } from './villageLayout';
 import { walkPose } from './villageWalks';
 
 const atlasKey = 'medieval-village-artwork';
@@ -34,7 +34,7 @@ function windmillBlades(textures: Phaser.Textures.TextureManager, id: number) {
   if (textures.exists(key)) return key;
 
   const frame = textures.getFrame(atlasKey, frameName('Structure', id));
-  const padding = 2;
+  const padding = bladePadding;
   const texture = textures.createCanvas(key, frame.realWidth + 2 * padding, frame.realHeight + 2 * padding);
   if (!texture) throw new Error(`Could not isolate windmill blades ${id}`);
 
@@ -85,9 +85,8 @@ export class MedievalVillageScene extends Phaser.Scene {
           : this.add.image(x, y, assembledBuilding(this.textures, frames)).setScale(scale);
         scenery.add(image.setOrigin(0.5, 1).setDepth(y));
       }
-      const bladeScale = mill.blades === 13 ? 0.51 : 0.45;
       const blades = this.add.image(mill.x, mill.y - mill.hub, windmillBlades(this.textures, mill.blades))
-        .setScale(bladeScale).setDepth(mill.y + 0.01);
+        .setScale(mill.bladeScale).setDepth(mill.y + 0.01);
       scenery.add(blades);
       const villagers = walks.map((walk) => {
         const image = sprite(0, 0, 'Unit', walk.front, 0.28).setOrigin(0.5, 1);

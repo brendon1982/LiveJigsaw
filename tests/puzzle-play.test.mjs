@@ -297,7 +297,8 @@ test('the landscape scenes animate on the board', async (t) => {
     { title: 'Meadow', x: 1003, y: 613, scroll: 320 },
     { title: 'Desert', x: 340, y: 500, scroll: 720 },
     { title: 'Forest', x: 1003, y: 500, scroll: 720 },
-    { title: 'Canyon Drift', x: 340, y: 600, scroll: 2200 },
+    { title: 'Canyon Drift', x: 340, y: 600, scroll: 1750 },
+    { title: 'Twilight Ridge', x: 935, y: 600, scroll: 1750 },
   ];
   const board = { x: 435, y: 275, width: 590, height: 320 };
 

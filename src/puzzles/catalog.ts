@@ -7,6 +7,7 @@ import { meadowSource } from './meadow/meadowSource';
 import { medievalVillageSource } from './medievalVillage/medievalVillageSource';
 import { mountainsSource } from './mountains/mountainsSource';
 import type { PuzzleSource } from './PuzzleSource';
+import { twilightRidgeSource } from './twilightRidge/twilightRidgeSource';
 import { windmillSource } from './windmill/windmillSource';
 
 export const puzzleSources: readonly PuzzleSource[] = [
@@ -19,4 +20,5 @@ export const puzzleSources: readonly PuzzleSource[] = [
   medievalVillageSource,
   hexCoastSource,
   canyonDriftSource,
+  twilightRidgeSource,
 ];

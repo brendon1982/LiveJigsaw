@@ -5,6 +5,10 @@ import { chromium } from 'playwright-core';
 import { PNG } from 'pngjs';
 import { build, preview } from 'vite';
 
+function readSave(page) {
+  return page.evaluate(() => JSON.parse(localStorage.getItem('live-jigsaw.save')));
+}
+
 async function pixelAt(page, png, x, y) {
   return page.evaluate(async ({ png, x, y }) => {
     const image = new Image();
@@ -58,14 +62,14 @@ async function openPuzzle(t, options, path = '/') {
   };
   await waitForText('Windmill');
   const clickDialog = async (dx, dy) => {
+    // Phaser uses the camera's render list for hit testing.
+    await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
     const { x, y, width, height } = await canvas.boundingBox();
     const tap = options.hasTouch ? page.touchscreen.tap.bind(page.touchscreen) : page.mouse.click.bind(page.mouse);
     await tap(x + width / 2 + dx, y + height / 2 + dy);
   };
   const playSelection = async ({ size, connectorStyle, animationSpeed } = {}) => {
     await waitForText('Animation speed');
-    // Phaser hit-tests the camera's render list, which updates on the first dialog frame.
-    await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
     if (size) {
       const index = ['Classic · 8', 'Large · 32', 'Dense · 64', 'Expert · 128'].indexOf(size);
       assert.ok(index >= 0);
@@ -159,7 +163,7 @@ test('live pieces scroll, reflow, and snap to the pannable board', async (t) => 
   await click(1246, 43);
   await waitForText('Color theme');
   await clickDialog(-95, -80);
-  await page.waitForFunction(() => localStorage.getItem('live-jigsaw.theme') === 'Forest');
+  await page.waitForFunction(() => JSON.parse(localStorage.getItem('live-jigsaw.save')).settings.theme === 'Forest');
   await page.keyboard.press('Escape');
   await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   const unfiltered = await canvas.screenshot();
@@ -180,7 +184,9 @@ test('live pieces scroll, reflow, and snap to the pannable board', async (t) => 
     await waitForText('Black and White');
     const before = await guidePixel(await canvas.screenshot());
     await clickDialog(x, y);
-    await page.waitForFunction((expected) => localStorage.getItem('live-jigsaw.puzzle-filter') === expected, name);
+    await page.waitForFunction((expected) => {
+      return (JSON.parse(localStorage.getItem('live-jigsaw.save')).settings.filter ?? null) === expected;
+    }, name);
     assert.notDeepEqual(await guidePixel(await canvas.screenshot()), before, 'The guide should change while Settings is still open');
     await clickDialog(101, 153);
     const screenshot = await canvas.screenshot();
@@ -250,7 +256,9 @@ test('live pieces scroll, reflow, and snap to the pannable board', async (t) => 
   await click(99, 43);
   await waitForText('Windmill');
   await click(460, 180);
-  await playSelection();
+  await waitForText('Resume');
+  await clickDialog(-6, 44);
+  await playSelection({ size: 'Classic · 8' });
   await waitForText('0 of 8 placed');
   const replay = await canvas.screenshot();
   assert.deepEqual(await pixelAt(page, replay, 85, 140), sky);
@@ -444,7 +452,7 @@ test('picker Settings remembers the theme and filter on a narrow touch screen', 
   await waitForText('Faded');
   assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 64, 400), [200, 222, 248, 255], 'The saved filter should be selected after reload');
   await clickDialog(102, -80);
-  await page.waitForFunction(() => localStorage.getItem('live-jigsaw.theme') === 'Dark');
+  await page.waitForFunction(() => JSON.parse(localStorage.getItem('live-jigsaw.save')).settings.theme === 'Dark');
   await clickDialog(101, 153);
   const dark = await canvas.screenshot();
   assert.deepEqual(await pixelAt(page, dark, 5, 105), [33, 33, 33, 255]);
@@ -452,6 +460,140 @@ test('picker Settings remembers the theme and filter on a narrow touch screen', 
   await page.reload();
   await waitForText('Select a Puzzle');
   assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 5, 105), [33, 33, 33, 255]);
+  await page.evaluate(() => {
+    localStorage.removeItem('live-jigsaw.save');
+    localStorage.setItem('live-jigsaw.theme', 'Slate');
+    localStorage.setItem('live-jigsaw.puzzle-filter', 'sepia');
+  });
+  await page.reload();
+  await waitForText('Select a Puzzle');
+  assert.deepEqual((await readSave(page)).settings, { theme: 'Slate', filter: 'sepia' });
+  assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 5, 105), [39, 51, 68, 255]);
+  assert.deepEqual(errors, []);
+});
+
+test('puzzle progress resumes, resets, and records each completion', async (t) => {
+  const { page, canvas, waitForText, errors, clickDialog, playSelection } = await openPuzzle(t, {
+    viewport: { width: 1320, height: 780 },
+  });
+  const pickWindmill = () => page.mouse.click(340, 180);
+  const backToPicker = async () => {
+    await page.evaluate(() => { window.paintedText = []; });
+    await page.mouse.click(99, 43);
+    await waitForText('Select a Puzzle');
+  };
+  const drag = async (x, y, targetX, targetY) => {
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(targetX, targetY, { steps: 6 });
+    await page.mouse.up();
+    await page.evaluate(() => new Promise(requestAnimationFrame));
+  };
+  const widenTray = () => drag(146, 420, 552, 420);
+  const targets = [348, 492].flatMap((y, row) => [734, 862, 990, 1118].map((x, column) => ({
+    x, y, id: `piece-${row}-${column}`,
+  })));
+  const getAttempt = async () => (await readSave(page)).progress.Windmill;
+  const getHistory = async () => (await readSave(page)).history.Windmill ?? [];
+  const placeNextPiece = async () => {
+    const placedIds = (await getAttempt())?.placedPieceIds ?? [];
+    const completedCount = (await getHistory()).length;
+    for (const target of targets) {
+      if (placedIds.includes(target.id)) continue;
+      await drag(75, 136, target.x, target.y);
+      const saved = await getAttempt();
+      if (saved?.placedPieceIds.length > placedIds.length || (await getHistory()).length > completedCount) {
+        return target;
+      }
+    }
+    assert.fail('The first tray piece should snap to one of the unfilled targets');
+  };
+
+  await waitForText('Completed 0 times');
+  await pickWindmill();
+  await playSelection({ connectorStyle: 'None', animationSpeed: 'Fast' });
+  await waitForText('0 of 8 placed');
+  assert.equal(await getAttempt(), undefined);
+  await backToPicker();
+  await pickWindmill();
+  await playSelection();
+  await waitForText('0 of 8 placed');
+  assert.equal(await page.evaluate(() => window.paintedText.includes('Resume')), false);
+  await widenTray();
+  const guide = await canvas.screenshot();
+  const firstTarget = await placeNextPiece();
+  const firstSave = await getAttempt();
+  assert.deepEqual(firstSave.placedPieceIds, [firstTarget.id]);
+  assert.equal(firstSave.setup.connectorStyle, 'none');
+  assert.equal(firstSave.setup.animationSpeed, 'Fast');
+  assert.equal(firstSave.setup.size.label, 'Classic');
+  assert.ok(Number.isInteger(firstSave.setup.seed));
+  const placedColor = await pixelAt(page, await canvas.screenshot(), firstTarget.x, firstTarget.y);
+  assert.notDeepEqual(placedColor, await pixelAt(page, guide, firstTarget.x, firstTarget.y));
+
+  await page.reload();
+  await waitForText('Select a Puzzle');
+  await pickWindmill();
+  await waitForText('1 of 8 pieces placed');
+  await clickDialog(-6, 44);
+  await waitForText('Puzzle size');
+  await clickDialog(-52, -107);
+  await page.keyboard.press('Escape');
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  assert.deepEqual(await getAttempt(), firstSave);
+  assert.deepEqual((await readSave(page)).recentOptions, {
+    sizeLabel: 'Classic', connectorStyle: 'none', animationSpeed: 'Fast',
+  });
+  await page.evaluate(() => { window.paintedText = []; });
+  await pickWindmill();
+  await waitForText('Resume');
+  await clickDialog(100, 44);
+  await waitForText('1 of 8 placed');
+  await widenTray();
+  assert.deepEqual(await pixelAt(page, await canvas.screenshot(), firstTarget.x, firstTarget.y), placedColor);
+  for (let count = 1; count < targets.length; count += 1) await placeNextPiece();
+  await waitForText('8 of 8 placed');
+  assert.equal(await getAttempt(), undefined);
+  assert.deepEqual((await getHistory()).map(({ setup }) => setup), [firstSave.setup]);
+
+  await backToPicker();
+  await waitForText('Completed 1 times');
+  await waitForText('Completed 0 times');
+  await pickWindmill();
+  await playSelection();
+  await waitForText('0 of 8 placed');
+  await widenTray();
+  await placeNextPiece();
+  await backToPicker();
+  await pickWindmill();
+  await waitForText('Resume');
+  await clickDialog(-6, 44);
+  await playSelection();
+  await waitForText('0 of 8 placed');
+  assert.equal(await getAttempt(), undefined);
+  assert.equal((await getHistory()).length, 1);
+  await widenTray();
+  await placeNextPiece();
+  const freshSetup = (await getAttempt()).setup;
+  for (let count = 1; count < targets.length; count += 1) await placeNextPiece();
+  await waitForText('8 of 8 placed');
+  await page.reload();
+  await waitForText('Completed 2 times');
+  assert.deepEqual((await getHistory()).map(({ setup }) => setup), [firstSave.setup, freshSetup]);
+  assert.ok((await getHistory()).every(({ completedAt }) => Number.isFinite(Date.parse(completedAt))));
+
+  await page.evaluate((attempt) => {
+    const key = 'live-jigsaw.save';
+    const save = JSON.parse(localStorage.getItem(key));
+    save.progress.Windmill = { ...attempt, placedPieceIds: ['unknown-piece'] };
+    save.history.Windmill.push({ setup: null });
+    localStorage.setItem(key, JSON.stringify(save));
+  }, firstSave);
+  await page.reload();
+  await waitForText('Completed 2 times');
+  await pickWindmill();
+  await waitForText('Puzzle size');
+  assert.equal(await page.evaluate(() => window.paintedText.includes('Resume')), false);
   assert.deepEqual(errors, []);
 });
 
@@ -520,6 +662,35 @@ test('the picker scrolls past two cards and clips previews', async (t) => {
     await page.mouse.click(340, 165);
     await playSelection({ animationSpeed: 'Slow' });
     await page.waitForFunction(() => window.sourceAnimationSpeed === 'Slow');
+
+    await page.evaluate(() => { window.paintedText = []; });
+    await page.mouse.click(99, 43);
+    await waitForText('Select a Puzzle');
+    await page.mouse.click(340, 165);
+    await playSelection({ size: 'Large · 32', connectorStyle: 'None', animationSpeed: 'Fast' });
+    await waitForText('0 of 32 placed');
+    await page.reload();
+    await waitForText('Windmill');
+    await page.mouse.click(1003, 165);
+    await playSelection();
+    await waitForText('0 of 32 placed');
+    assert.deepEqual((await readSave(page)).recentOptions, {
+      sizeLabel: 'Large', connectorStyle: 'none', animationSpeed: 'Fast',
+    });
+
+    await page.evaluate(() => { window.paintedText = []; });
+    await page.mouse.click(99, 43);
+    await waitForText('Select a Puzzle');
+    await page.mouse.move(340, 300);
+    await page.mouse.wheel(0, 1000);
+    assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 120, 165), previewColor);
+    await page.mouse.click(340, 165);
+    await playSelection();
+    await waitForText('0 of 8 placed');
+    await page.waitForFunction(() => window.sourceAnimationSpeed === 'Fast');
+    assert.deepEqual((await readSave(page)).recentOptions, {
+      sizeLabel: 'Classic', connectorStyle: 'none', animationSpeed: 'Fast',
+    });
     assert.deepEqual(errors, []);
   });
 
@@ -554,7 +725,7 @@ test('the picker scrolls past two cards and clips previews', async (t) => {
 });
 
 test('tablet touch scrolls, resizes, zooms, cancels, and places pieces', async (t) => {
-  const { page, canvas, waitForText, errors, playSelection } = await openPuzzle(t, {
+  const { page, canvas, waitForText, errors, clickDialog, playSelection } = await openPuzzle(t, {
     viewport: { width: 1024, height: 768 },
     hasTouch: true,
     isMobile: true,
@@ -617,6 +788,15 @@ test('tablet touch scrolls, resizes, zooms, cancels, and places pieces', async (
   await page.touchscreen.tap(99, 43);
   await waitForText('Windmill');
   await page.touchscreen.tap(395, 180);
+  await waitForText('Resume');
+  await clickDialog(100, 44);
+  await waitForText('1 of 8 placed');
+  await page.evaluate(() => { window.paintedText = []; });
+  await page.touchscreen.tap(99, 43);
+  await waitForText('Windmill');
+  await page.touchscreen.tap(395, 180);
+  await waitForText('Resume');
+  await clickDialog(-6, 44);
   await playSelection({ size: 'Expert · 128', connectorStyle: 'Rounded' });
   await waitForText('0 of 128 placed');
   const expertTray = await canvas.screenshot();

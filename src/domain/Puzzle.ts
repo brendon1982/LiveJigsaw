@@ -52,6 +52,23 @@ export class Puzzle {
     return this.placedCount === this.pieces.length;
   }
 
+  isPlaced(pieceId: string): boolean {
+    return this.placedPieceIds.has(pieceId);
+  }
+
+  snapshotPlacements(): readonly string[] {
+    return [...this.placedPieceIds];
+  }
+
+  restorePlacements(pieceIds: readonly string[]): boolean {
+    const restored = new Set(pieceIds);
+    if (restored.size !== pieceIds.length || pieceIds.some((id) => !this.piecesById.has(id))) return false;
+
+    this.placedPieceIds.clear();
+    for (const id of restored) this.placedPieceIds.add(id);
+    return true;
+  }
+
   drop(pieceId: string, position: Point): DropResult {
     const piece = this.piecesById.get(pieceId);
     if (!piece) throw new RangeError(`Unknown piece: ${pieceId}`);

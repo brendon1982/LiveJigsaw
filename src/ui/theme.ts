@@ -1,4 +1,5 @@
 import type Phaser from 'phaser';
+import { gameSave } from '../persistence';
 
 const forest = {
   background: 0x263a36,
@@ -77,16 +78,11 @@ export const themes = {
 } satisfies Record<string, Palette>;
 
 type Theme = keyof typeof themes;
-const storageKey = 'live-jigsaw.theme';
 const listeners = new Set<(colors: Palette) => void>();
 
 function readTheme(): Theme {
-  try {
-    const stored = window.localStorage.getItem(storageKey);
-    if (stored && Object.hasOwn(themes, stored)) return stored as Theme;
-  } catch {
-    // Storage can be unavailable in a restricted browser context.
-  }
+  const stored = gameSave.settings.theme;
+  if (stored && Object.hasOwn(themes, stored)) return stored as Theme;
   return 'Forest';
 }
 
@@ -98,11 +94,7 @@ export function selectTheme(theme: Theme) {
   activeTheme = theme;
   palette = themes[theme];
   for (const listener of listeners) listener(palette);
-  try {
-    window.localStorage.setItem(storageKey, theme);
-  } catch {
-    // The selected theme still applies for this session.
-  }
+  gameSave.updateSettings({ theme });
 }
 
 export function onThemeChange(listener: (colors: Palette) => void) {

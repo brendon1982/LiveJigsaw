@@ -1,9 +1,10 @@
 import Phaser from 'phaser';
 import type RexUIPlugin from 'phaser4-rex-plugins/templates/ui/ui-plugin.js';
-import type { ConnectorStyleId } from '../domain/connectorStyles';
-import { createPuzzle, type PuzzleSize } from '../domain/puzzleSizes';
+import { createPuzzle } from '../domain/puzzleSizes';
+import { gameSave } from '../persistence';
+import type { PuzzleSetup } from '../persistence/GameSave';
 import { LivePuzzleCapture } from '../rendering/LivePuzzleCapture';
-import type { PuzzleAnimationSpeed, PuzzleSource } from '../puzzles/PuzzleSource';
+import type { PuzzleSource } from '../puzzles/PuzzleSource';
 import { makeButton } from './button';
 import { headerInset, makeSettingsButton, puzzleHeader } from './puzzleHeader';
 import { PuzzleBoardView } from './PuzzleBoardView';
@@ -13,10 +14,8 @@ import { styleWithTheme } from './theme';
 
 export type PuzzleSelection = {
   source: PuzzleSource;
-  size: PuzzleSize;
-  connectorStyle?: ConnectorStyleId;
-  animationSpeed?: PuzzleAnimationSpeed;
-  seed: number;
+  setup: PuzzleSetup;
+  placedPieceIds?: readonly string[];
 };
 
 // Target length in screen pixels for the shorter side of a tray piece's base cell.
@@ -30,8 +29,10 @@ export class PlayPuzzleScene extends Phaser.Scene {
     super(PlayPuzzleScene.key);
   }
 
-  create({ source, size, connectorStyle, animationSpeed = 'Normal', seed }: PuzzleSelection) {
+  create({ source, setup, placedPieceIds = [] }: PuzzleSelection) {
+    const { size, connectorStyle, animationSpeed, seed } = setup;
     const puzzle = createPuzzle(size, connectorStyle, seed);
+    if (!puzzle.restorePlacements(placedPieceIds)) throw new Error('Invalid puzzle placements');
     const capture = new LivePuzzleCapture(this, source, {
       ...puzzle.board.size, seed: puzzle.seed, animationSpeed,
     });
@@ -68,7 +69,15 @@ export class PlayPuzzleScene extends Phaser.Scene {
     const updateProgress = () => {
       progress.setText(`${puzzle.placedCount} of ${puzzle.pieces.length} placed`);
     };
-    const board = new PuzzleBoardView(this, puzzle, capture, trayPieceSize, updateProgress);
+    const onPlacement = () => {
+      updateProgress();
+      if (puzzle.isComplete) {
+        gameSave.completeAttempt(source.scene.key, { setup, completedAt: new Date().toISOString() });
+      } else {
+        gameSave.saveProgress(source.scene.key, { setup, placedPieceIds: puzzle.snapshotPlacements() });
+      }
+    };
+    const board = new PuzzleBoardView(this, puzzle, capture, trayPieceSize, onPlacement);
     updateProgress();
     capture.start();
 

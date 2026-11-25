@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { connectorStyles, type ConnectorStyleId } from '../domain/connectorStyles';
 import { availablePuzzleSizes, type PuzzleSize } from '../domain/puzzleSizes';
+import type { PuzzleOptions } from '../persistence/GameSave';
 import { puzzleAnimationSpeeds, type PuzzleAnimationSpeed, type PuzzleSource } from '../puzzles/PuzzleSource';
 import { makeButtonLabel, type UIScene } from './button';
 import { palette } from './theme';
@@ -20,27 +21,27 @@ type Option = {
 export function showPuzzleOptions(
   scene: UIScene,
   source: PuzzleSource,
+  defaults: PuzzleOptions | undefined,
   play: (size: PuzzleSize, connectorStyle: ConnectorStyleId, animationSpeed: PuzzleAnimationSpeed) => void,
   onClose: () => void,
 ) {
   const sizes = availablePuzzleSizes(source.maxViewport);
   const styles = Object.keys(connectorStyles) as ConnectorStyleId[];
-  const cover = scene.add.rectangle(0, 0, 1, 1, palette.modalBackdrop, 0.72)
-    .setOrigin(0).setDepth(depth.cover).setInteractive();
+  const initialSize = sizes.find(({ label }) => label === defaults?.sizeLabel) ?? sizes[0];
   const sizeButtons = makeRadioButtons(scene, sizes.map((size) => ({
     name: size.label,
     label: `${size.label} · ${size.columns * size.rows}`,
     drawIcon: () => drawSizeIcon(scene, size),
-  })), sizes[0].label);
+  })), initialSize.label);
   const styleButtons = makeRadioButtons(scene, styles.map((style) => ({
     name: style,
     label: connectorStyles[style].label,
     drawIcon: () => drawConnectorIcon(scene, style),
-  })), 'classic');
+  })), defaults?.connectorStyle ?? 'classic');
   const speedButtons = makeRadioButtons(scene, puzzleAnimationSpeeds.map((speed) => ({
     name: speed,
     label: speed,
-  })), 'Normal');
+  })), defaults?.animationSpeed ?? 'Normal');
 
   const content = scene.rexUI.add.sizer({ orientation: 'y', width: contentWidth, space: { item: 14 } });
   const sections = [
@@ -57,17 +58,59 @@ export function showPuzzleOptions(
     content.add(section, { align: 'left' });
   }
 
+  const actions = [
+    makeButtonLabel(scene, 'Cancel', 92, 52),
+    makeButtonLabel(scene, 'Play', 92, 52, true),
+  ];
+  return showPickerDialog(scene, source.title, content, actions, (action) => {
+    onClose();
+    if (action !== 1) return;
+
+    const size = sizes.find(({ label }) => label === sizeButtons.getSelectedButtonName());
+    const style = styles.find((id) => id === styleButtons.getSelectedButtonName());
+    const speed = puzzleAnimationSpeeds.find((name) => name === speedButtons.getSelectedButtonName());
+    if (size && style && speed) play(size, style, speed);
+  });
+}
+
+export function showResumePuzzle(
+  scene: UIScene,
+  source: PuzzleSource,
+  placedCount: number,
+  pieceCount: number,
+  onClose: (choice: 'resume' | 'reset' | 'cancel') => void,
+) {
+  const content = scene.rexUI.add.sizer({ orientation: 'y' });
+  content.add(scene.add.text(0, 0, `${placedCount} of ${pieceCount} pieces placed`, {
+    fontFamily: 'system-ui', fontSize: '17px', color: palette.mutedText,
+  }).setDepth(depth.controls), { align: 'left' });
+  const actions = [
+    makeButtonLabel(scene, 'Cancel', 92, 52),
+    makeButtonLabel(scene, 'Reset', 92, 52),
+    makeButtonLabel(scene, 'Resume', 104, 52, true),
+  ];
+  return showPickerDialog(scene, source.title, content, actions, (action) => {
+    onClose(action === 2 ? 'resume' : action === 1 ? 'reset' : 'cancel');
+  });
+}
+
+function showPickerDialog(
+  scene: UIScene,
+  title: string,
+  content: ReturnType<UIScene['rexUI']['add']['sizer']>,
+  actions: ReturnType<typeof makeButtonLabel>[],
+  onClose: (action?: number) => void,
+) {
+  const cover = scene.add.rectangle(0, 0, 1, 1, palette.modalBackdrop, 0.72)
+    .setOrigin(0).setDepth(depth.cover).setInteractive();
   const dialog = scene.rexUI.add.dialog({
     background: scene.rexUI.add.roundRectangle(0, 0, 1, 1, 16, palette.surface)
       .setStrokeStyle(1, palette.border).setDepth(depth.panel),
-    title: scene.add.text(0, 0, source.title, {
+    title: scene.add.text(0, 0, title, {
       fontFamily: 'system-ui', fontSize: '25px', fontStyle: 'bold', color: palette.text,
     }).setFixedSize(0, 34).setDepth(depth.controls),
     content,
-    actions: [
-      makeButtonLabel(scene, 'Cancel', 92, 52).setDepth(depth.controls),
-      makeButtonLabel(scene, 'Play', 92, 52, true).setDepth(depth.controls),
-    ],
+    actions: actions.map((button) => button.setDepth(depth.controls)),
     align: { title: 'left', actions: 'right' },
     space: { top: 20, bottom: 20, left: 20, right: 20, title: 14, content: 18, action: 8 },
     click: { mode: 'release', clickInterval: 0 },
@@ -83,10 +126,10 @@ export function showPuzzleOptions(
     dialog.setPosition(width / (2 * zoom), height / (2 * zoom)).setScale(scale / zoom);
   };
   const cancel = () => dialog.modalClose();
-  let startPuzzle = false;
+  let action: number | undefined;
   dialog.on('action.click', (_button: Phaser.GameObjects.GameObject, index: number, pointer: Phaser.Input.Pointer) => {
     if (pointer.wasCanceled) return;
-    startPuzzle = index === 1;
+    action = index;
     dialog.modalClose();
   });
 
@@ -105,15 +148,7 @@ export function showPuzzleOptions(
     // @ts-expect-error RexUI accepts false at runtime to disable its cover.
     cover: false,
     duration: { in: 0, out: 0 },
-  }, () => {
-    onClose();
-    if (!startPuzzle) return;
-
-    const size = sizes.find(({ label }) => label === sizeButtons.getSelectedButtonName());
-    const style = styles.find((id) => id === styleButtons.getSelectedButtonName());
-    const speed = puzzleAnimationSpeeds.find((name) => name === speedButtons.getSelectedButtonName());
-    if (size && style && speed) play(size, style, speed);
-  });
+  }, () => onClose(action));
 
   return dialog;
 }

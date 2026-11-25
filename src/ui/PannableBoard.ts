@@ -59,11 +59,14 @@ export class PannableBoard {
     this.layer.add([guide, this.placedImage]);
   }
 
-  addPiece(piece: PuzzlePiece) {
-    const [first, ...rest] = piece.outline.points;
-    this.placedPath.moveTo(first.x, first.y);
-    for (const point of rest) this.placedPath.lineTo(point.x, point.y);
-    this.placedPath.closePath();
+  addPieces(pieces: readonly PuzzlePiece[]) {
+    if (pieces.length === 0) return;
+    for (const piece of pieces) {
+      const [first, ...rest] = piece.outline.points;
+      this.placedPath.moveTo(first.x, first.y);
+      for (const point of rest) this.placedPath.lineTo(point.x, point.y);
+      this.placedPath.closePath();
+    }
 
     // Fill all placed shapes together so shared edges get full pixel coverage.
     const { context } = this.placedMask;

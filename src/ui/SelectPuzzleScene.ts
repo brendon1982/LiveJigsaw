@@ -1,11 +1,12 @@
 import Phaser from 'phaser';
 import type RexUIPlugin from 'phaser4-rex-plugins/templates/ui/ui-plugin.js';
 import { availablePuzzleSizes, puzzleSizes } from '../domain/puzzleSizes';
+import { gameSave } from '../persistence';
 import { puzzleSources } from '../puzzles/catalog';
 import type { PuzzleSource } from '../puzzles/PuzzleSource';
 import type { PuzzleSelection } from './PlayPuzzleScene';
 import { headerInset, makeSettingsButton, puzzleHeader } from './puzzleHeader';
-import { showPuzzleOptions } from './puzzleOptions';
+import { showPuzzleOptions, showResumePuzzle } from './puzzleOptions';
 import { openSettings } from './SettingsScene';
 import { styleWithTheme } from './theme';
 
@@ -33,16 +34,38 @@ export class SelectPuzzleScene extends Phaser.Scene {
 
   create() {
     const listBounds = new Phaser.Geom.Rectangle();
-    let options: ReturnType<typeof showPuzzleOptions> | undefined;
-    const cards = puzzleSources.map((source) => this.makeCard(source, listBounds, () => {
-      if (options) return;
-      panel.setScrollerEnable(false).setMouseWheelScrollerEnable(false);
-      options = showPuzzleOptions(this, source, (size, connectorStyle, animationSpeed) => {
+    let dialog: ReturnType<typeof showPuzzleOptions> | undefined;
+    const setPickerScrolling = (enabled: boolean) => {
+      panel.setScrollerEnable(enabled).setMouseWheelScrollerEnable(enabled);
+    };
+    const closeDialog = () => {
+      dialog = undefined;
+      setPickerScrolling(true);
+    };
+    const play = (selection: PuzzleSelection) => this.scene.start('PlayPuzzle', selection);
+    const openSetup = (source: PuzzleSource) => {
+      setPickerScrolling(false);
+      dialog = showPuzzleOptions(this, source, gameSave.recentOptions, (size, connectorStyle, animationSpeed) => {
         const [seed] = crypto.getRandomValues(new Uint32Array(1));
-        this.scene.start('PlayPuzzle', { source, size, connectorStyle, animationSpeed, seed } satisfies PuzzleSelection);
-      }, () => {
-        options = undefined;
-        panel.setScrollerEnable(true).setMouseWheelScrollerEnable(true);
+        gameSave.startAttempt(source.scene.key, { sizeLabel: size.label, connectorStyle, animationSpeed });
+        play({ source, setup: { size, connectorStyle, animationSpeed, seed } });
+      }, closeDialog);
+    };
+    const cards = puzzleSources.map((source) => this.makeCard(source, listBounds, () => {
+      if (dialog) return;
+      const progress = gameSave.getProgress(source.scene.key);
+      if (!progress || progress.setup.size.width > source.maxViewport.width
+        || progress.setup.size.height > source.maxViewport.height) {
+        openSetup(source);
+        return;
+      }
+
+      const { columns, rows } = progress.setup.size;
+      setPickerScrolling(false);
+      dialog = showResumePuzzle(this, source, progress.placedPieceIds.length, columns * rows, (choice) => {
+        closeDialog();
+        if (choice === 'resume') play({ source, ...progress });
+        if (choice === 'reset') openSetup(source);
       });
     }));
     const grid = this.rexUI.add.gridSizer({
@@ -77,9 +100,9 @@ export class SelectPuzzleScene extends Phaser.Scene {
       title.setColor(colors.text);
     });
     const settings = makeSettingsButton(this, () => {
-      if (options) return;
-      panel.setScrollerEnable(false).setMouseWheelScrollerEnable(false);
-      openSettings(this, () => panel.setScrollerEnable(true).setMouseWheelScrollerEnable(true));
+      if (dialog) return;
+      setPickerScrolling(false);
+      openSettings(this, () => setPickerScrolling(true));
     });
 
     let currentColumns = 0;
@@ -121,9 +144,13 @@ export class SelectPuzzleScene extends Phaser.Scene {
     const title = this.add.text(24, 333, source.title, {
       fontFamily: 'system-ui', fontSize: '23px',
     });
+    const completions = this.add.text(cardWidth - 24, cardHeight - 16, `Completed ${gameSave.completionCount(source.scene.key)} times`, {
+      fontFamily: 'system-ui', fontSize: '17px',
+    }).setOrigin(1, 1);
     styleWithTheme(background, (colors) => {
       background.setFillStyle(colors.surface);
       title.setColor(colors.text);
+      completions.setColor(colors.mutedText);
     });
     if (availablePuzzleSizes(source.maxViewport).length > 0) {
       this.rexUI.add.click(background, { threshold: scrollThreshold, clickInterval: 0 })
@@ -138,7 +165,7 @@ export class SelectPuzzleScene extends Phaser.Scene {
       background.input!.cursor = 'pointer';
     }
     return this.rexUI.add.container(0, 0, cardWidth, cardHeight).setOrigin(0)
-      .addLocal([background, this.makePreview(source), title]);
+      .addLocal([background, this.makePreview(source), title, completions]);
   }
 
   private makePreview(source: PuzzleSource) {

@@ -50,7 +50,9 @@ export class PuzzleBoardView {
     trayPieceSize: number,
     private readonly onPlacement: () => void,
   ) {
-    this.pieces = Phaser.Math.RND.shuffle([...puzzle.pieces])
+    const remainingPieces = puzzle.pieces.filter(({ id }) => !puzzle.isPlaced(id));
+    const placedPieces = puzzle.pieces.filter(({ id }) => puzzle.isPlaced(id));
+    this.pieces = Phaser.Math.RND.shuffle(remainingPieces)
       .map((piece) => new PuzzlePieceView(scene, capture, piece));
 
     this.trayPanel = scene.add.rectangle(0, 0, 1, 1);
@@ -71,6 +73,7 @@ export class PuzzleBoardView {
     });
     this.tray = new PieceTray(scene, this.pieces, puzzle.board.cellSize, trayPieceSize);
     this.board = new PannableBoard(scene, puzzle.board.size, capture);
+    this.board.addPieces(placedPieces);
     this.floatingPieces = scene.add.layer();
     const dragCamera = scene.cameras.add().setName('Dragged piece');
     dragCamera.inputEnabled = false;
@@ -244,7 +247,7 @@ export class PuzzleBoardView {
 
     const { entry } = gesture;
     if (this.board.contains(pointer) && this.puzzle.drop(entry.piece.id, this.board.toLocal(entry.position)) === 'placed') {
-      this.board.addPiece(entry.piece);
+      this.board.addPieces([entry.piece]);
       entry.hide();
       this.tray.remove(entry, this.trayPanel.getBounds());
       this.onPlacement();

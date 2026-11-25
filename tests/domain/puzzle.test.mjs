@@ -41,3 +41,27 @@ test('a drop from outside the puzzle leaves its progress intact', () => {
   assert.throws(() => game.puzzle.drop('unregistered-piece', { x: 64, y: 72 }), /Unknown piece/);
   game.expectProgress({ placed: 0, total: 4 });
 });
+
+test('restoring placements allows the remaining pieces to finish the puzzle', () => {
+  const original = givenPuzzle({ columns: 2, rows: 1, seed: 42 });
+  assert.equal(original.whenPiece(0, 0).dropsOn(0, 0), 'placed');
+
+  const resumed = givenPuzzle({ columns: 2, rows: 1, seed: 42 });
+  assert.equal(resumed.puzzle.restorePlacements(original.puzzle.snapshotPlacements()), true);
+  resumed.expectProgress({ placed: 1, total: 2 });
+  assert.equal(resumed.whenPiece(0, 0).dropsOn(0, 0), 'already-placed');
+  assert.equal(resumed.whenPiece(1, 0).dropsOn(1, 0), 'placed');
+  resumed.expectProgress({ placed: 2, total: 2, complete: true });
+  original.expectProgress({ placed: 1, total: 2 });
+});
+
+test('invalid placement snapshots leave the puzzle progress intact', () => {
+  const game = givenPuzzle();
+  assert.equal(game.whenPiece(0, 0).dropsOn(0, 0), 'placed');
+  const otherPiece = game.pieceAt(1, 0);
+
+  assert.equal(game.puzzle.restorePlacements([otherPiece.id, 'unregistered-piece']), false);
+  assert.equal(game.puzzle.restorePlacements([otherPiece.id, otherPiece.id]), false);
+  assert.equal(game.whenPiece(0, 0).dropsOn(0, 0), 'already-placed');
+  game.expectProgress({ placed: 1, total: 4 });
+});

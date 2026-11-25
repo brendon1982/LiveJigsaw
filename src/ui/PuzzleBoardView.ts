@@ -4,8 +4,10 @@ import type { Puzzle } from '../domain/Puzzle';
 import type { TrayFractions, TrayPosition } from '../persistence/GameSave';
 import type { LivePuzzleCapture } from '../rendering/LivePuzzleCapture';
 import type { UIScene } from './button';
+import { drawEffectImage, effectImageResolution, traceEffectPath } from './effectImage';
 import { PannableBoard } from './PannableBoard';
 import { PieceTray } from './PieceTray';
+import { PlacementEffects } from './PlacementEffects';
 import { playWorkspace, resolveTraySide, trayScrollAxis, type TraySide } from './playLayout';
 import { PuzzlePanels } from './PuzzlePanels';
 import { PuzzlePieceView } from './PuzzlePieceView';
@@ -44,7 +46,9 @@ function measurePinch(a: Point, b: Point) {
 export class PuzzleBoardView {
   private readonly tray: PieceTray;
   private readonly board: PannableBoard;
+  private readonly placementEffects: PlacementEffects;
   private readonly floatingPieces: Phaser.GameObjects.Layer;
+  private liftShadow?: Phaser.GameObjects.Image;
   private readonly pieces: PuzzlePieceView[];
   private trayBounds = new Phaser.Geom.Rectangle();
   private trayPosition: TrayPosition;
@@ -72,6 +76,7 @@ export class PuzzleBoardView {
     this.tray = new PieceTray(scene, this.pieces, puzzle.board.cellSize, trayPieceSize, trayScrollAxis(this.side));
     this.board = new PannableBoard(scene, puzzle.board.size, capture);
     this.board.addPieces(placedPieces);
+    this.placementEffects = new PlacementEffects(scene, this.board.layer);
     this.floatingPieces = scene.add.layer();
     const dragCamera = scene.cameras.add().setName('Dragged piece');
     dragCamera.inputEnabled = false;
@@ -134,6 +139,8 @@ export class PuzzleBoardView {
     this.scene.input.off(Phaser.Input.Events.POINTER_WHEEL, this.handleWheel);
     this.scene.input.setDefaultCursor('default');
     this.tray.destroy();
+    this.clearLiftShadow();
+    this.placementEffects.destroy();
     this.board.destroy();
     for (const { mask } of this.pieces) this.scene.textures.remove(mask);
   }
@@ -146,6 +153,7 @@ export class PuzzleBoardView {
 
   cancelInteraction() {
     if (this.gesture?.kind === 'piece') this.tray.returnPiece(this.gesture.entry);
+    this.clearLiftShadow();
     this.gesture = undefined;
     this.pinch = undefined;
     this.scene.input.setDefaultCursor('default');
@@ -183,8 +191,31 @@ export class PuzzleBoardView {
     this.gesture = { kind: 'piece', pointerId: pointer.id, entry, offset };
     this.tray.lift(entry);
     entry.setScale(this.board.zoom);
+    const { target, outline } = entry.piece;
+    this.liftShadow = drawEffectImage(this.scene, outline.frame, 10, target, (context) => {
+      context.beginPath();
+      traceEffectPath(context, outline.points);
+      context.closePath();
+      context.fillStyle = '#10171a';
+      context.shadowColor = '#10171a';
+      context.shadowBlur = 5 * effectImageResolution;
+      context.fill();
+    }).setAlpha(0.3);
+    this.floatingPieces.add(this.liftShadow);
     entry.addTo(this.floatingPieces);
-    entry.moveTo(pointer.x + offset.x, pointer.y + offset.y);
+    this.moveDraggedPiece(entry, pointer, offset);
+  }
+
+  private moveDraggedPiece(entry: PuzzlePieceView, pointer: Point, offset: Point) {
+    const x = pointer.x + offset.x;
+    const y = pointer.y + offset.y;
+    entry.moveTo(x, y);
+    this.liftShadow?.setPosition(x + 2, y + 4).setScale(this.board.zoom / effectImageResolution);
+  }
+
+  private clearLiftShadow() {
+    this.liftShadow?.destroy();
+    this.liftShadow = undefined;
   }
 
   private readonly handleWheel = (pointer: Phaser.Input.Pointer, _over: Phaser.GameObjects.GameObject[], dx: number, dy: number) => {
@@ -235,7 +266,7 @@ export class PuzzleBoardView {
         this.tray.scrollBy(alongTray);
       }
     } else if (gesture.kind === 'piece') {
-      gesture.entry.moveTo(pointer.x + gesture.offset.x, pointer.y + gesture.offset.y);
+      this.moveDraggedPiece(gesture.entry, pointer, gesture.offset);
     } else {
       const dx = pointer.x - gesture.previous.x;
       const dy = pointer.y - gesture.previous.y;
@@ -258,12 +289,15 @@ export class PuzzleBoardView {
     this.scene.input.setDefaultCursor('default');
     if (gesture.kind !== 'piece') return;
 
+    this.clearLiftShadow();
     const { entry } = gesture;
-    if (this.board.contains(pointer) && this.puzzle.drop(entry.piece.id, this.board.toLocal(entry.position)) === 'placed') {
-      this.board.addPieces([entry.piece]);
+    const { piece } = entry;
+    if (this.board.contains(pointer) && this.puzzle.drop(piece.id, this.board.toLocal(entry.position)) === 'placed') {
+      this.board.addPieces([piece]);
       entry.hide();
       this.tray.remove(entry, this.trayBounds);
       this.onPlacement();
+      this.placementEffects.play(piece, this.puzzle.joinedSeams(piece));
     } else {
       this.tray.returnPiece(entry);
     }

@@ -229,11 +229,23 @@ test('live pieces scroll, reflow, and snap to the pannable board', async (t) => 
   await move(863, 348, 8);
   assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 863, 348), sky, 'The dragged piece should keep its original color');
   await page.mouse.up();
+  const highlighted = await canvas.screenshot();
   await waitForText('2 of 8 placed');
-  const joined = await canvas.screenshot();
+  const seamPoints = [[798, 337], [802, 339], [811, 342], [815, 348], [809, 357]];
+  const seamColors = (screenshot) => {
+    const { width, data } = PNG.sync.read(screenshot);
+    return seamPoints.map(([x, y]) => [...data.subarray((y * width + x) * 4, (y * width + x) * 4 + 4)]);
+  };
+  assert.ok(seamColors(highlighted).some(([red]) => red > sky[0]), 'The newly joined seam should briefly light up');
+  let joined = highlighted;
+  const fadeDeadline = Date.now() + 2000;
+  const isSky = (color) => color.every((channel, index) => channel === sky[index]);
+  while (!seamColors(joined).every(isSky) && Date.now() < fadeDeadline) {
+    joined = await canvas.screenshot();
+  }
   assert.deepEqual(await pixelAt(page, joined, 863, 348), sky, 'A newly placed piece should keep its original color');
-  for (const [x, y] of [[798, 337], [802, 339], [811, 342], [815, 348], [809, 357]]) {
-    assert.deepEqual(await pixelAt(page, joined, x, y), sky, 'The live guide should not show through joined pieces');
+  for (const color of seamColors(joined)) {
+    assert.deepEqual(color, sky, 'The live guide should not show through joined pieces');
   }
   assert.deepEqual(await selectFilter(88, settingsY.secondFilter, null), originalGuide, 'Clearing the filter should restore the original guide');
 
@@ -1204,7 +1216,7 @@ test('tray settings move the live tray and rotate touch gestures with it', async
   await selectSide('Auto');
   await dispatch('touchStart', [trayX, trayY]);
   await dispatch('touchMove', [trayX, trayY - 90]);
-  assert.deepEqual(await sample(trayX, trayY), trayColor, 'The drag should be active before rotating');
+  assert.ok((await sample(trayX, trayY))[0] < trayColor[0], 'The lifted piece should cast a shadow before rotating');
   await resize(landscape);
   await dispatch('touchEnd');
   await assertSide('Left');

@@ -35,6 +35,34 @@ test('a zero-tolerance single-piece puzzle needs an exact drop', () => {
   game.expectProgress({ placed: 1, total: 1, complete: true });
 });
 
+test('placed pieces join only the cut edges they share with already-placed neighbors', () => {
+  const game = givenPuzzle({ columns: 3, connectorStyle: 'classic' });
+  const upperLeft = game.pieceAt(0, 0);
+  const upperMiddle = game.pieceAt(1, 0);
+  const lowerMiddle = game.pieceAt(1, 1);
+
+  assert.equal(game.whenPiece(0, 0).dropsOn(0, 0), 'placed');
+  assert.deepEqual(game.puzzle.joinedSeams(upperLeft), []);
+  assert.equal(game.whenPiece(1, 1).dropsOn(1, 1), 'placed');
+  assert.deepEqual(game.puzzle.joinedSeams(lowerMiddle), []);
+
+  assert.equal(game.whenPiece(1, 0).dropsOn(1, 0), 'placed');
+  assert.deepEqual(game.puzzle.joinedSeams(upperMiddle), [
+    [...lowerMiddle.outline.edges.top].reverse(),
+    [...upperLeft.outline.edges.right].reverse(),
+  ]);
+});
+
+test('a straight joined edge runs from one corner to the other', () => {
+  const game = givenPuzzle({ columns: 2, rows: 1, connectorStyle: 'none' });
+  assert.equal(game.whenPiece(0, 0).dropsOn(0, 0), 'placed');
+  assert.equal(game.whenPiece(1, 0).dropsOn(1, 0), 'placed');
+  assert.deepEqual(game.puzzle.joinedSeams(game.pieceAt(1, 0)), [[
+    { x: 128, y: 144 },
+    { x: 128, y: 0 },
+  ]]);
+});
+
 test('a drop from outside the puzzle leaves its progress intact', () => {
   const game = givenPuzzle();
 

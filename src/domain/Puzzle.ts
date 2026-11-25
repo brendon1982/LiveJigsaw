@@ -3,13 +3,19 @@ import type { ConnectorStyleId } from './connectorStyles.ts';
 import type { Point } from './geometry.ts';
 import { PieceOutline } from './PieceOutline.ts';
 
+function pieceIdAt(row: number, column: number): string {
+  return `piece-${row}-${column}`;
+}
+
 export class PuzzlePiece {
+  readonly cell: Cell;
   readonly id: string;
   readonly target: Point;
   readonly outline: PieceOutline;
 
   constructor(cell: Cell, outline: PieceOutline) {
-    this.id = `piece-${cell.row}-${cell.column}`;
+    this.cell = cell;
+    this.id = pieceIdAt(cell.row, cell.column);
     this.target = cell.bounds.center;
     this.outline = outline;
   }
@@ -54,6 +60,22 @@ export class Puzzle {
 
   isPlaced(pieceId: string): boolean {
     return this.placedPieceIds.has(pieceId);
+  }
+
+  joinedSeams(piece: PuzzlePiece): readonly (readonly Point[])[] {
+    if (!this.isPlaced(piece.id)) return [];
+
+    const { row, column } = piece.cell;
+    const { top, right, bottom, left } = piece.outline.edges;
+    const neighbors = [
+      { row: row - 1, column, edge: top },
+      { row, column: column + 1, edge: right },
+      { row: row + 1, column, edge: bottom },
+      { row, column: column - 1, edge: left },
+    ];
+    return neighbors
+      .filter(({ row, column }) => this.isPlaced(pieceIdAt(row, column)))
+      .map(({ edge }) => edge);
   }
 
   snapshotPlacements(): readonly string[] {

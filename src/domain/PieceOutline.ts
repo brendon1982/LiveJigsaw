@@ -3,15 +3,20 @@ import { connectorStyles, type ConnectorStyleId } from './connectorStyles.ts';
 import { Bounds, type Point, type Size } from './geometry.ts';
 import { seededRandom } from './seededRandom.ts';
 
+type EdgePaths = Readonly<Record<'top' | 'right' | 'bottom' | 'left', readonly Point[]>>;
+
 export class PieceOutline {
+  readonly edges: EdgePaths;
   readonly points: readonly Point[];
   readonly frame: Bounds;
   readonly localPoints: readonly Point[];
 
-  private constructor(points: readonly Point[]) {
-    this.points = points;
-    this.frame = Bounds.around(points);
-    this.localPoints = points.map((point) => this.frame.toLocal(point));
+  private constructor(edges: EdgePaths) {
+    this.edges = edges;
+    const clockwiseEdges = [edges.top, edges.right, edges.bottom, edges.left];
+    this.points = clockwiseEdges.flatMap((edge) => edge.slice(0, -1));
+    this.frame = Bounds.around(this.points);
+    this.localPoints = this.points.map((point) => this.frame.toLocal(point));
   }
 
   static forBoard(board: Board, styleId: ConnectorStyleId, seed: number): PieceOutline[] {
@@ -30,13 +35,12 @@ export class PieceOutline {
       const bottomSeam = row === board.rows - 1 ? [] : cutSeam(bottomRight, bottomLeft, tabDirection);
       previousSeams.push({ right: rightSeam, bottom: bottomSeam });
 
-      const clockwisePoints = [
-        topLeft, ...topSeam,
-        topRight, ...rightSeam,
-        bottomRight, ...bottomSeam,
-        bottomLeft, ...leftSeam,
-      ];
-      return new PieceOutline(clockwisePoints);
+      return new PieceOutline({
+        top: [topLeft, ...topSeam, topRight],
+        right: [topRight, ...rightSeam, bottomRight],
+        bottom: [bottomRight, ...bottomSeam, bottomLeft],
+        left: [bottomLeft, ...leftSeam, topLeft],
+      });
     });
   }
 }

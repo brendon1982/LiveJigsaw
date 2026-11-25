@@ -26,6 +26,7 @@ import { silverCloudbankSource } from './silverCloudbank/silverCloudbankSource';
 import { thornwoodHollowSource } from './thornwoodHollow/thornwoodHollowSource';
 import { twilightRidgeSource } from './twilightRidge/twilightRidgeSource';
 import { windmillSource } from './windmill/windmillSource';
+import { witchlightHearthSource } from './witchlightHearth/witchlightHearthSource';
 
 export const puzzleSources: readonly PuzzleSource[] = [
   windmillSource,
@@ -55,4 +56,5 @@ export const puzzleSources: readonly PuzzleSource[] = [
   lanternManorSource,
   thornwoodHollowSource,
   crescentCryptSource,
+  witchlightHearthSource,
 ];

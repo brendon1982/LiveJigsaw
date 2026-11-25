@@ -3,6 +3,7 @@ import { amberWoodsSource } from './amberWoods/amberWoodsSource';
 import { birchGladeSource } from './birchGlade/birchGladeSource';
 import { canyonDriftSource } from './canyonDrift/canyonDriftSource';
 import { chocolateHillsSource } from './chocolateHills/chocolateHillsSource';
+import { crescentCryptSource } from './crescentCrypt/crescentCryptSource';
 import { cupcakeCrossingSource } from './cupcakeCrossing/cupcakeCrossingSource';
 import { desertSource } from './desert/desertSource';
 import { emberMesaSource } from './emberMesa/emberMesaSource';
@@ -53,4 +54,5 @@ export const puzzleSources: readonly PuzzleSource[] = [
   cupcakeCrossingSource,
   lanternManorSource,
   thornwoodHollowSource,
+  crescentCryptSource,
 ];

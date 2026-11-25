@@ -8,6 +8,7 @@ import { onThemeChange, palette } from './ui/theme';
 import './style.css';
 
 const gameRoot = document.querySelector<HTMLElement>('#game')!;
+const startupLoading = document.getElementById('startup-loading');
 const [seed] = crypto.getRandomValues(new Uint32Array(1));
 
 const game = new Phaser.Game({
@@ -23,6 +24,16 @@ const game = new Phaser.Game({
   plugins: { scene: [{ key: 'rexUI', plugin: RexUIPlugin, mapping: 'rexUI' }] },
   scene: [SelectPuzzleScene, PlayPuzzleScene, SettingsScene, ...puzzleSources.map(({ scene }) => scene)],
 });
+
+function dismissStartupLoading() {
+  if (!game.scene.isActive(SelectPuzzleScene.key)) return;
+
+  startupLoading?.remove();
+  game.events.off(Phaser.Core.Events.POST_RENDER, dismissStartupLoading);
+}
+
+if (startupLoading) game.events.on(Phaser.Core.Events.POST_RENDER, dismissStartupLoading);
+
 game.events.once(Phaser.Core.Events.DESTROY, onThemeChange((colors) => {
   game.config.backgroundColor.setFromRGB(Phaser.Display.Color.IntegerToRGB(colors.background));
 }));

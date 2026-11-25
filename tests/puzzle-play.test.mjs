@@ -45,7 +45,7 @@ async function scrollPickerTo(page, wheelDelta) {
   await page.mouse.wheel(0, wheelDelta);
 }
 
-async function openPuzzle(t, options, path = '/') {
+async function openGamePage(t, options) {
   const server = await preview({ preview: { host: '127.0.0.1', port: 0 } });
   t.after(() => server.close());
   const { port } = server.httpServer.address();
@@ -73,7 +73,6 @@ async function openPuzzle(t, options, path = '/') {
   });
   const errors = [];
   page.on('pageerror', (error) => errors.push(error.message));
-  await page.goto(`http://127.0.0.1:${port}${path}`);
   const canvas = page.locator('#game canvas');
   const waitForText = async (text) => {
     try {
@@ -83,6 +82,12 @@ async function openPuzzle(t, options, path = '/') {
       throw error;
     }
   };
+  return { page, canvas, waitForText, errors, origin: `http://127.0.0.1:${port}` };
+}
+
+async function openPuzzle(t, options, path = '/') {
+  const { page, canvas, waitForText, errors, origin } = await openGamePage(t, options);
+  await page.goto(`${origin}${path}`);
   await waitForText('Windmill');
   const clickDialog = async (dx, dy) => {
     // Phaser uses the camera's render list for hit testing.
@@ -112,6 +117,53 @@ async function openPuzzle(t, options, path = '/') {
   };
   return { page, canvas, waitForText, errors, clickDialog, playSelection };
 }
+
+test('the startup indicator stays visible until the picker renders', async (t) => {
+  const { page, canvas, waitForText, errors, origin } = await openGamePage(t, {
+    viewport: { width: 768, height: 1024 },
+    reducedMotion: 'reduce',
+  });
+  const gameScript = /\/assets\/index-[\w-]+\.js$/;
+  const previewAsset = /\/assets\/preview-[\w-]+\.png$/;
+  const scriptGate = Promise.withResolvers();
+  const previewGate = Promise.withResolvers();
+  await page.route(gameScript, async (route) => {
+    await scriptGate.promise;
+    await route.continue();
+  }, { times: 1 });
+  await page.route(previewAsset, async (route) => {
+    await previewGate.promise;
+    await route.continue();
+  }, { times: 1 });
+
+  const status = page.getByRole('status');
+  try {
+    await page.goto(origin, { waitUntil: 'commit' });
+    await status.waitFor({ state: 'visible' });
+    assert.equal(await status.textContent().then((text) => text.trim()), 'Loading Live Jigsaw…');
+    assert.equal(await canvas.count(), 0);
+
+    const spinner = status.locator('[aria-hidden="true"]');
+    assert.equal(await spinner.evaluate((element) => getComputedStyle(element).animationName), 'none');
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    assert.equal(await spinner.evaluate((element) => getComputedStyle(element).animationName), 'startup-spin');
+
+    const previewRequested = page.waitForRequest(previewAsset);
+    scriptGate.resolve();
+    await previewRequested;
+    await canvas.waitFor({ state: 'visible' });
+    await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    assert.ok(await status.isVisible(), 'The indicator should cover the canvas while previews load');
+
+    previewGate.resolve();
+    await waitForText('Select a Puzzle');
+    await status.waitFor({ state: 'detached' });
+    assert.deepEqual(errors, []);
+  } finally {
+    scriptGate.resolve();
+    previewGate.resolve();
+  }
+});
 
 test('live pieces scroll, reflow, and snap to the pannable board', async (t) => {
   const { page, canvas, waitForText, errors, clickDialog, playSelection } = await openPuzzle(t, { viewport: { width: 1320, height: 780 } });

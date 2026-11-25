@@ -39,7 +39,7 @@ export class PuzzlePanels {
     styleWithTheme(tray, (colors) => {
       tray.setFillStyle(colors.tray);
       board.setFillStyle(colors.board);
-      this.dividerLine.setFillStyle(colors.border);
+      this.dividerLine.setFillStyle(colors.dividerLine);
       this.grip.clear().fillStyle(colors.dividerGrip).fillRoundedRect(-4, -16, 8, 32, 3);
       this.grip.fillStyle(colors.dividerDots);
       for (const y of [-8, -3, 3, 8]) {

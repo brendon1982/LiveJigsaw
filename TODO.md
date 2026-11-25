@@ -14,7 +14,7 @@
 ## UI polish
 
 - [x] Add a soft shadow when a piece lifts, a quick settle when it snaps, and a brief highlight along the seam after placement. Keep the piece anchored to the pointer or finger during the drag.
-- [ ] Refine the board, tray, and guide colours across themes. Use consistent spacing and reserve the strongest accent for primary actions and selected states.
+- [x] Refine the board, tray, and guide colours across themes. Use consistent spacing and reserve the strongest accent for primary actions and selected states.
 - [ ] Give picker previews more room and align card titles and metadata consistently. Show progress such as “Resume · 34 of 80” for saved attempts, “Completed” for solved puzzles without an active attempt, and leave the status blank for untouched puzzles.
 - [ ] Add a subtle pressed state to buttons and picker cards for mouse and touch. Clear the card’s pressed state when the player starts scrolling.
 - [ ] Show a “Fit board” control after the player pans or zooms so they can return to the full puzzle in one tap.

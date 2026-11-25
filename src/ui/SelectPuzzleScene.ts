@@ -8,7 +8,7 @@ import { makeButton } from './button';
 import type { PuzzleSelection } from './PlayPuzzleScene';
 import { showPuzzleFilters } from './puzzleFilterDialog';
 import { activeFilterCount, matchesPuzzleFilters, noPuzzleFilters, samePuzzleFilters, type PuzzleFilters } from './puzzleFilters';
-import { headerInset, makeSettingsButton, puzzleHeader } from './puzzleHeader';
+import { headerControlGap, headerGap, headerInset, makeSettingsButton, puzzleHeader } from './puzzleHeader';
 import { showPuzzleOptions, showResumePuzzle } from './puzzleOptions';
 import { openSettings } from './SettingsScene';
 import { styleWithTheme } from './theme';
@@ -17,7 +17,7 @@ const cardWidth = 560;
 const cardHeight = 387;
 const columnGap = 32;
 const rowGap = 16;
-const listPadding = 16;
+const listPadding = headerGap;
 const scrollbarWidth = 10;
 const scrollbarGap = 14;
 const scrollbarSpace = scrollbarWidth + scrollbarGap;
@@ -189,7 +189,8 @@ export class SelectPuzzleScene extends Phaser.Scene {
       title.setFontSize(stacked ? 20 : 34).setScale(1 / zoom)
         .setPosition(headerInset / zoom, (stacked ? 87 : header.buttonY + settings.button.height / 2) / zoom);
       settings.layout(width, zoom);
-      filtersButton.setScale(1 / zoom).setPosition(settings.button.x - (filtersButton.width + 8) / zoom, settings.button.y);
+      filtersButton.setScale(1 / zoom)
+        .setPosition(settings.button.x - (filtersButton.width + headerControlGap) / zoom, settings.button.y);
       listBounds.setTo(0, panelTop, listWidth, panelHeight);
       panel.setPosition(0, panelTop).setMinSize(panelWidth, panelHeight).layout().setChildOY(offset, true);
       const empty = visibleCards.length === 0;

@@ -6,7 +6,7 @@ import type { PuzzleSetup } from '../persistence/GameSave';
 import { LivePuzzleCapture } from '../rendering/LivePuzzleCapture';
 import type { PuzzleSource } from '../puzzles/PuzzleSource';
 import { makeButton } from './button';
-import { headerInset, makeSettingsButton, puzzleHeader } from './puzzleHeader';
+import { headerControlGap, headerGap, headerInset, makeSettingsButton, puzzleHeader } from './puzzleHeader';
 import { PuzzleBoardView } from './PuzzleBoardView';
 import { SelectPuzzleScene } from './SelectPuzzleScene';
 import { openSettings } from './SettingsScene';
@@ -60,9 +60,9 @@ export class PlayPuzzleScene extends Phaser.Scene {
       backButton.setY(buttonY);
       settings.layout(width);
       title.setFontSize(narrow || stacked ? 20 : 34)
-        .setPosition(narrow ? headerInset : backButton.x + backButton.width + 22, centerY - (stacked ? 10 : 0));
+        .setPosition(narrow ? headerInset : backButton.x + backButton.width + headerGap, centerY - (stacked ? 10 : 0));
       progress.setFontSize(narrow || stacked ? 15 : 17)
-        .setPosition(stacked ? title.x : title.x + title.width + 12, centerY + (stacked ? 11 : 0));
+        .setPosition(stacked ? title.x : title.x + title.width + headerControlGap, centerY + (stacked ? 11 : 0));
     };
     this.scale.on(Phaser.Scale.Events.RESIZE, layoutHeader);
     layoutHeader();

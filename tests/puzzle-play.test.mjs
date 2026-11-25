@@ -136,7 +136,7 @@ test('live pieces scroll, reflow, and snap to the pannable board', async (t) => 
   assert.ok(!header.includes('Pieces') && !header.includes('Drag to pan · Scroll to zoom'));
   const initial = await canvas.screenshot();
   const sky = [192, 221, 219, 255];
-  const panelBackground = [25, 46, 40, 255];
+  const panelBackground = [32, 46, 42, 255];
   assert.deepEqual(await pixelAt(page, initial, 1290, 100), panelBackground, 'The board should extend into the reclaimed space');
   const guide = await pixelAt(page, initial, 542, 348);
   assert.ok(guide[0] > 25 && guide[0] < sky[0], 'The board should show the artwork at low opacity');
@@ -180,8 +180,14 @@ test('live pieces scroll, reflow, and snap to the pannable board', async (t) => 
   await clickDialog(21, settingsY.theme);
   await clickDialog(101, settingsY.done);
   const slate = await canvas.screenshot();
-  assert.deepEqual(await pixelAt(page, slate, 1290, 100), [31, 45, 64, 255], 'Settings should restyle the active board');
+  assert.deepEqual(await pixelAt(page, slate, 1290, 100), [33, 44, 59, 255], 'Settings should restyle the active board');
   assert.deepEqual(await pixelAt(page, slate, 735, 348), sky, 'The placed piece should stay at its zoomed position');
+  await page.evaluate(() => { window.paintedText = []; });
+  await click(1246, 43);
+  await waitForText('Color theme');
+  await clickDialog(102, settingsY.theme);
+  await clickDialog(101, settingsY.done);
+  assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 1290, 100), [27, 28, 30, 255], 'Dark should use its own board colour');
   await page.evaluate(() => { window.paintedText = []; });
   await click(1246, 43);
   await waitForText('Color theme');
@@ -192,14 +198,14 @@ test('live pieces scroll, reflow, and snap to the pannable board', async (t) => 
   const unfiltered = await canvas.screenshot();
   assert.deepEqual(await pixelAt(page, unfiltered, 1290, 100), panelBackground);
   const trayPieceColor = await pixelAt(page, unfiltered, 85, 140);
-  assert.notDeepEqual(trayPieceColor, [48, 72, 65, 255], 'The sample should be on a tray piece');
+  assert.notDeepEqual(trayPieceColor, [52, 66, 62, 255], 'The sample should be on a tray piece');
   const guidePixel = (screenshot) => pixelAt(page, screenshot, 990, 348);
   const originalGuide = await guidePixel(unfiltered);
   const assertGuideColor = (actual, expected, message) => {
     assert.ok(actual.every((channel, i) => Math.abs(channel - expected[i]) <= 1),
       `${message}. Expected ${expected}, got ${actual}`);
   };
-  assertGuideColor(originalGuide, [65, 88, 83, 255], 'The original guide should blend with the board at 24% opacity');
+  assertGuideColor(originalGuide, [67, 85, 81, 255], 'The original guide should blend with the board at 22% opacity');
 
   const selectFilter = async (x, y, name) => {
     await page.evaluate(() => { window.paintedText = []; });
@@ -218,9 +224,9 @@ test('live pieces scroll, reflow, and snap to the pannable board', async (t) => 
     assert.deepEqual(await pixelAt(page, screenshot, 85, 140), trayPieceColor, 'The tray piece should keep its original color');
     return guidePixel(screenshot);
   };
-  assertGuideColor(await selectFilter(-65, settingsY.firstFilter, 'grayscale'), [118, 129, 126, 255], 'Black and White should blend with the board at 50% opacity');
-  assertGuideColor(await selectFilter(88, settingsY.firstFilter, 'sepia'), [88, 96, 78, 255], 'Sepia should blend with the board at 24% opacity');
-  assertGuideColor(await selectFilter(-65, settingsY.secondFilter, 'faded'), [102, 120, 116, 255], 'Faded should blend with the board at 50% opacity');
+  assertGuideColor(await selectFilter(-65, settingsY.firstFilter, 'grayscale'), [107, 116, 113, 255], 'Black and White should blend with the board at 42% opacity');
+  assertGuideColor(await selectFilter(88, settingsY.firstFilter, 'sepia'), [88, 92, 76, 255], 'Sepia should blend with the board at 22% opacity');
+  assertGuideColor(await selectFilter(-65, settingsY.secondFilter, 'faded'), [94, 108, 105, 255], 'Faded should blend with the board at 42% opacity');
 
   await move(735, 348);
   await page.mouse.wheel(0, 200);
@@ -304,7 +310,7 @@ test('live pieces scroll, reflow, and snap to the pannable board', async (t) => 
   await click(340, 180);
   await playSelection({ size: 'Dense · 64' });
   await waitForText('0 of 64 placed');
-  assert.notDeepEqual(await pixelAt(page, await canvas.screenshot(), 85, 140), [48, 72, 65, 255], 'The dense tray should render its thumbnails');
+  assert.notDeepEqual(await pixelAt(page, await canvas.screenshot(), 85, 140), [52, 66, 62, 255], 'The dense tray should render its thumbnails');
   assert.deepEqual(errors, []);
 });
 
@@ -321,7 +327,7 @@ test('the landscape scenes animate on the board', async (t) => {
     ['Fernwood Grove', 'Amber Woods'],
   ];
   const board = { x: 435, y: 275, width: 590, height: 320 };
-  const emptyGuide = [25, 46, 40, 255];
+  const emptyGuide = [32, 46, 42, 255];
 
   for (const [index, title] of selections.flat().entries()) {
     const rows = [1, 2, 4, 5, 6, 7, 8, 9];
@@ -438,7 +444,7 @@ test('the medieval village is captured during loading and animates after reopeni
   await waitForText('Loading village…');
   const indicator = await canvas.screenshot();
   assert.deepEqual(await pixelAt(page, indicator, 85, 140), [23, 57, 45, 255], 'The tray should show the loading backdrop');
-  assert.notDeepEqual(await pixelAt(page, indicator, 542, 348), [25, 46, 40, 255], 'The board guide should show the loading backdrop');
+  assert.notDeepEqual(await pixelAt(page, indicator, 542, 348), [32, 46, 42, 255], 'The board guide should show the loading backdrop');
 
   await page.mouse.click(99, 43);
   await waitForText('Windmill');
@@ -1091,9 +1097,9 @@ test('tablet touch scrolls, resizes, zooms, cancels, and places pieces', async (
   await moveFinger(85, 140, 85, 254);
   assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 85, 140), startingPiece);
   await moveFinger(167, 414, 450, 414);
-  assert.notDeepEqual(await pixelAt(page, await canvas.screenshot(), 199, 140), [48, 72, 65, 255], 'The touch divider should reflow the tray');
+  assert.notDeepEqual(await pixelAt(page, await canvas.screenshot(), 199, 140), [52, 66, 62, 255], 'The touch divider should reflow the tray');
 
-  const panelBackground = [25, 46, 40, 255];
+  const panelBackground = [32, 46, 42, 255];
   assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 900, 216), panelBackground);
   await dispatch('touchStart', [530, 372]);
   await dispatch('touchStart', [530, 372], [650, 372]);
@@ -1105,7 +1111,7 @@ test('tablet touch scrolls, resizes, zooms, cancels, and places pieces', async (
   assert.equal(await page.evaluate(() => window.paintedText.includes('1 of 8 placed')), false, 'A cancelled touch should not place a piece');
   await dispatch('touchStart', [85, 253]);
   await dispatch('touchMove', [55, 253]);
-  assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 140, 253), [48, 72, 65, 255],
+  assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 140, 253), [52, 66, 62, 255],
     'A leftward move should leave the piece in the tray');
   await dispatch('touchEnd');
   await dispatch('touchStart', [85, 253]);
@@ -1140,7 +1146,7 @@ test('tablet touch scrolls, resizes, zooms, cancels, and places pieces', async (
   await playSelection({ size: 'Expert · 128', connectorStyle: 'Rounded' });
   await waitForText('0 of 128 placed');
   const expertTray = await canvas.screenshot();
-  assert.notDeepEqual(await pixelAt(page, expertTray, 85, 929), [48, 72, 65, 255], 'The smallest pieces should scale up to the bottom tray target');
+  assert.notDeepEqual(await pixelAt(page, expertTray, 85, 929), [52, 66, 62, 255], 'The smallest pieces should scale up to the bottom tray target');
   assert.deepEqual(errors, []);
 });
 
@@ -1151,8 +1157,8 @@ test('tray settings move the live tray and rotate touch gestures with it', async
     viewport: portrait, hasTouch: true, isMobile: true,
   });
   const { dispatch, moveFinger } = await touchController(page);
-  const trayColor = [48, 72, 65, 255];
-  const boardColor = [25, 46, 40, 255];
+  const trayColor = [52, 66, 62, 255];
+  const boardColor = [32, 46, 42, 255];
   const selectedColor = [199, 225, 209, 255];
   const layout = {
     Left: { choice: [-102, settingsY.firstTray], first: [75, 136], scroll: [0, -52], lift: [85, 0] },

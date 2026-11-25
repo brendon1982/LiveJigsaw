@@ -1,6 +1,8 @@
 import { makeButton, type UIScene } from './button';
 
 export const headerInset = 24;
+export const headerGap = 16;
+export const headerControlGap = 8;
 
 export function puzzleHeader(width: number) {
   const narrow = width < 480;

@@ -3,6 +3,7 @@ import type { Point, Size } from '../domain/geometry';
 import type { PuzzlePiece } from '../domain/Puzzle';
 import type { LivePuzzleCapture } from '../rendering/LivePuzzleCapture';
 import { activePuzzleFilter, onPuzzleFilterChange, type PuzzleArtworkFilter } from './puzzleFilter';
+import { palette, styleWithTheme } from './theme';
 
 export class PannableBoard {
   readonly layer: Phaser.GameObjects.Layer;
@@ -20,9 +21,14 @@ export class PannableBoard {
     this.camera.inputEnabled = false;
     const guide = scene.add.image(0, 0, capture.texture.key, '__BASE').setOrigin(0)
       .setDisplaySize(size.width, size.height);
+    const setGuideOpacity = (colors: typeof palette) => {
+      const filtered = activePuzzleFilter === 'grayscale' || activePuzzleFilter === 'faded';
+      guide.setAlpha(filtered ? colors.filteredGuideOpacity : colors.guideOpacity);
+    };
+    styleWithTheme(guide, setGuideOpacity);
     let guideFilter: Phaser.Filters.ColorMatrix | undefined;
     const updateGuideFilter = (filter: PuzzleArtworkFilter | undefined) => {
-      guide.setAlpha(filter === 'grayscale' || filter === 'faded' ? 0.5 : 0.24);
+      setGuideOpacity(palette);
       if (!filter) {
         guideFilter?.setActive(false);
         return;

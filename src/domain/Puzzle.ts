@@ -1,5 +1,5 @@
 import type { Board, Cell } from './Board.ts';
-import type { ChallengeMode } from './challengeModes.ts';
+import { challengeModes, type ChallengeMode } from './challengeModes.ts';
 import type { ConnectorStyleId } from './connectorStyles.ts';
 import type { Point } from './geometry.ts';
 import { PieceOutline } from './PieceOutline.ts';
@@ -70,6 +70,10 @@ export class Puzzle {
     return this.placedCount === this.pieces.length;
   }
 
+  get hidesGuide(): boolean {
+    return challengeModes[this.challengeMode].hideGuide;
+  }
+
   isPlaced(pieceId: string): boolean {
     return this.placedPieceIds.has(pieceId);
   }
@@ -80,10 +84,10 @@ export class Puzzle {
 
   canDrag(pieceId: string): boolean {
     if (!this.piecesById.has(pieceId) || this.isPlaced(pieceId)) return false;
-    if (this.challengeMode !== 'sequential' && this.challengeMode !== 'sequential-window') return true;
+    const windowSize = challengeModes[this.challengeMode].trayWindow;
+    if (windowSize === null) return true;
 
-    const windowSize = this.challengeMode === 'sequential' ? 1 : 4;
-    let availableSlots = windowSize;
+    let availableSlots: number = windowSize;
     for (const piece of this.trayOrder) {
       if (this.isPlaced(piece.id)) continue;
       if (piece.id === pieceId) return true;
@@ -120,7 +124,9 @@ export class Puzzle {
     if (this.placedPieceIds.has(piece.id)) return 'already-placed';
     if (!this.canDrag(piece.id)) return 'blocked';
     if (!piece.acceptsDrop(position, this.snapTolerance)) return 'missed';
-    if (this.challengeMode === 'seed' && !this.canJoinSeedGroup(piece)) return 'disconnected-from-seed';
+    if (challengeModes[this.challengeMode].requiresSeedConnection && !this.canJoinSeedGroup(piece)) {
+      return 'disconnected-from-seed';
+    }
 
     this.placedPieceIds.add(piece.id);
     return 'placed';

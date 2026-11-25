@@ -92,7 +92,7 @@ export class PuzzleBoardView {
     this.trayPosition = traySettings.position;
     this.side = resolveTraySide(this.trayPosition, scene.scale.gameSize);
     this.tray = new PieceTray(scene, this.pieces, puzzle.board.cellSize, trayPieceSize, trayScrollAxis(this.side));
-    this.board = new PannableBoard(scene, puzzle.board.size, capture, puzzle.challengeMode === 'no-guide');
+    this.board = new PannableBoard(scene, puzzle.board.size, capture, puzzle.hidesGuide);
     this.board.addPieces(placedPieces);
     this.fitButton = makeIconButton(scene, 'Fit board', drawFitBoardIcon, (pointer) => {
       if (pointer.wasCanceled) return;

@@ -3,6 +3,9 @@ import type { Size } from '../domain/geometry';
 
 export const puzzleAnimationSpeeds = ['Slow', 'Normal', 'Fast'] as const;
 export type PuzzleAnimationSpeed = typeof puzzleAnimationSpeeds[number];
+export const puzzleAnimationRates: Readonly<Record<PuzzleAnimationSpeed, number>> = {
+  Slow: 0.5, Normal: 1, Fast: 2,
+};
 
 /** Settings passed to the source scene at the start of a puzzle. */
 export type PuzzleSourceSceneData = Size & Readonly<{ seed: number; animationSpeed: PuzzleAnimationSpeed }>;

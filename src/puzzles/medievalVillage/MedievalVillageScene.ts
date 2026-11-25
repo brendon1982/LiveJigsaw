@@ -1,12 +1,11 @@
 import Phaser from 'phaser';
-import type { PuzzleAnimationSpeed, PuzzleSourceSceneData } from '../PuzzleSource';
+import { puzzleAnimationRates, type PuzzleSourceSceneData } from '../PuzzleSource';
 import atlasImage from './assets/medievalRTS_spritesheet@2.png';
 import atlasData from './assets/medievalRTS_spritesheet@2.xml?url';
 import { bladePadding, cellSize, generateVillage, villageSize } from './villageLayout';
 import { walkPose } from './villageWalks';
 
 const atlasKey = 'medieval-village-artwork';
-const animationRate: Record<PuzzleAnimationSpeed, number> = { Slow: 0.5, Normal: 1, Fast: 2 };
 const frameName = (kind: string, id: number) => `medieval${kind}_${String(id).padStart(2, '0')}.png`;
 
 function assembledBuilding(textures: Phaser.Textures.TextureManager, frames: readonly number[]) {
@@ -96,7 +95,7 @@ export class MedievalVillageScene extends Phaser.Scene {
 
       let elapsed = 0;
       this.animate = (delta) => {
-        elapsed += delta * animationRate[animationSpeed];
+        elapsed += delta * puzzleAnimationRates[animationSpeed];
         blades.rotation = elapsed * 0.00085;
         for (const { walk, image } of villagers) {
           const { x, y, bob, frame, flip } = walkPose(walk, elapsed);

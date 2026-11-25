@@ -5,6 +5,7 @@
   "type": "module",
   "packageManager": "pnpm@12.21.0",
   "scripts": {
+    "atlas:prepare": "node scripts/prepare-atlas.mjs",
     "dev": "vite",
     "check": "tsc --noEmit",
     "build": "tsc --noEmit && vite build",
@@ -17,7 +18,9 @@
     "phaser4-rex-plugins": "^4.2.0"
   },
   "devDependencies": {
+    "@xmldom/xmldom": "^0.9.12",
     "playwright-core": "^1.65.1",
+    "pngjs": "^7.0.0",
     "typescript": "~5.9.3",
     "vite": "^7.3.1"
   }

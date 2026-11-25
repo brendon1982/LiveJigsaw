@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { seededRandom } from '../../domain/seededRandom';
-import type { PuzzleAnimationSpeed, PuzzleSourceSceneData } from '../PuzzleSource';
+import { puzzleAnimationRates, type PuzzleSourceSceneData } from '../PuzzleSource';
 import buildingImage from './assets/buildings.png';
 import buildingAtlas from './assets/buildings.xml?url';
 import detailImage from './assets/details.png';
@@ -19,7 +19,6 @@ const sheets = [
 ] as const;
 type Sheet = typeof sheets[number][0];
 const textureKey = (sheet: Sheet) => `hex-coast-${sheet}`;
-const animationRates: Record<PuzzleAnimationSpeed, number> = { Slow: 0.5, Normal: 1, Fast: 2 };
 const groundFrames = {
   water: 'tileWater_full', sand: 'tileSand_full', grass: 'tileGrass', autumn: 'tileAutumn',
   rock: 'tileRock_full', snow: 'tileSnow_full',
@@ -48,7 +47,7 @@ export class HexCoastScene extends Phaser.Scene {
 
   create({ width, height, seed, animationSpeed }: PuzzleSourceSceneData) {
     this.elapsed = 0;
-    this.animationRate = animationRates[animationSpeed];
+    this.animationRate = puzzleAnimationRates[animationSpeed];
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => { this.waves = []; });
     const { tiles, road, towns, buildings } = generateHexCoast(seed);
     const land = tiles.filter((tile) => tile.biome !== 'water');

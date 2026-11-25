@@ -21,6 +21,12 @@ Run `pnpm check` for type checking, `pnpm build` for the production build, and `
 
 Run `pnpm test` for fast puzzle-rule and geometry tests. Run `pnpm test:browser` with Google Chrome installed to verify scrolling, resizing, panning, and dragging. Set `LIVE_JIGSAW_BROWSER=msedge` to use Microsoft Edge.
 
+### Preparing sprite atlases
+
+Run `pnpm atlas:prepare input.png input.xml path/to/output.xml` to prepare a Phaser `TextureAtlas` XML sheet. The tool writes `output.xml` and `output.png` together. It repeats each frame's edge pixels into a two-pixel gutter so linear filtering can sample the edge without picking up a neighboring sprite's colors. The XML still describes the original frame dimensions.
+
+Check in the prepared PNG and XML alongside the puzzle that uses them. You can run the tool on an already prepared sheet because it reads each frame from the rectangles in the XML.
+
 ## Reading the code
 
 - [Domain](src/domain/Puzzle.ts) owns the board, piece outlines, drop rules, and completion.

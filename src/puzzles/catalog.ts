@@ -43,6 +43,7 @@ import { thornwoodHollowSource } from './thornwoodHollow/thornwoodHollowSource';
 import { twilightRidgeSource } from './twilightRidge/twilightRidgeSource';
 import { twinPlanetsSource } from './twinPlanets/twinPlanetsSource';
 import { verdigrisFrontierSource } from './verdigrisFrontier/verdigrisFrontierSource';
+import { violetNebulaSource } from './violetNebula/violetNebulaSource';
 import { windmillSource } from './windmill/windmillSource';
 import { witchlightHearthSource } from './witchlightHearth/witchlightHearthSource';
 
@@ -93,4 +94,5 @@ export const puzzleSources: readonly PuzzleSource[] = [
   opalPlanetSource,
   verdigrisFrontierSource,
   twinPlanetsSource,
+  violetNebulaSource,
 ];

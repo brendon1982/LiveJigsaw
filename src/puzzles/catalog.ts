@@ -25,6 +25,7 @@ import { moonlitSkiesSource } from './moonlitSkies/moonlitSkiesSource';
 import { mountainsSource } from './mountains/mountainsSource';
 import { peppermintGladeSource } from './peppermintGlade/peppermintGladeSource';
 import { pineHighlandsSource } from './pineHighlands/pineHighlandsSource';
+import { pinnacleValleySource } from './pinnacleValley/pinnacleValleySource';
 import type { PuzzleSource } from './PuzzleSource';
 import { seaOfCloudsSource } from './seaOfClouds/seaOfCloudsSource';
 import { silverCloudbankSource } from './silverCloudbank/silverCloudbankSource';
@@ -69,4 +70,5 @@ export const puzzleSources: readonly PuzzleSource[] = [
   lavenderMesaSource,
   jadeRidgeSource,
   evergreenHorizonSource,
+  pinnacleValleySource,
 ];

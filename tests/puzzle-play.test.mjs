@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { chromium } from 'playwright-core';
 import { build, preview } from 'vite';
@@ -355,7 +356,36 @@ test('Hex Coast loads both tilesets and animates the captured water', async (t) 
   await page.mouse.wheel(0, 2200);
   await page.mouse.click(935, 600);
   await playSelection({ animationSpeed: 'Fast' });
-  await Promise.all([atlases, waitForText('0 of 8 placed')]);
+  const [[terrain]] = await Promise.all([atlases, waitForText('0 of 8 placed')]);
+  const atlas = readFileSync(new URL('../src/puzzles/hexCoast/assets/fullTiles.xml', import.meta.url), 'utf8');
+  const unpadded = await page.evaluate(async ({ url, atlas }) => {
+    const image = new Image();
+    image.src = url;
+    await image.decode();
+    const canvas = document.createElement('canvas');
+    canvas.width = image.naturalWidth;
+    canvas.height = image.naturalHeight;
+    const context = canvas.getContext('2d');
+    context.drawImage(image, 0, 0);
+    const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+    const rgba = new Uint32Array(pixels.buffer);
+    const at = (x, y) => x >= 0 && x < canvas.width && y >= 0 && y < canvas.height
+      ? rgba[y * canvas.width + x] : undefined;
+    const frames = new DOMParser().parseFromString(atlas, 'text/xml').querySelectorAll('SubTexture');
+    return Array.from(frames).filter((frame) => {
+      const [x, y, width, height] = ['x', 'y', 'width', 'height'].map((key) => Number(frame.getAttribute(key)));
+      const right = x + width - 1;
+      const bottom = y + height - 1;
+      for (let row = y; row <= bottom; row += 1) {
+        if (at(x - 1, row) !== at(x, row) || at(right + 1, row) !== at(right, row)) return true;
+      }
+      for (let column = x; column <= right; column += 1) {
+        if (at(column, y - 1) !== at(column, y) || at(column, bottom + 1) !== at(column, bottom)) return true;
+      }
+      return false;
+    }).map((frame) => frame.getAttribute('name'));
+  }, { url: terrain.url(), atlas });
+  assert.deepEqual(unpadded, [], 'Terrain frames should repeat their edge pixels for linear filtering');
 
   const board = { x: 435, y: 275, width: 590, height: 320 };
   await page.waitForFunction(() => window.paintedText.filter((text) => text === 'Hex Coast').length >= 2);

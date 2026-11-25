@@ -1,23 +1,23 @@
-<TextureAtlas imagePath="sheet.png">
-	<SubTexture name="pineAutumn_high.png" x="0" y="591" width="30" height="99"/>
-	<SubTexture name="pineAutumn_low.png" x="0" y="789" width="30" height="79"/>
-	<SubTexture name="pineAutumn_mid.png" x="0" y="411" width="30" height="101"/>
-	<SubTexture name="pineBlue_high.png" x="0" y="690" width="30" height="99"/>
-	<SubTexture name="pineBlue_low.png" x="0" y="512" width="30" height="79"/>
-	<SubTexture name="pineBlue_mid.png" x="0" y="310" width="30" height="101"/>
-	<SubTexture name="pineGreen_high.png" x="0" y="211" width="30" height="99"/>
-	<SubTexture name="pineGreen_low.png" x="0" y="132" width="30" height="79"/>
-	<SubTexture name="pineGreen_mid.png" x="0" y="868" width="30" height="101"/>
-	<SubTexture name="treeAutumn_high.png" x="30" y="887" width="27" height="107"/>
-	<SubTexture name="treeAutumn_low.png" x="30" y="800" width="27" height="87"/>
-	<SubTexture name="treeAutumn_mid.png" x="30" y="693" width="27" height="107"/>
-	<SubTexture name="treeBlue_high.png" x="30" y="586" width="27" height="107"/>
-	<SubTexture name="treeBlue_low.png" x="30" y="499" width="27" height="87"/>
-	<SubTexture name="treeBlue_mid.png" x="30" y="392" width="27" height="107"/>
-	<SubTexture name="treeCactus_1.png" x="0" y="0" width="32" height="66"/>
-	<SubTexture name="treeCactus_2.png" x="30" y="132" width="29" height="66"/>
-	<SubTexture name="treeCactus_3.png" x="0" y="66" width="32" height="66"/>
-	<SubTexture name="treeGreen_high.png" x="32" y="0" width="27" height="107"/>
-	<SubTexture name="treeGreen_low.png" x="30" y="198" width="27" height="87"/>
-	<SubTexture name="treeGreen_mid.png" x="30" y="285" width="27" height="107"/>
+<TextureAtlas imagePath="trees.png">
+	<SubTexture name="pineAutumn_high.png" x="2" y="2" width="30" height="99" />
+	<SubTexture name="pineAutumn_low.png" x="36" y="2" width="30" height="79" />
+	<SubTexture name="pineAutumn_mid.png" x="70" y="2" width="30" height="101" />
+	<SubTexture name="pineBlue_high.png" x="104" y="2" width="30" height="99" />
+	<SubTexture name="pineBlue_low.png" x="138" y="2" width="30" height="79" />
+	<SubTexture name="pineBlue_mid.png" x="172" y="2" width="30" height="101" />
+	<SubTexture name="pineGreen_high.png" x="206" y="2" width="30" height="99" />
+	<SubTexture name="pineGreen_low.png" x="2" y="107" width="30" height="79" />
+	<SubTexture name="pineGreen_mid.png" x="36" y="107" width="30" height="101" />
+	<SubTexture name="treeAutumn_high.png" x="70" y="107" width="27" height="107" />
+	<SubTexture name="treeAutumn_low.png" x="101" y="107" width="27" height="87" />
+	<SubTexture name="treeAutumn_mid.png" x="132" y="107" width="27" height="107" />
+	<SubTexture name="treeBlue_high.png" x="163" y="107" width="27" height="107" />
+	<SubTexture name="treeBlue_low.png" x="194" y="107" width="27" height="87" />
+	<SubTexture name="treeBlue_mid.png" x="225" y="107" width="27" height="107" />
+	<SubTexture name="treeCactus_1.png" x="2" y="218" width="32" height="66" />
+	<SubTexture name="treeCactus_2.png" x="38" y="218" width="29" height="66" />
+	<SubTexture name="treeCactus_3.png" x="71" y="218" width="32" height="66" />
+	<SubTexture name="treeGreen_high.png" x="107" y="218" width="27" height="107" />
+	<SubTexture name="treeGreen_low.png" x="138" y="218" width="27" height="87" />
+	<SubTexture name="treeGreen_mid.png" x="169" y="218" width="27" height="107" />
 </TextureAtlas>

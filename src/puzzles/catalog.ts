@@ -11,6 +11,7 @@ import { emberMesaSource } from './emberMesa/emberMesaSource';
 import { fallenTimberSource } from './fallenTimber/fallenTimberSource';
 import { fernwoodGroveSource } from './fernwoodGrove/fernwoodGroveSource';
 import { forestSource } from './forest/forestSource';
+import { goldenPeaksSource } from './goldenPeaks/goldenPeaksSource';
 import { hexCoastSource } from './hexCoast/hexCoastSource';
 import { lanternManorSource } from './lanternManor/lanternManorSource';
 import { lighthouseSource } from './lighthouse/lighthouseSource';
@@ -61,4 +62,5 @@ export const puzzleSources: readonly PuzzleSource[] = [
   witchlightHearthSource,
   blueMoonValleySource,
   spireCountrySource,
+  goldenPeaksSource,
 ];

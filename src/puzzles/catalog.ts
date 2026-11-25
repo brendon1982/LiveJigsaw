@@ -10,6 +10,7 @@ import { medievalVillageSource } from './medievalVillage/medievalVillageSource';
 import { mountainsSource } from './mountains/mountainsSource';
 import { pineHighlandsSource } from './pineHighlands/pineHighlandsSource';
 import type { PuzzleSource } from './PuzzleSource';
+import { silverCloudbankSource } from './silverCloudbank/silverCloudbankSource';
 import { twilightRidgeSource } from './twilightRidge/twilightRidgeSource';
 import { windmillSource } from './windmill/windmillSource';
 
@@ -27,4 +28,5 @@ export const puzzleSources: readonly PuzzleSource[] = [
   pineHighlandsSource,
   emberMesaSource,
   afterglowSource,
+  silverCloudbankSource,
 ];

@@ -1,3 +1,4 @@
+import { canyonDriftSource } from './canyonDrift/canyonDriftSource';
 import { desertSource } from './desert/desertSource';
 import { forestSource } from './forest/forestSource';
 import { hexCoastSource } from './hexCoast/hexCoastSource';
@@ -17,4 +18,5 @@ export const puzzleSources: readonly PuzzleSource[] = [
   forestSource,
   medievalVillageSource,
   hexCoastSource,
+  canyonDriftSource,
 ];

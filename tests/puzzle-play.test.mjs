@@ -290,13 +290,14 @@ test('live pieces scroll, reflow, and snap to the pannable board', async (t) => 
   assert.deepEqual(errors, []);
 });
 
-test('the four new artwork scenes animate on the board', async (t) => {
+test('the landscape scenes animate on the board', async (t) => {
   const { page, waitForText, errors, playSelection } = await openPuzzle(t, { viewport: { width: 1320, height: 780 } });
   const selections = [
     { title: 'Mountains', x: 340, y: 613, scroll: 320 },
     { title: 'Meadow', x: 1003, y: 613, scroll: 320 },
     { title: 'Desert', x: 340, y: 500, scroll: 720 },
     { title: 'Forest', x: 1003, y: 500, scroll: 720 },
+    { title: 'Canyon Drift', x: 340, y: 600, scroll: 2200 },
   ];
   const board = { x: 435, y: 275, width: 590, height: 320 };
 
@@ -339,7 +340,7 @@ test('the medieval village is captured during loading and animates after reopeni
   const openVillage = async () => {
     await page.evaluate(() => { window.paintedText = []; });
     await page.mouse.move(340, 300);
-    await page.mouse.wheel(0, 2200);
+    await page.mouse.wheel(0, 1250);
     await page.mouse.click(340, 600);
     await playSelection({ animationSpeed: 'Fast' });
     await waitForText('Medieval Village');
@@ -380,7 +381,7 @@ test('Hex Coast captures continuous roads and animated water', async (t) => {
     new RegExp(`/${name}-[^/]+\\.png$`).test(response.url()) && response.ok());
   const atlases = Promise.all([atlasLoaded('fullTiles'), atlasLoaded('buildings')]);
   await page.mouse.move(935, 300);
-  await page.mouse.wheel(0, 2200);
+  await page.mouse.wheel(0, 1250);
   await page.mouse.click(935, 600);
   await waitForText('Animation speed');
   await page.evaluate(() => {

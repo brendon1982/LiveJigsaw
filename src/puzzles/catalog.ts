@@ -4,6 +4,7 @@ import { canyonDriftSource } from './canyonDrift/canyonDriftSource';
 import { desertSource } from './desert/desertSource';
 import { emberMesaSource } from './emberMesa/emberMesaSource';
 import { fallenTimberSource } from './fallenTimber/fallenTimberSource';
+import { fernwoodGroveSource } from './fernwoodGrove/fernwoodGroveSource';
 import { forestSource } from './forest/forestSource';
 import { hexCoastSource } from './hexCoast/hexCoastSource';
 import { lighthouseSource } from './lighthouse/lighthouseSource';
@@ -37,4 +38,5 @@ export const puzzleSources: readonly PuzzleSource[] = [
   seaOfCloudsSource,
   birchGladeSource,
   fallenTimberSource,
+  fernwoodGroveSource,
 ];

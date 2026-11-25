@@ -34,6 +34,7 @@ import { seafoamCoveSource } from './seafoamCove/seafoamCoveSource';
 import { seaOfCloudsSource } from './seaOfClouds/seaOfCloudsSource';
 import { silverCloudbankSource } from './silverCloudbank/silverCloudbankSource';
 import { spireCountrySource } from './spireCountry/spireCountrySource';
+import { sunsetReefSource } from './sunsetReef/sunsetReefSource';
 import { thornwoodHollowSource } from './thornwoodHollow/thornwoodHollowSource';
 import { twilightRidgeSource } from './twilightRidge/twilightRidgeSource';
 import { windmillSource } from './windmill/windmillSource';
@@ -79,4 +80,5 @@ export const puzzleSources: readonly PuzzleSource[] = [
   daybreakPassSource,
   coralGardenSource,
   seafoamCoveSource,
+  sunsetReefSource,
 ];

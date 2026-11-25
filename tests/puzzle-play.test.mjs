@@ -305,6 +305,7 @@ test('the landscape scenes animate on the board', async (t) => {
     { title: 'Silver Cloudbank', x: 935, y: 600, scroll: 2700 },
     { title: 'Moonlit Skies', x: 340, y: 600, scroll: 3300 },
     { title: 'Sea of Clouds', x: 935, y: 600, scroll: 3300 },
+    { title: 'Birch Glade', x: 340, y: 600, scroll: 3850 },
   ];
   const board = { x: 435, y: 275, width: 590, height: 320 };
   const emptyGuide = [25, 46, 40, 255];

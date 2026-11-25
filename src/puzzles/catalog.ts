@@ -1,4 +1,5 @@
 import { afterglowSource } from './afterglow/afterglowSource';
+import { birchGladeSource } from './birchGlade/birchGladeSource';
 import { canyonDriftSource } from './canyonDrift/canyonDriftSource';
 import { desertSource } from './desert/desertSource';
 import { emberMesaSource } from './emberMesa/emberMesaSource';
@@ -33,4 +34,5 @@ export const puzzleSources: readonly PuzzleSource[] = [
   silverCloudbankSource,
   moonlitSkiesSource,
   seaOfCloudsSource,
+  birchGladeSource,
 ];

@@ -10,6 +10,7 @@ import { cupcakeCrossingSource } from './cupcakeCrossing/cupcakeCrossingSource';
 import { daybreakPassSource } from './daybreakPass/daybreakPassSource';
 import { desertSource } from './desert/desertSource';
 import { emberMesaSource } from './emberMesa/emberMesaSource';
+import { emberworldSource } from './emberworld/emberworldSource';
 import { evergreenHorizonSource } from './evergreenHorizon/evergreenHorizonSource';
 import { fallenTimberSource } from './fallenTimber/fallenTimberSource';
 import { fernwoodGroveSource } from './fernwoodGrove/fernwoodGroveSource';
@@ -83,4 +84,5 @@ export const puzzleSources: readonly PuzzleSource[] = [
   seafoamCoveSource,
   sunsetReefSource,
   sapphireLagoonSource,
+  emberworldSource,
 ];

@@ -13,6 +13,7 @@ import { meadowSource } from './meadow/meadowSource';
 import { medievalVillageSource } from './medievalVillage/medievalVillageSource';
 import { moonlitSkiesSource } from './moonlitSkies/moonlitSkiesSource';
 import { mountainsSource } from './mountains/mountainsSource';
+import { peppermintGladeSource } from './peppermintGlade/peppermintGladeSource';
 import { pineHighlandsSource } from './pineHighlands/pineHighlandsSource';
 import type { PuzzleSource } from './PuzzleSource';
 import { seaOfCloudsSource } from './seaOfClouds/seaOfCloudsSource';
@@ -41,4 +42,5 @@ export const puzzleSources: readonly PuzzleSource[] = [
   fallenTimberSource,
   fernwoodGroveSource,
   amberWoodsSource,
+  peppermintGladeSource,
 ];

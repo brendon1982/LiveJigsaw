@@ -1,20 +1,19 @@
 import Phaser from 'phaser';
 import type RexUIPlugin from 'phaser4-rex-plugins/templates/ui/ui-plugin.js';
-import { availablePuzzleSizes, puzzleSizes } from '../domain/puzzleSizes';
 import { gameSave } from '../persistence';
+import type { PuzzleProgress } from '../persistence/GameSave';
 import { puzzleSources } from '../puzzles/catalog';
 import type { PuzzleSource } from '../puzzles/PuzzleSource';
-import { addPressFeedback, makeButton } from './button';
+import { makeButton } from './button';
 import type { PuzzleSelection } from './PlayPuzzleScene';
 import { showPuzzleFilters } from './puzzleFilterDialog';
 import { activeFilterCount, matchesPuzzleFilters, noPuzzleFilters, samePuzzleFilters, type PuzzleFilters } from './puzzleFilters';
 import { headerControlGap, headerGap, headerInset, makeSettingsButton, puzzleHeader } from './puzzleHeader';
+import { makePreviewCornerCutout, makePuzzlePickerCard, maxPickerCardWidth } from './PuzzlePickerCard';
 import { showPuzzleOptions, showResumePuzzle } from './puzzleOptions';
 import { openSettings } from './SettingsScene';
-import { palette, styleWithTheme } from './theme';
+import { styleWithTheme } from './theme';
 
-const cardWidth = 560;
-const cardHeight = 387;
 const columnGap = 32;
 const rowGap = 16;
 const listPadding = headerGap;
@@ -22,6 +21,18 @@ const scrollbarWidth = 10;
 const scrollbarGap = 14;
 const scrollbarSpace = scrollbarWidth + scrollbarGap;
 const scrollThreshold = 10;
+
+function resumableProgress(source: PuzzleSource): PuzzleProgress | undefined {
+  const progress = gameSave.getProgress(source.scene.key);
+  if (progress && progress.setup.size.width <= source.maxViewport.width
+    && progress.setup.size.height <= source.maxViewport.height) return progress;
+}
+
+function cardStatus(progress: PuzzleProgress | undefined, completions: number): string {
+  if (!progress) return completions > 0 ? 'Completed' : '';
+  const { columns, rows } = progress.setup.size;
+  return `${progress.placedPieceIds.length} of ${columns * rows} placed`;
+}
 
 export class SelectPuzzleScene extends Phaser.Scene {
   static readonly key = 'SelectPuzzle';
@@ -63,11 +74,9 @@ export class SelectPuzzleScene extends Phaser.Scene {
         play({ source, setup: { size, connectorStyle, animationSpeed, seed } });
       }, closeDialog);
     };
-    const openCard = (source: PuzzleSource) => {
+    const openCard = (source: PuzzleSource, progress: PuzzleProgress | undefined) => {
       if (dialogOpen) return;
-      const progress = gameSave.getProgress(source.scene.key);
-      if (!progress || progress.setup.size.width > source.maxViewport.width
-        || progress.setup.size.height > source.maxViewport.height) {
+      if (!progress) {
         openSetup(source);
         return;
       }
@@ -80,11 +89,15 @@ export class SelectPuzzleScene extends Phaser.Scene {
         if (choice === 'reset') openSetup(source);
       });
     };
+    const cutout = makePreviewCornerCutout(this);
     const cards = puzzleSources.map((source) => {
       const completions = gameSave.completionCount(source.scene.key);
-      const card = this.makeCard(source, completions, listBounds, () => openCard(source));
+      const progress = resumableProgress(source);
+      const card = makePuzzlePickerCard(this, source, cardStatus(progress, completions), cutout, listBounds,
+        scrollThreshold, () => openCard(source, progress));
       return { card, tags: source.tags, completions };
     });
+    this.textures.remove(cutout);
     const grid = this.rexUI.add.gridSizer({
       column: 1, row: 1,
     });
@@ -148,7 +161,7 @@ export class SelectPuzzleScene extends Phaser.Scene {
     const matchingCards = (filters: PuzzleFilters) =>
       cards.filter(({ tags, completions }) => matchesPuzzleFilters(tags, completions, filters));
     let visibleCards = matchingCards(this.filters);
-    let currentColumns = 0;
+    let cardLayout: { columns: number; width: number; stackStatus: boolean } | undefined;
     const updateFilterCaption = () => {
       const count = activeFilterCount(this.filters);
       filtersButton.setText(count ? `Filters (${count})` : 'Filters').layout();
@@ -157,50 +170,48 @@ export class SelectPuzzleScene extends Phaser.Scene {
       if (samePuzzleFilters(this.filters, filters)) return;
       this.filters = filters;
       visibleCards = matchingCards(filters);
-      currentColumns = 0;
+      cardLayout = undefined;
       updateFilterCaption();
       layoutPicker(0);
     };
     const layoutPicker = (offset: number) => {
       const { width, height } = this.scale.gameSize;
-      const zoom = Math.min(1, width / (cardWidth + 2 * listPadding + scrollbarSpace));
       const header = puzzleHeader(width);
       const stacked = width < 560;
-      const headerHeight = stacked ? 110 : header.height;
-      const panelTop = headerHeight / zoom;
-      const panelWidth = width / zoom;
-      const panelHeight = Math.max(1, (height - headerHeight) / zoom);
-      const listWidth = panelWidth - scrollbarSpace;
-      const fittingColumns = Math.floor((listWidth - 2 * listPadding + columnGap) / (cardWidth + columnGap));
+      const panelTop = stacked ? 110 : header.height;
+      const panelHeight = Math.max(1, height - panelTop);
+      const listWidth = width - scrollbarSpace;
+      const cardWidth = Phaser.Math.Clamp(listWidth - 2 * listPadding, 1, maxPickerCardWidth);
+      const fittingColumns = Math.floor((listWidth - 2 * listPadding + columnGap) / (maxPickerCardWidth + columnGap));
       const columns = Math.min(Math.max(1, fittingColumns), Math.max(1, visibleCards.length));
-      const rows = Math.max(1, Math.ceil(visibleCards.length / columns));
-      if (currentColumns !== columns) {
+      const stackStatus = visibleCards.some(({ card }) => card.needsStatusRow(cardWidth));
+      if (cardLayout?.columns !== columns || cardLayout.width !== cardWidth || cardLayout.stackStatus !== stackStatus) {
+        const rows = Math.max(1, Math.ceil(visibleCards.length / columns));
         grid.resetGrid(columns, rows, 0, 0, { column: columnGap, row: rowGap });
-        for (const { card } of cards) card.setVisible(false);
+        for (const { card } of cards) card.container.setVisible(false);
         visibleCards.forEach(({ card }, index) => {
-          card.setVisible(true);
-          grid.add(card, { column: index % columns, row: Math.floor(index / columns) });
+          card.layout(cardWidth, stackStatus);
+          card.container.setVisible(true);
+          grid.add(card.container, { column: index % columns, row: Math.floor(index / columns) });
         });
-        currentColumns = columns;
+        cardLayout = { columns, width: cardWidth, stackStatus };
       }
 
-      this.cameras.main.setViewport(0, 0, width, height).setOrigin(0).setZoom(zoom);
-      headerBackground.setDisplaySize(panelWidth, panelTop);
-      title.setFontSize(stacked ? 20 : 34).setScale(1 / zoom)
-        .setPosition(headerInset / zoom, (stacked ? 87 : header.buttonY + settings.button.height / 2) / zoom);
-      settings.layout(width, zoom);
-      filtersButton.setScale(1 / zoom)
-        .setPosition(settings.button.x - (filtersButton.width + headerControlGap) / zoom, settings.button.y);
+      this.cameras.main.setViewport(0, 0, width, height).setOrigin(0);
+      headerBackground.setDisplaySize(width, panelTop);
+      title.setFontSize(stacked ? 20 : 34)
+        .setPosition(headerInset, stacked ? 87 : header.buttonY + settings.button.height / 2);
+      settings.layout(width);
+      filtersButton.setPosition(settings.button.x - filtersButton.width - headerControlGap, settings.button.y);
       listBounds.setTo(0, panelTop, listWidth, panelHeight);
-      panel.setPosition(0, panelTop).setMinSize(panelWidth, panelHeight).layout().setChildOY(offset, true);
+      panel.setPosition(0, panelTop).setMinSize(width, panelHeight).layout().setChildOY(offset, true);
       const empty = visibleCards.length === 0;
       panel.setVisible(!empty);
       emptyState.setVisible(empty);
       if (empty) {
         const messageWidth = width - 2 * headerInset;
         emptyMessage.setWordWrapWidth(Math.max(1, messageWidth), true);
-        emptyState.setScale(1).layout().setScale(1 / zoom)
-          .setPosition(panelWidth / 2, panelTop + 36 / zoom);
+        emptyState.layout().setPosition(width / 2, panelTop + 36);
       }
     };
     const fitPicker = () => layoutPicker(panel.childOY);
@@ -210,56 +221,5 @@ export class SelectPuzzleScene extends Phaser.Scene {
     });
     updateFilterCaption();
     layoutPicker(this.scrollOffset);
-  }
-
-  private makeCard(source: PuzzleSource, completionCount: number, listBounds: Phaser.Geom.Rectangle, openOptions: () => void) {
-    const background = this.rexUI.add.roundRectangle(0, 0, cardWidth, cardHeight, 16).setOrigin(0);
-    const title = this.add.text(24, 323, source.title, {
-      fontFamily: 'system-ui', fontSize: '23px',
-    });
-    const tags = this.add.text(24, cardHeight - 16, `${source.tags.theme} · ${source.tags.type}`, {
-      fontFamily: 'system-ui', fontSize: '17px',
-    }).setOrigin(0, 1);
-    const completions = this.add.text(cardWidth - 24, cardHeight - 16, `Completed ${completionCount} times`, {
-      fontFamily: 'system-ui', fontSize: '17px',
-    }).setOrigin(1, 1);
-    let pressed = false;
-    const restyle = (colors: typeof palette) => {
-      background.setFillStyle(pressed ? colors.surfacePressed : colors.surface);
-      title.setColor(colors.text);
-      tags.setColor(colors.mutedText);
-      completions.setColor(colors.mutedText);
-    };
-    styleWithTheme(background, restyle);
-    if (availablePuzzleSizes(source.maxViewport).length > 0) {
-      addPressFeedback(background, (value) => { pressed = value; restyle(palette); }, scrollThreshold, (pointer) => {
-        const point = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
-        return listBounds.contains(point.x, point.y);
-      });
-      this.rexUI.add.click(background, { threshold: scrollThreshold, clickInterval: 0 })
-        .on('click', (_button: unknown, _object: unknown, pointer: Phaser.Input.Pointer) => {
-          const camera = this.cameras.main;
-          const start = camera.getWorldPoint(pointer.downX, pointer.downY);
-          const end = camera.getWorldPoint(pointer.x, pointer.y);
-          if (pointer.wasCanceled || pointer.getDistance() >= scrollThreshold
-            || !listBounds.contains(start.x, start.y) || !listBounds.contains(end.x, end.y)) return;
-          openOptions();
-        });
-      background.input!.cursor = 'pointer';
-    }
-    return this.rexUI.add.container(0, 0, cardWidth, cardHeight).setOrigin(0)
-      .addLocal([background, this.makePreview(source), title, tags, completions]);
-  }
-
-  private makePreview(source: PuzzleSource) {
-    const { width, height } = puzzleSizes[0];
-    const scale = Math.min(1, source.maxViewport.width / width, source.maxViewport.height / height);
-    const objects = source.drawPreview(this, { width: width * scale, height: height * scale });
-    const artwork = this.add.container(0, 0, objects).setScale(1 / scale);
-    // Render once into a bounded texture so graphics cannot paint outside the preview.
-    const preview = this.add.renderTexture(24, 24, width, height).setOrigin(0);
-    preview.draw(artwork).render();
-    artwork.destroy();
-    return preview;
   }
 }

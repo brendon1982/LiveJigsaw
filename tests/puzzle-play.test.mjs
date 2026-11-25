@@ -607,10 +607,27 @@ test('version 1 saves migrate with settings, options, progress, and history inta
   const storeSave = (data) => page.evaluate((value) => localStorage.setItem('live-jigsaw.save', JSON.stringify(value)), data);
   await storeSave(original);
   await page.reload();
-  await waitForText('Completed 1 times');
+  await waitForText('Completed');
+  await waitForText('1 of 8 placed');
   assert.deepEqual(await readSave(page), {
     ...original, version: 2, settings: { ...original.settings, trayFractions: { vertical: 0, horizontal: 0 } },
   });
+  const hasStatusInk = (screenshot, left, top, right, bottom) => {
+    const { width, data } = PNG.sync.read(screenshot);
+    for (let y = top; y < bottom; y += 1) {
+      for (let x = left; x < right; x += 1) {
+        const offset = (y * width + x) * 4;
+        if (data[offset] >= 235 && data[offset + 1] >= 240 && data[offset + 2] >= 247) return true;
+      }
+    }
+    return false;
+  };
+  assert.ok(hasStatusInk(await canvas.screenshot(), 470, 457, 625, 474), 'Status should align to the right on a wide card');
+  await page.setViewportSize({ width: 320, height: 780 });
+  await page.waitForFunction(() => document.querySelector('canvas').width === 320);
+  assert.ok(hasStatusInk(await canvas.screenshot(), 30, 336, 185, 358), 'Status should have its own line on a narrow card');
+  await page.setViewportSize({ width: 1320, height: 780 });
+  await page.waitForFunction(() => document.querySelector('canvas').width === 1320);
   await canvas.screenshot();
   await page.mouse.click(340, 180);
   await waitForText('1 of 8 pieces placed');
@@ -665,7 +682,8 @@ test('puzzle progress resumes, resets, and records each completion', async (t) =
     assert.fail('The first tray piece should snap to one of the unfilled targets');
   };
 
-  await waitForText('Completed 0 times');
+  assert.equal(await page.evaluate(() => window.paintedText.some((text) =>
+    text === 'Completed' || /^\d+ of \d+ placed$/.test(text))), false, 'Untouched puzzles should have no status');
   await pickWindmill();
   await playSelection({ connectorStyle: 'None', animationSpeed: 'Fast' });
   await waitForText('0 of 8 placed');
@@ -703,6 +721,7 @@ test('puzzle progress resumes, resets, and records each completion', async (t) =
   await page.evaluate(() => { window.paintedText = []; });
   await pickWindmill();
   await waitForText('Resume');
+  await page.evaluate(() => { window.paintedText = []; });
   await clickDialog(100, 44);
   await waitForText('1 of 8 placed');
   await widenTray();
@@ -737,14 +756,16 @@ test('puzzle progress resumes, resets, and records each completion', async (t) =
   assert.ok(!sails.equals(await windmill()), 'The finished puzzle should continue animating');
 
   await backToPicker();
-  await waitForText('Completed 1 times');
-  await waitForText('Completed 0 times');
+  await waitForText('Completed');
   await pickWindmill();
   await playSelection();
   await waitForText('0 of 8 placed');
   await widenTray();
   await placeNextPiece();
   await backToPicker();
+  await waitForText('1 of 8 placed');
+  assert.equal(await page.evaluate(() => window.paintedText.includes('Completed')), false,
+    'A saved attempt should take priority over completion history');
   await pickWindmill();
   await waitForText('Resume');
   await clickDialog(-6, 44);
@@ -758,7 +779,7 @@ test('puzzle progress resumes, resets, and records each completion', async (t) =
   for (let count = 1; count < targets.length; count += 1) await placeNextPiece();
   await waitForText('8 of 8 placed');
   await page.reload();
-  await waitForText('Completed 2 times');
+  await waitForText('Completed');
   assert.deepEqual((await getHistory()).map(({ setup }) => setup), [firstSave.setup, freshSetup]);
   assert.ok((await getHistory()).every(({ completedAt }) => Number.isFinite(Date.parse(completedAt))));
 
@@ -770,7 +791,7 @@ test('puzzle progress resumes, resets, and records each completion', async (t) =
     localStorage.setItem(key, JSON.stringify(save));
   }, firstSave);
   await page.reload();
-  await waitForText('Completed 2 times');
+  await waitForText('Completed');
   await pickWindmill();
   await waitForText('Puzzle size');
   assert.equal(await page.evaluate(() => window.paintedText.includes('Resume')), false);
@@ -880,6 +901,7 @@ test('picker tag and completion filters combine and refresh after play', async (
   assert.ok(!topOfResults.equals(await canvas.screenshot()), 'Three results should scroll across two rows');
   await pickFirst();
   await waitForText('7 of 8 pieces placed');
+  await page.evaluate(() => { window.paintedText = []; });
   await clickDialog(100, 44); // Resume the unfinished first attempt.
   await waitForText('7 of 8 placed');
   await drag(146, 420, 552, 420);
@@ -968,9 +990,10 @@ test('the picker scrolls past two cards and clips previews', async (t) => {
     assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 1208, 43), hoveredButton, 'Moving off the button should clear the press');
     await page.mouse.move(340, 180);
     await page.mouse.down();
-    assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 86, 116), [60, 81, 74, 255], 'The card should respond to a mouse press');
+    const previewBeforePress = await pixelAt(page, initial, 86, 116);
+    assert.notDeepEqual(await pixelAt(page, await canvas.screenshot(), 86, 116), previewBeforePress, 'The card should respond to a mouse press');
     await page.mouse.move(360, 180);
-    assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 86, 116), [48, 69, 63, 255], 'Crossing the drag threshold should clear the press');
+    assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 86, 116), previewBeforePress, 'Crossing the drag threshold should clear the press');
     await page.mouse.up();
     const assertColumnSpacing = (screenshot) => {
       const { width, data } = PNG.sync.read(screenshot);
@@ -1006,8 +1029,11 @@ test('the picker scrolls past two cards and clips previews', async (t) => {
     await page.mouse.wheel(0, 1000);
     const scrolled = await canvas.screenshot();
     assert.deepEqual(await pixelAt(page, scrolled, 120, 175), previewColor);
-    for (const [x, y] of [[86, 175], [618, 175], [120, 158], [120, 462]]) {
+    for (const [x, y] of [[70, 175], [633, 175], [120, 136], [120, 453], [73, 138]]) {
       assert.notDeepEqual(await pixelAt(page, scrolled, x, y), previewColor, `Artwork should stay inside all four preview edges (${x}, ${y})`);
+    }
+    for (const x of [73, 630]) {
+      assert.deepEqual(await pixelAt(page, scrolled, x, 175), previewColor, 'The preview should fill the card width');
     }
     const { width, data } = PNG.sync.read(scrolled);
     const textBands = [];
@@ -1112,10 +1138,10 @@ test('the picker scrolls past two cards and clips previews', async (t) => {
     const initial = await canvas.screenshot();
     await swipeUp(400, 265, 43, async (step) => {
       if (step === 0) {
-        assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 108, 160), [60, 81, 74, 255], 'The card should respond to a touch press');
+        assert.notDeepEqual(await pixelAt(page, await canvas.screenshot(), 108, 160), [192, 221, 219, 255], 'The card should respond to a touch press');
       }
       if (step === 1) {
-        assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 108, 160), [48, 69, 63, 255], 'The card should release while the finger is scrolling');
+        assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 108, 160), [192, 221, 219, 255], 'The card should release while the finger is scrolling');
       }
     });
     assert.notDeepEqual(await pixelAt(page, await canvas.screenshot(), 140, 244), await pixelAt(page, initial, 140, 244));
@@ -1194,6 +1220,7 @@ test('tablet touch scrolls, resizes, zooms, cancels, and places pieces', async (
   await waitForText('Windmill');
   await page.touchscreen.tap(395, 180);
   await waitForText('Resume');
+  await page.evaluate(() => { window.paintedText = []; });
   await clickDialog(100, 44);
   await waitForText('1 of 8 placed');
   await page.evaluate(() => { window.paintedText = []; });
@@ -1355,6 +1382,7 @@ test('tray settings move the live tray and rotate touch gestures with it', async
   await closeSettings();
   await page.touchscreen.tap(522, 180);
   await waitForText('Resume');
+  await page.evaluate(() => { window.paintedText = []; });
   await clickDialog(100, 44);
   await waitForText('1 of 8 placed');
   await assertSide('Right');

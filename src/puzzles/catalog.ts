@@ -41,6 +41,7 @@ import { spireCountrySource } from './spireCountry/spireCountrySource';
 import { sunsetReefSource } from './sunsetReef/sunsetReefSource';
 import { thornwoodHollowSource } from './thornwoodHollow/thornwoodHollowSource';
 import { twilightRidgeSource } from './twilightRidge/twilightRidgeSource';
+import { verdigrisFrontierSource } from './verdigrisFrontier/verdigrisFrontierSource';
 import { windmillSource } from './windmill/windmillSource';
 import { witchlightHearthSource } from './witchlightHearth/witchlightHearthSource';
 
@@ -89,4 +90,5 @@ export const puzzleSources: readonly PuzzleSource[] = [
   emberworldSource,
   cobaltWorldSource,
   opalPlanetSource,
+  verdigrisFrontierSource,
 ];

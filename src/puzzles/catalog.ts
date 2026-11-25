@@ -6,6 +6,7 @@ import { canyonDriftSource } from './canyonDrift/canyonDriftSource';
 import { chocolateHillsSource } from './chocolateHills/chocolateHillsSource';
 import { crescentCryptSource } from './crescentCrypt/crescentCryptSource';
 import { cupcakeCrossingSource } from './cupcakeCrossing/cupcakeCrossingSource';
+import { daybreakPassSource } from './daybreakPass/daybreakPassSource';
 import { desertSource } from './desert/desertSource';
 import { emberMesaSource } from './emberMesa/emberMesaSource';
 import { evergreenHorizonSource } from './evergreenHorizon/evergreenHorizonSource';
@@ -73,4 +74,5 @@ export const puzzleSources: readonly PuzzleSource[] = [
   evergreenHorizonSource,
   pinnacleValleySource,
   forestLanternSource,
+  daybreakPassSource,
 ];

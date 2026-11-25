@@ -130,6 +130,32 @@ test('restoring placements allows the remaining pieces to finish the puzzle', ()
   original.expectProgress({ placed: 1, total: 2 });
 });
 
+test('Sequential restores a later tray piece without requiring the earlier pieces', () => {
+  const { puzzle, whenTrayPiece, expectProgress } = givenPuzzle({ challengeMode: 'sequential' });
+  const first = whenTrayPiece(0);
+  const second = whenTrayPiece(1);
+  const third = whenTrayPiece(2);
+
+  assert.equal(puzzle.restorePlacements([second.piece.id]), true);
+  expectProgress({ placed: 1, total: 4 });
+  assert.equal(second.dropsOnTarget(), 'already-placed');
+  assert.equal(third.dropsOnTarget(), 'blocked');
+  assert.equal(first.dropsOnTarget(), 'placed');
+  assert.equal(third.dropsOnTarget(), 'placed');
+});
+
+test('Seed restores disconnected pieces but still checks new drops for a shared edge', () => {
+  const { puzzle, pieceAt, whenPiece, expectProgress } = givenPuzzle({ columns: 3, challengeMode: 'seed' });
+  const disconnectedSnapshot = [pieceAt(0, 0).id, pieceAt(1, 1).id];
+
+  assert.equal(puzzle.restorePlacements(disconnectedSnapshot), true);
+  expectProgress({ placed: 2, total: 6 });
+  assert.deepEqual(puzzle.snapshotPlacements(), disconnectedSnapshot);
+  assert.equal(whenPiece(2, 0).dropsNearTarget(), 'disconnected-from-seed');
+  assert.equal(whenPiece(2, 1).dropsNearTarget(), 'placed');
+  assert.equal(whenPiece(2, 0).dropsNearTarget(), 'placed');
+});
+
 test('invalid placement snapshots leave the puzzle progress intact', () => {
   const game = givenPuzzle();
   assert.equal(game.whenPiece(0, 0).dropsOn(0, 0), 'placed');

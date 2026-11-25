@@ -109,6 +109,7 @@ export class Puzzle {
     return [...this.placedPieceIds];
   }
 
+  /** Restores a snapshot of known, unique pieces without replaying live challenge rules. */
   restorePlacements(pieceIds: readonly string[]): boolean {
     const restored = new Set(pieceIds);
     if (restored.size !== pieceIds.length || pieceIds.some((id) => !this.piecesById.has(id))) return false;

@@ -12,6 +12,7 @@ import { playWorkspace, resolveTraySide, trayScrollAxis, type TraySide } from '.
 import { headerControlGap } from './puzzleHeader';
 import { PuzzlePanels } from './PuzzlePanels';
 import { PuzzlePieceView } from './PuzzlePieceView';
+import { SeedDropFeedback } from './SeedDropFeedback';
 
 type Gesture = { pointerId: number } & (
   | { kind: 'tray-touch'; entry: PuzzlePieceView; start: Point }
@@ -61,8 +62,10 @@ export class PuzzleBoardView {
   private readonly board: PannableBoard;
   private readonly fitButton: ReturnType<typeof makeIconButton>;
   private readonly placementEffects: PlacementEffects;
+  private readonly seedDropFeedback?: SeedDropFeedback;
   private readonly floatingPieces: Phaser.GameObjects.Layer;
   private liftShadow?: Phaser.GameObjects.Image;
+  private rejectedPiece?: PuzzlePieceView;
   private readonly pieces: PuzzlePieceView[];
   private trayBounds = new Phaser.Geom.Rectangle();
   private trayPosition: TrayPosition;
@@ -100,6 +103,9 @@ export class PuzzleBoardView {
     this.placementEffects = new PlacementEffects(scene, this.board.layer);
     this.floatingPieces = scene.add.layer();
     this.fitButton.addToLayer(this.floatingPieces);
+    if (puzzle.challengeMode === 'seed') {
+      this.seedDropFeedback = new SeedDropFeedback(scene, this.board.layer, this.floatingPieces);
+    }
     const dragCamera = scene.cameras.add().setName('Board overlay');
 
     // The panel cameras clip their own layers. The overlay draws above both panels.
@@ -123,6 +129,7 @@ export class PuzzleBoardView {
       const { gameSize } = scene.scale;
       const workspace = playWorkspace(gameSize);
       dragCamera.setViewport(0, 0, gameSize.width, gameSize.height);
+      this.seedDropFeedback?.layout(gameSize);
       if (this.completionStage !== 'playing') {
         const finishSlide = this.completionStage === 'revealing';
         if (finishSlide) {
@@ -177,6 +184,7 @@ export class PuzzleBoardView {
     this.traySlide?.remove();
     this.tray.destroy();
     this.clearLiftShadow();
+    this.seedDropFeedback?.destroy();
     this.placementEffects.destroy();
     this.board.destroy();
     for (const { mask } of this.pieces) this.scene.textures.remove(mask);
@@ -214,6 +222,7 @@ export class PuzzleBoardView {
 
   cancelInteraction() {
     if (this.gesture?.kind === 'piece') this.tray.returnPiece(this.gesture.entry);
+    this.returnRejectedPiece();
     this.clearLiftShadow();
     this.gesture = undefined;
     this.pinch = undefined;
@@ -259,6 +268,7 @@ export class PuzzleBoardView {
   };
 
   private startPieceDrag(pointer: Phaser.Input.Pointer, entry: PuzzlePieceView, grab: Point) {
+    this.returnRejectedPiece();
     const scale = this.board.zoom / this.tray.pieceScale;
     const offset = { x: (entry.position.x - grab.x) * scale, y: (entry.position.y - grab.y) * scale };
     this.gesture = { kind: 'piece', pointerId: pointer.id, entry, offset };
@@ -370,19 +380,40 @@ export class PuzzleBoardView {
     if (gesture.kind !== 'piece') return;
 
     this.clearLiftShadow();
-    const { entry } = gesture;
-    const { piece } = entry;
-    if (this.board.contains(pointer) && this.puzzle.drop(piece.id, this.board.toLocal(entry.position)) === 'placed') {
-      this.board.addPieces([piece]);
-      entry.hide();
-      this.tray.remove(entry, this.trayBounds);
-      this.updateTrayAvailability();
-      this.onPlacement();
-      this.placementEffects.play(piece, this.puzzle.joinedSeams(piece));
-    } else {
-      this.tray.returnPiece(entry);
-    }
+    this.dropPiece(gesture.entry, pointer);
   };
+
+  private dropPiece(entry: PuzzlePieceView, pointer: Point) {
+    const { piece } = entry;
+    const result = this.board.contains(pointer)
+      ? this.puzzle.drop(piece.id, this.board.toLocal(entry.position)) : 'missed';
+    if (result === 'disconnected-from-seed' && this.seedDropFeedback) {
+      this.rejectedPiece = entry;
+      entry.addTo(this.board.layer);
+      entry.setScale(1);
+      entry.moveTo(piece.target.x, piece.target.y);
+      this.seedDropFeedback.show(piece, () => this.returnRejectedPiece());
+      return;
+    }
+    if (result !== 'placed') {
+      this.tray.returnPiece(entry);
+      return;
+    }
+
+    this.board.addPieces([piece]);
+    entry.hide();
+    this.tray.remove(entry, this.trayBounds);
+    this.updateTrayAvailability();
+    this.onPlacement();
+    this.placementEffects.play(piece, this.puzzle.joinedSeams(piece));
+  }
+
+  private returnRejectedPiece() {
+    if (!this.rejectedPiece) return;
+    this.seedDropFeedback?.clearPreview();
+    this.tray.returnPiece(this.rejectedPiece);
+    this.rejectedPiece = undefined;
+  }
 
   private updateTrayAvailability() {
     for (const entry of this.pieces) {

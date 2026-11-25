@@ -112,7 +112,7 @@ export class PieceTray {
 
   pieceAt(point: Point): PuzzlePieceView | undefined {
     if (!this.clip.contains(point.x, point.y)) return;
-    return this.entries.find((entry) => entry.contains(point));
+    return this.entries.find((entry) => entry !== this.lifted && entry.contains(point));
   }
 
   canScrollFrom(point: Point): boolean {

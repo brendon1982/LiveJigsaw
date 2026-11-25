@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import type { Bounds, Point } from '../domain/geometry';
+import type { PuzzlePiece } from '../domain/Puzzle';
 
 export const effectImageResolution = 3;
 
@@ -32,6 +33,22 @@ export function drawEffectImage(
     .setScale(1 / resolution);
   image.once(Phaser.GameObjects.Events.DESTROY, () => texture.manager.remove(texture));
   return image;
+}
+
+export function drawOutlineEffect(
+  scene: Phaser.Scene, { target, outline }: PuzzlePiece, outer: string, inner: string,
+) {
+  return drawEffectImage(scene, outline.frame, 3, target, (context) => {
+    context.beginPath();
+    traceEffectPath(context, outline.points);
+    context.closePath();
+    context.lineWidth = 3;
+    context.strokeStyle = outer;
+    context.stroke();
+    context.lineWidth = 1.5;
+    context.strokeStyle = inner;
+    context.stroke();
+  });
 }
 
 export function traceEffectPath(context: CanvasRenderingContext2D, points: readonly Point[]) {

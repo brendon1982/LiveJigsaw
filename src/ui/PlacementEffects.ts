@@ -1,7 +1,7 @@
 import type Phaser from 'phaser';
 import { Bounds, type Point } from '../domain/geometry';
 import type { PuzzlePiece } from '../domain/Puzzle';
-import { drawEffectImage, traceEffectPath } from './effectImage';
+import { drawEffectImage, drawOutlineEffect, traceEffectPath } from './effectImage';
 
 export class PlacementEffects {
   private readonly active = new Map<Phaser.GameObjects.GameObject, Phaser.Tweens.Tween>();
@@ -21,18 +21,8 @@ export class PlacementEffects {
     this.active.clear();
   }
 
-  private playSettle({ target, outline }: PuzzlePiece) {
-    const pulse = drawEffectImage(this.scene, outline.frame, 3, target, (context) => {
-      context.beginPath();
-      traceEffectPath(context, outline.points);
-      context.closePath();
-      context.lineWidth = 3;
-      context.strokeStyle = 'rgba(17, 27, 34, 0.26)';
-      context.stroke();
-      context.lineWidth = 1.5;
-      context.strokeStyle = 'rgba(245, 250, 255, 0.5)';
-      context.stroke();
-    });
+  private playSettle(piece: PuzzlePiece) {
+    const pulse = drawOutlineEffect(this.scene, piece, 'rgba(17, 27, 34, 0.26)', 'rgba(245, 250, 255, 0.5)');
     const settledScale = pulse.scale;
     pulse.setScale(settledScale * 1.045);
     this.animate({ targets: pulse, scale: settledScale, alpha: 0, duration: 280, ease: 'Cubic.Out' });

@@ -36,11 +36,15 @@ test('a saved seed and placements restore the remaining tray in the same order',
 test('Seed accepts any first piece and expands only through shared edges', () => {
   const { puzzle, whenPiece, pieceAt, expectProgress } = givenPuzzle({ connectorStyle: 'none', challengeMode: 'seed' });
   assert.equal(whenPiece(1, 1).dropsNearTarget(), 'placed');
+  const disconnected = whenPiece(0, 0);
   assert.equal(puzzle.canDrag(pieceAt(0, 0).id), true);
-  assert.equal(whenPiece(0, 0).dropsNearTarget(), 'blocked');
+  assert.equal(disconnected.dropsNearTarget({ x: 11 }), 'missed');
+  assert.equal(disconnected.dropsNearTarget(), 'disconnected-from-seed');
   expectProgress({ placed: 1, total: 4 });
+  assert.deepEqual(puzzle.snapshotPlacements(), [pieceAt(1, 1).id]);
+  assert.ok(puzzle.trayPieces.includes(pieceAt(0, 0)));
   assert.equal(whenPiece(1, 0).dropsNearTarget(), 'placed');
-  assert.equal(whenPiece(0, 0).dropsNearTarget(), 'placed');
+  assert.equal(disconnected.dropsNearTarget(), 'placed');
   assert.equal(whenPiece(0, 1).dropsNearTarget(), 'placed');
   expectProgress({ placed: 4, total: 4, complete: true });
 });

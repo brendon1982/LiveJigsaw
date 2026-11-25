@@ -30,7 +30,7 @@ export class PuzzlePiece {
   }
 }
 
-export type DropResult = 'placed' | 'missed' | 'already-placed' | 'blocked';
+export type DropResult = 'placed' | 'missed' | 'already-placed' | 'blocked' | 'disconnected-from-seed';
 
 export class Puzzle {
   readonly board: Board;
@@ -93,13 +93,6 @@ export class Puzzle {
     return false;
   }
 
-  canPlace(pieceId: string): boolean {
-    if (!this.canDrag(pieceId)) return false;
-    if (this.challengeMode !== 'seed' || this.placedCount === 0) return true;
-    const piece = this.piecesById.get(pieceId)!;
-    return neighboringEdges(piece).some(({ id }) => this.isPlaced(id));
-  }
-
   joinedSeams(piece: PuzzlePiece): readonly (readonly Point[])[] {
     if (!this.isPlaced(piece.id)) return [];
 
@@ -125,11 +118,16 @@ export class Puzzle {
     const piece = this.piecesById.get(pieceId);
     if (!piece) throw new RangeError(`Unknown piece: ${pieceId}`);
     if (this.placedPieceIds.has(piece.id)) return 'already-placed';
-    if (!this.canPlace(piece.id)) return 'blocked';
+    if (!this.canDrag(piece.id)) return 'blocked';
     if (!piece.acceptsDrop(position, this.snapTolerance)) return 'missed';
+    if (this.challengeMode === 'seed' && !this.canJoinSeedGroup(piece)) return 'disconnected-from-seed';
 
     this.placedPieceIds.add(piece.id);
     return 'placed';
+  }
+
+  private canJoinSeedGroup(piece: PuzzlePiece): boolean {
+    return this.placedCount === 0 || neighboringEdges(piece).some(({ id }) => this.isPlaced(id));
   }
 }
 

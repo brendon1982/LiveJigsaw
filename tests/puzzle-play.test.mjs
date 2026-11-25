@@ -782,6 +782,64 @@ test('Sequential locks tray pieces while keeping touch scrolling and saves the a
   assert.deepEqual(errors, []);
 });
 
+test('Seed previews an on-target disconnected drop without saving it', async (t) => {
+  const { page, canvas, waitForText, errors, playSelection } = await openPuzzle(t, {
+    viewport: { width: 1320, height: 780 }, hasTouch: true, isMobile: true,
+  });
+  const { moveFinger } = await touchController(page);
+  const message = 'Piece must be connected to seed group';
+  await page.touchscreen.tap(340, 180);
+  await playSelection({ connectorStyle: 'None', challengeMode: 'seed' });
+  await waitForText('0 of 8 placed');
+  await moveFinger(146, 420, 552, 420);
+  await moveFinger(75, 136, 990, 492);
+  await waitForText('1 of 8 placed');
+  const saved = await readSave(page);
+  assert.deepEqual(saved.progress.Windmill.placedPieceIds, ['piece-1-2']);
+
+  await moveFinger(75, 136, 990, 348);
+  assert.equal(await page.evaluate((text) => window.paintedText.includes(text), message), false,
+    'An ordinary miss should not show a rule warning');
+
+  await page.mouse.move(1118, 348);
+  await page.mouse.wheel(0, -200);
+  const before = await canvas.screenshot();
+  await page.mouse.move(75, 136);
+  await page.mouse.down();
+  await page.mouse.move(1118, 348, { steps: 6 });
+  await page.mouse.up();
+  const preview = await canvas.screenshot();
+  assert.notDeepEqual(await pixelAt(page, preview, 1118, 348), await pixelAt(page, before, 1118, 348),
+    'The rejected piece should briefly appear at its target on the zoomed board');
+  const { width, data } = PNG.sync.read(preview);
+  const hasRedOutline = [1019, 1020, 1021, 1022, 1023, 1024].some((x) => {
+    const [red, green, blue] = data.subarray((348 * width + x) * 4);
+    return red > Math.max(green, blue) + 40;
+  });
+  assert.ok(hasRedOutline, 'The preview should have a red outline');
+  await waitForText(message);
+  assert.deepEqual(await readSave(page), saved, 'A rejected drop should not save or change progress');
+
+  const targetBefore = await pixelAt(page, before, 1118, 348);
+  const returnDeadline = Date.now() + 2000;
+  let returned;
+  let after;
+  do {
+    after = await canvas.screenshot();
+    returned = await pixelAt(page, after, 1118, 348);
+  } while (returned.some((channel, i) => channel !== targetBefore[i]) && Date.now() < returnDeadline);
+  assert.deepEqual(returned, targetBefore, 'The preview should disappear after the pulse');
+  assert.deepEqual(await pixelAt(page, after, 660, 756), [71, 37, 42, 255],
+    'The screen-space toast should still be visible after the preview ends');
+
+  await moveFinger(168, 136, 1118, 564);
+  await waitForText('2 of 8 placed');
+  await moveFinger(75, 136, 1118, 348);
+  await waitForText('3 of 8 placed');
+  assert.deepEqual((await readSave(page)).progress.Windmill.placedPieceIds, ['piece-1-2', 'piece-1-3', 'piece-0-3']);
+  assert.deepEqual(errors, []);
+});
+
 test('No Guide progress resumes, resets, and records each completion', async (t) => {
   const { page, canvas, waitForText, errors, clickDialog, clickSetup, playSelection } = await openPuzzle(t, {
     viewport: { width: 1320, height: 780 },

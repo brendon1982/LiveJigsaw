@@ -13,6 +13,7 @@ import { fernwoodGroveSource } from './fernwoodGrove/fernwoodGroveSource';
 import { forestSource } from './forest/forestSource';
 import { goldenPeaksSource } from './goldenPeaks/goldenPeaksSource';
 import { hexCoastSource } from './hexCoast/hexCoastSource';
+import { jadeRidgeSource } from './jadeRidge/jadeRidgeSource';
 import { lanternManorSource } from './lanternManor/lanternManorSource';
 import { lavenderMesaSource } from './lavenderMesa/lavenderMesaSource';
 import { lighthouseSource } from './lighthouse/lighthouseSource';
@@ -65,4 +66,5 @@ export const puzzleSources: readonly PuzzleSource[] = [
   spireCountrySource,
   goldenPeaksSource,
   lavenderMesaSource,
+  jadeRidgeSource,
 ];

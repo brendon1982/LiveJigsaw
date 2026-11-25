@@ -8,6 +8,7 @@ import { crescentCryptSource } from './crescentCrypt/crescentCryptSource';
 import { cupcakeCrossingSource } from './cupcakeCrossing/cupcakeCrossingSource';
 import { desertSource } from './desert/desertSource';
 import { emberMesaSource } from './emberMesa/emberMesaSource';
+import { evergreenHorizonSource } from './evergreenHorizon/evergreenHorizonSource';
 import { fallenTimberSource } from './fallenTimber/fallenTimberSource';
 import { fernwoodGroveSource } from './fernwoodGrove/fernwoodGroveSource';
 import { forestSource } from './forest/forestSource';
@@ -67,4 +68,5 @@ export const puzzleSources: readonly PuzzleSource[] = [
   goldenPeaksSource,
   lavenderMesaSource,
   jadeRidgeSource,
+  evergreenHorizonSource,
 ];

@@ -22,7 +22,7 @@ export class PannableBoard {
       .setDisplaySize(size.width, size.height);
     let guideFilter: Phaser.Filters.ColorMatrix | undefined;
     const updateGuideFilter = (filter: PuzzleArtworkFilter | undefined) => {
-      guide.setAlpha(filter ? 1 : 0.24);
+      guide.setAlpha(filter === 'grayscale' || filter === 'faded' ? 0.5 : 0.24);
       if (!filter) {
         guideFilter?.setActive(false);
         return;

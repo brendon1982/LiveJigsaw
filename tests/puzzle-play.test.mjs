@@ -184,13 +184,14 @@ test('live pieces scroll, reflow, and snap to the pannable board', async (t) => 
     assert.notDeepEqual(await guidePixel(await canvas.screenshot()), before, 'The guide should change while Settings is still open');
     await clickDialog(101, 153);
     const screenshot = await canvas.screenshot();
+    assert.deepEqual(await pixelAt(page, screenshot, 1290, 100), panelBackground, 'The area outside the guide should keep the theme color');
     assert.deepEqual(await pixelAt(page, screenshot, 735, 348), sky, 'The placed piece should keep its original color');
     assert.deepEqual(await pixelAt(page, screenshot, 85, 140), trayPieceColor, 'The tray piece should keep its original color');
     return guidePixel(screenshot);
   };
-  assertGuideColor(await selectFilter(-65, 19, 'grayscale'), [211, 211, 211, 255], 'Black and White should be fully opaque');
-  assertGuideColor(await selectFilter(88, 19, 'sepia'), [255, 255, 199, 255], 'Sepia should be fully opaque');
-  assertGuideColor(await selectFilter(-65, 81, 'faded'), [179, 193, 192, 255], 'Faded should be fully opaque');
+  assertGuideColor(await selectFilter(-65, 19, 'grayscale'), [118, 129, 126, 255], 'Black and White should blend with the board at 50% opacity');
+  assertGuideColor(await selectFilter(88, 19, 'sepia'), [88, 96, 78, 255], 'Sepia should blend with the board at 24% opacity');
+  assertGuideColor(await selectFilter(-65, 81, 'faded'), [102, 120, 116, 255], 'Faded should blend with the board at 50% opacity');
 
   await move(735, 348);
   await page.mouse.wheel(0, 200);

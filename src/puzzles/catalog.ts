@@ -3,6 +3,7 @@ import { birchGladeSource } from './birchGlade/birchGladeSource';
 import { canyonDriftSource } from './canyonDrift/canyonDriftSource';
 import { desertSource } from './desert/desertSource';
 import { emberMesaSource } from './emberMesa/emberMesaSource';
+import { fallenTimberSource } from './fallenTimber/fallenTimberSource';
 import { forestSource } from './forest/forestSource';
 import { hexCoastSource } from './hexCoast/hexCoastSource';
 import { lighthouseSource } from './lighthouse/lighthouseSource';
@@ -35,4 +36,5 @@ export const puzzleSources: readonly PuzzleSource[] = [
   moonlitSkiesSource,
   seaOfCloudsSource,
   birchGladeSource,
+  fallenTimberSource,
 ];

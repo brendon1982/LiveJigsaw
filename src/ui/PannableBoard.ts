@@ -13,6 +13,7 @@ export class PannableBoard {
   private readonly placedPath = new Path2D();
   private viewport = new Phaser.Geom.Rectangle();
   private offset: Point;
+  private usesFitZoom = false;
 
   constructor(scene: Phaser.Scene, private readonly size: Size, capture: LivePuzzleCapture) {
     this.offset = { x: -size.width / 2, y: -size.height / 2 };
@@ -88,11 +89,13 @@ export class PannableBoard {
   }
 
   layout(bounds: Phaser.Geom.Rectangle) {
+    const keepFitted = this.usesFitZoom && !this.isViewAdjusted;
     const dx = (bounds.width - this.viewport.width) / 2;
     const dy = (bounds.height - this.viewport.height) / 2;
     this.viewport = bounds;
     this.camera.setViewport(bounds.x, bounds.y, bounds.width, bounds.height);
-    this.pan(dx, dy);
+    if (keepFitted) this.fit();
+    else this.pan(dx, dy);
   }
 
   contains(point: Point): boolean {
@@ -110,9 +113,25 @@ export class PannableBoard {
     return this.camera.zoom;
   }
 
+  get isViewAdjusted(): boolean {
+    const homeZoom = this.usesFitZoom ? this.fitZoom : 1;
+    const centered = this.centeredOffset(homeZoom);
+    return Math.abs(this.zoom - homeZoom) > 0.0001
+      || Math.abs(this.offset.x - centered.x) > 0.01
+      || Math.abs(this.offset.y - centered.y) > 0.01;
+  }
+
+  fit() {
+    this.usesFitZoom = true;
+    this.camera.setZoom(this.fitZoom);
+    this.offset = this.centeredOffset(this.zoom);
+    this.pan(0, 0);
+  }
+
   zoomAt(point: Point, scale: number, previousPoint: Point = point) {
     const anchor = this.toLocal(previousPoint);
-    this.camera.setZoom(Phaser.Math.Clamp(this.zoom * scale, 0.5, 2.5));
+    const minimumZoom = Math.min(0.5, this.fitZoom);
+    this.camera.setZoom(Phaser.Math.Clamp(this.zoom * scale, minimumZoom, 2.5));
     this.offset = {
       x: point.x - this.viewport.x - anchor.x * this.zoom,
       y: point.y - this.viewport.y - anchor.y * this.zoom,
@@ -126,6 +145,17 @@ export class PannableBoard {
       y: this.limitOffset(this.offset.y + dy, this.viewport.height, this.size.height * this.zoom),
     };
     this.camera.setScroll(-this.offset.x / this.zoom, -this.offset.y / this.zoom);
+  }
+
+  private get fitZoom(): number {
+    return Math.min(1, this.viewport.width / this.size.width, this.viewport.height / this.size.height);
+  }
+
+  private centeredOffset(zoom: number): Point {
+    return {
+      x: (this.viewport.width - this.size.width * zoom) / 2,
+      y: (this.viewport.height - this.size.height * zoom) / 2,
+    };
   }
 
   private limitOffset(offset: number, viewport: number, content: number): number {

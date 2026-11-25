@@ -137,6 +137,7 @@ test('live pieces scroll, reflow, and snap to the pannable board', async (t) => 
   const initial = await canvas.screenshot();
   const sky = [192, 221, 219, 255];
   const panelBackground = [32, 46, 42, 255];
+  assert.deepEqual(await pixelAt(page, initial, 1200, 106), panelBackground, 'Fit board should start hidden');
   assert.deepEqual(await pixelAt(page, initial, 1290, 100), panelBackground, 'The board should extend into the reclaimed space');
   const guide = await pixelAt(page, initial, 542, 348);
   assert.ok(guide[0] > 25 && guide[0] < sky[0], 'The board should show the artwork at low opacity');
@@ -290,6 +291,12 @@ test('live pieces scroll, reflow, and snap to the pannable board', async (t) => 
   assert.deepEqual(await pixelAt(page, largeAfter, 1024, 412), tower, 'Large artwork should move with both pan axes');
   await drag(313, 391, 635, 268);
   await waitForText('1 of 32 placed');
+  assert.notDeepEqual(await pixelAt(page, await canvas.screenshot(), 1200, 106), panelBackground, 'Panning should show Fit board');
+  await click(1235, 112);
+  const fitted = await canvas.screenshot();
+  assert.deepEqual(await pixelAt(page, fitted, 1200, 106), panelBackground, 'Fit board should hide after resetting the view');
+  assert.deepEqual(await pixelAt(page, fitted, 900, 205), panelBackground, 'The large board should fit vertically when scaled to the narrowed panel');
+  assert.notDeepEqual(await pixelAt(page, fitted, 900, 240), panelBackground, 'The fitted board should be centered');
 
   await page.setViewportSize({ width: 900, height: 620 });
   await page.waitForFunction(() => document.querySelector('canvas').width === 900);
@@ -1150,6 +1157,10 @@ test('tablet touch scrolls, resizes, zooms, cancels, and places pieces', async (
   const panned = await canvas.screenshot();
   assert.deepEqual(await pixelAt(page, panned, 508, 327), panelBackground, 'One finger should pan the zoomed board');
   assert.deepEqual(await pixelAt(page, panned, 658, 327), [192, 221, 219, 255], 'Placed pieces should follow the pan');
+  await page.touchscreen.tap(942, 119);
+  const fitted = await canvas.screenshot();
+  assert.deepEqual(await pixelAt(page, fitted, 535, 342), [192, 221, 219, 255], 'A tap on Fit board should recenter the placed piece');
+  assert.deepEqual(await pixelAt(page, fitted, 900, 216), panelBackground, 'Fit board should restore the full artwork after a pinch');
 
   await page.setViewportSize({ width: 768, height: 1024 });
   await page.waitForFunction(() => document.querySelector('canvas').height === 1024);

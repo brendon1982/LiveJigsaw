@@ -3,12 +3,13 @@ import type { Point } from '../domain/geometry';
 import type { Puzzle } from '../domain/Puzzle';
 import type { TrayFractions, TrayPosition } from '../persistence/GameSave';
 import type { LivePuzzleCapture } from '../rendering/LivePuzzleCapture';
-import type { UIScene } from './button';
+import { makeButton, type UIScene } from './button';
 import { drawEffectImage, effectImageResolution, traceEffectPath } from './effectImage';
 import { PannableBoard } from './PannableBoard';
 import { PieceTray } from './PieceTray';
 import { PlacementEffects } from './PlacementEffects';
 import { playWorkspace, resolveTraySide, trayScrollAxis, type TraySide } from './playLayout';
+import { headerControlGap } from './puzzleHeader';
 import { PuzzlePanels } from './PuzzlePanels';
 import { PuzzlePieceView } from './PuzzlePieceView';
 
@@ -46,6 +47,7 @@ function measurePinch(a: Point, b: Point) {
 export class PuzzleBoardView {
   private readonly tray: PieceTray;
   private readonly board: PannableBoard;
+  private readonly fitButton: ReturnType<typeof makeButton>;
   private readonly placementEffects: PlacementEffects;
   private readonly floatingPieces: Phaser.GameObjects.Layer;
   private liftShadow?: Phaser.GameObjects.Image;
@@ -76,12 +78,18 @@ export class PuzzleBoardView {
     this.tray = new PieceTray(scene, this.pieces, puzzle.board.cellSize, trayPieceSize, trayScrollAxis(this.side));
     this.board = new PannableBoard(scene, puzzle.board.size, capture);
     this.board.addPieces(placedPieces);
+    this.fitButton = makeButton(scene, 0, 0, 'Fit board', (pointer) => {
+      if (pointer.wasCanceled) return;
+      this.cancelInteraction();
+      this.board.fit();
+      this.updateFitButton();
+    }, 104).setVisible(false);
     this.placementEffects = new PlacementEffects(scene, this.board.layer);
     this.floatingPieces = scene.add.layer();
-    const dragCamera = scene.cameras.add().setName('Dragged piece');
-    dragCamera.inputEnabled = false;
+    this.fitButton.addToLayer(this.floatingPieces);
+    const dragCamera = scene.cameras.add().setName('Board overlay');
 
-    // The panel cameras clip their own layers. The drag camera draws above both panels.
+    // The panel cameras clip their own layers. The overlay draws above both panels.
     scene.cameras.main.ignore([this.tray.layer, this.board.layer, this.floatingPieces]);
     const layers = [
       [this.tray.camera, this.tray.layer],
@@ -111,6 +119,9 @@ export class PuzzleBoardView {
           this.trayBounds = trayBounds;
           this.tray.layout(trayBounds);
           this.board.layout(boardBounds);
+          const x = Math.max(boardBounds.x, boardBounds.right - this.fitButton.width - headerControlGap);
+          this.fitButton.setPosition(x, boardBounds.top + headerControlGap);
+          this.updateFitButton();
         }, (fraction) => {
           trayFractions = { ...trayFractions, [orientation]: fraction };
           traySettings.onResize(trayFractions);
@@ -159,8 +170,13 @@ export class PuzzleBoardView {
     this.scene.input.setDefaultCursor('default');
   }
 
-  private readonly startGesture = (pointer: Phaser.Input.Pointer) => {
-    if (!pointer.primaryDown || this.pinch) return;
+  private updateFitButton() {
+    const visible = this.board.isViewAdjusted;
+    if (this.fitButton.visible !== visible) this.fitButton.setVisible(visible);
+  }
+
+  private readonly startGesture = (pointer: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]) => {
+    if (!pointer.primaryDown || this.pinch || over.includes(this.fitButton)) return;
     const current = this.gesture;
     if (current) {
       if (current.kind === 'pan' && current.pointer.wasTouch && pointer.wasTouch
@@ -230,6 +246,7 @@ export class PuzzleBoardView {
       : deltaMode === WheelEvent.DOM_DELTA_LINE ? 16 : 1;
     const previousZoom = this.board.zoom;
     this.board.zoomAt(pointer, 1.5 ** (-dy * pixelsPerUnit / 200));
+    this.updateFitButton();
 
     const gesture = this.gesture;
     if (gesture?.kind === 'piece' && gesture.pointerId === pointer.id) {
@@ -246,6 +263,7 @@ export class PuzzleBoardView {
       if (pinch.fingers.includes(pointer)) {
         const next = measurePinch(...pinch.fingers);
         this.board.zoomAt(next.center, next.span / pinch.span, pinch.center);
+        this.updateFitButton();
         Object.assign(pinch, next);
       }
       return;
@@ -270,8 +288,12 @@ export class PuzzleBoardView {
     } else {
       const dx = pointer.x - gesture.previous.x;
       const dy = pointer.y - gesture.previous.y;
-      if (gesture.kind === 'pan') this.board.pan(dx, dy);
-      else this.tray.scrollBy(trayScrollAxis(this.side) === 'y' ? dy : dx);
+      if (gesture.kind === 'pan') {
+        this.board.pan(dx, dy);
+        this.updateFitButton();
+      } else {
+        this.tray.scrollBy(trayScrollAxis(this.side) === 'y' ? dy : dx);
+      }
       gesture.previous = { x: pointer.x, y: pointer.y };
     }
   };

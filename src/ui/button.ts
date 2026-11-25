@@ -54,11 +54,11 @@ export function makeButtonLabel(
   const button = scene.rexUI.add.label({
     width, height, align: 'center', background, text: caption,
     space: { left: 16, right: 16 },
-  });
+  }).setData('primary', primary);
   let hovered = false;
   let pressed = false;
   const restyle = (colors: typeof palette) => {
-    const highlighted = primary || button.data?.get('selected') === true;
+    const highlighted = button.getData('primary') === true || button.getData('selected') === true;
     const fill = highlighted ? colors.primaryButton : colors.button;
     const hover = highlighted ? colors.primaryButtonHover : colors.buttonHover;
     const press = highlighted ? colors.primaryButtonPressed : colors.buttonPressed;
@@ -66,6 +66,7 @@ export function makeButtonLabel(
     caption.setColor(highlighted ? colors.primaryButtonText : colors.text);
   };
   styleWithTheme(button, restyle);
+  button.on('changedata-primary', () => restyle(palette));
   button.on('changedata-selected', () => restyle(palette));
   button.on('pointerover', (pointer: Phaser.Input.Pointer) => { hovered = !pointer.wasTouch; restyle(palette); });
   button.on('pointerout', () => { hovered = false; restyle(palette); });

@@ -20,6 +20,7 @@ export type PuzzleSelection = {
 
 // Target length in screen pixels for the shorter side of a tray piece's base cell.
 const trayPieceSize = 76.8;
+const completionPreviewDuration = 1400;
 
 export class PlayPuzzleScene extends Phaser.Scene {
   static readonly key = 'PlayPuzzle';
@@ -37,7 +38,9 @@ export class PlayPuzzleScene extends Phaser.Scene {
       ...puzzle.board.size, seed: puzzle.seed, animationSpeed,
     });
 
-    const backButton = makeButton(this, headerInset, 0, 'All puzzles', () => this.scene.start(SelectPuzzleScene.key), 150);
+    const backButton = makeButton(this, headerInset, 0, 'All puzzles', (pointer) => {
+      if (!pointer.wasCanceled) this.scene.start(SelectPuzzleScene.key);
+    }, 150);
     const settings = makeSettingsButton(this, () => {
       board.cancelInteraction();
       openSettings(this, { onTrayPositionChange: (position) => board.setTrayPosition(position) });
@@ -69,10 +72,16 @@ export class PlayPuzzleScene extends Phaser.Scene {
     const updateProgress = () => {
       progress.setText(`${puzzle.placedCount} of ${puzzle.pieces.length} placed`);
     };
+    let completionAction: Phaser.Time.TimerEvent | undefined;
     const onPlacement = () => {
       updateProgress();
       if (puzzle.isComplete) {
         gameSave.completeAttempt(source.scene.key, { setup, completedAt: new Date().toISOString() });
+        backButton.setVisible(false);
+        board.showCompletion();
+        completionAction = this.time.delayedCall(completionPreviewDuration, () => {
+          backButton.setText('Choose puzzle').setData('primary', true).layout().setVisible(true);
+        });
       } else {
         gameSave.saveProgress(source.scene.key, { setup, placedPieceIds: puzzle.snapshotPlacements() });
       }
@@ -88,6 +97,7 @@ export class PlayPuzzleScene extends Phaser.Scene {
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.scale.off(Phaser.Scale.Events.RESIZE, layoutHeader);
+      completionAction?.remove(false);
       board.destroy();
       capture.destroy();
     });

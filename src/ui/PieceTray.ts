@@ -141,6 +141,12 @@ export class PieceTray {
     this.layout(bounds);
   }
 
+  hide() {
+    this.panel.setVisible(false);
+    this.layer.setVisible(false);
+    this.clip.setTo(0, 0, 0, 0);
+  }
+
   destroy() {
     this.scene.events.off(Phaser.Scenes.Events.POST_UPDATE, this.syncScroll);
   }

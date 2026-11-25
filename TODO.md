@@ -18,4 +18,4 @@
 - [ ] Give picker previews more room and align card titles and metadata consistently. Show progress such as “Resume · 34 of 80” for saved attempts, “Completed” for solved puzzles without an active attempt, and leave the status blank for untouched puzzles.
 - [x] Add a subtle pressed state to buttons and picker cards for mouse and touch. Clear the card’s pressed state when the player starts scrolling.
 - [x] Show a “Fit board” control after the player pans or zooms so they can return to the full puzzle in one tap.
-- [ ] On completion, fade the guide and any visible seams, tuck away the empty tray, and let the finished scene keep moving briefly before showing the next action.
+- [x] On completion, fade the guide and any visible seams, tuck away the empty tray, and let the finished scene keep moving briefly before showing the next action.

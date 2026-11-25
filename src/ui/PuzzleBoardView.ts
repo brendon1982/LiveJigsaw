@@ -35,6 +35,7 @@ type TraySettings = {
 const pieceDragThreshold = 8;
 const pieceDragSlope = Math.tan(70 * Math.PI / 180);
 const trayScrollThreshold = 20;
+const trayFadeDuration = 360;
 const boardDirection: Record<TraySide, number> = { Left: 1, Right: -1, Top: 1, Bottom: -1 };
 
 function measurePinch(a: Point, b: Point) {
@@ -59,6 +60,8 @@ export class PuzzleBoardView {
   private readonly resize: () => void;
   private gesture?: Gesture;
   private pinch?: Pinch;
+  private completionStage: 'playing' | 'revealing' | 'finished' = 'playing';
+  private tuckTrayTimer?: Phaser.Time.TimerEvent;
 
   constructor(
     private readonly scene: UIScene,
@@ -108,6 +111,12 @@ export class PuzzleBoardView {
     this.resize = () => {
       this.cancelInteraction();
       const { gameSize } = scene.scale;
+      const workspace = playWorkspace(gameSize);
+      dragCamera.setViewport(0, 0, gameSize.width, gameSize.height);
+      if (this.completionStage === 'finished') {
+        this.layoutBoard(this.panels!.layoutBoardOnly(workspace));
+        return;
+      }
       const side = resolveTraySide(this.trayPosition, gameSize);
       const axis = trayScrollAxis(side);
       const orientation = axis === 'y' ? 'vertical' : 'horizontal';
@@ -118,18 +127,15 @@ export class PuzzleBoardView {
         this.panels = new PuzzlePanels(scene, side, (trayBounds, boardBounds) => {
           this.trayBounds = trayBounds;
           this.tray.layout(trayBounds);
-          this.board.layout(boardBounds);
-          const x = Math.max(boardBounds.x, boardBounds.right - this.fitButton.width - headerControlGap);
-          this.fitButton.setPosition(x, boardBounds.top + headerControlGap);
-          this.updateFitButton();
+          this.layoutBoard(boardBounds);
         }, (fraction) => {
           trayFractions = { ...trayFractions, [orientation]: fraction };
           traySettings.onResize(trayFractions);
         });
+        if (this.completionStage === 'revealing') this.panels.fadeTray(trayFadeDuration);
         clipLayers();
       }
-      this.panels.layout(playWorkspace(gameSize), this.tray.minimumSize, trayFractions[orientation]);
-      dragCamera.setViewport(0, 0, gameSize.width, gameSize.height);
+      this.panels.layout(workspace, this.tray.minimumSize, trayFractions[orientation]);
     };
     scene.scale.on(Phaser.Scale.Events.RESIZE, this.resize);
     this.resize();
@@ -149,6 +155,7 @@ export class PuzzleBoardView {
     this.scene.input.off('pointerupoutside', this.cancelGesture);
     this.scene.input.off(Phaser.Input.Events.POINTER_WHEEL, this.handleWheel);
     this.scene.input.setDefaultCursor('default');
+    this.tuckTrayTimer?.remove(false);
     this.tray.destroy();
     this.clearLiftShadow();
     this.placementEffects.destroy();
@@ -162,6 +169,21 @@ export class PuzzleBoardView {
     this.resize();
   }
 
+  showCompletion() {
+    this.completionStage = 'revealing';
+    this.updateFitButton();
+    this.board.revealFinishedArtwork();
+    this.panels!.fadeTray(trayFadeDuration);
+    this.tuckTrayTimer = this.scene.time.delayedCall(trayFadeDuration, () => {
+      this.completionStage = 'finished';
+      this.tray.hide();
+      this.trayBounds.setTo(0, 0, 0, 0);
+      this.resize();
+      this.board.fit();
+      this.updateFitButton();
+    });
+  }
+
   cancelInteraction() {
     if (this.gesture?.kind === 'piece') this.tray.returnPiece(this.gesture.entry);
     this.clearLiftShadow();
@@ -171,12 +193,19 @@ export class PuzzleBoardView {
   }
 
   private updateFitButton() {
-    const visible = this.board.isViewAdjusted;
+    const visible = this.completionStage !== 'revealing' && this.board.isViewAdjusted;
     if (this.fitButton.visible !== visible) this.fitButton.setVisible(visible);
   }
 
+  private layoutBoard(bounds: Phaser.Geom.Rectangle) {
+    this.board.layout(bounds);
+    const x = Math.max(bounds.x, bounds.right - this.fitButton.width - headerControlGap);
+    this.fitButton.setPosition(x, bounds.top + headerControlGap);
+    this.updateFitButton();
+  }
+
   private readonly startGesture = (pointer: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]) => {
-    if (!pointer.primaryDown || this.pinch || over.includes(this.fitButton)) return;
+    if (this.completionStage === 'revealing' || !pointer.primaryDown || this.pinch || over.includes(this.fitButton)) return;
     const current = this.gesture;
     if (current) {
       if (current.kind === 'pan' && current.pointer.wasTouch && pointer.wasTouch
@@ -235,6 +264,7 @@ export class PuzzleBoardView {
   }
 
   private readonly handleWheel = (pointer: Phaser.Input.Pointer, _over: Phaser.GameObjects.GameObject[], dx: number, dy: number) => {
+    if (this.completionStage === 'revealing') return;
     if (this.trayBounds.contains(pointer.x, pointer.y)) {
       const delta = trayScrollAxis(this.side) === 'x' ? dx || dy : dy;
       this.tray.scrollBy(-0.75 * delta);

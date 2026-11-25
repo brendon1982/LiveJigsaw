@@ -10,6 +10,9 @@ const preferredBoardMinimum = 260;
 
 export class PuzzlePanels {
   private readonly split: SplitPanels;
+  private readonly tray: Phaser.GameObjects.Rectangle;
+  private readonly board: Phaser.GameObjects.Rectangle;
+  private readonly divider: Phaser.GameObjects.Rectangle;
   private readonly dividerLine: Phaser.GameObjects.Rectangle;
   private readonly grip: Phaser.GameObjects.Graphics;
   private readonly stacked: boolean;
@@ -17,18 +20,19 @@ export class PuzzlePanels {
   private readonly layoutPanels: () => void;
 
   constructor(
-    scene: UIScene,
+    private readonly scene: UIScene,
     side: TraySide,
     onLayout: (trayBounds: Phaser.Geom.Rectangle, boardBounds: Phaser.Geom.Rectangle) => void,
     onResizeTray: (fraction: number) => void,
   ) {
     this.stacked = trayScrollAxis(side) === 'x';
     this.trayFirst = side === 'Left' || side === 'Top';
-    const tray = scene.add.rectangle(0, 0, 1, 1).setDepth(-1);
-    const board = scene.add.rectangle(0, 0, 1, 1).setDepth(-1);
+    this.tray = scene.add.rectangle(0, 0, 1, 1).setDepth(-1);
+    this.board = scene.add.rectangle(0, 0, 1, 1).setDepth(-1);
+    this.divider = scene.add.rectangle(0, 0, this.stacked ? 1 : dividerThickness, this.stacked ? dividerThickness : 1, 0, 0);
+    const { tray, board, divider } = this;
     const first = this.trayFirst ? tray : board;
     const second = this.trayFirst ? board : tray;
-    const divider = scene.add.rectangle(0, 0, this.stacked ? 1 : dividerThickness, this.stacked ? dividerThickness : 1, 0, 0);
     const sides = this.stacked ? { topPanel: first, bottomPanel: second } : { leftPanel: first, rightPanel: second };
     this.split = scene.rexUI.add.splitPanels({ ...sides, splitter: divider }).setOrigin(0);
     if (divider.input) divider.input.cursor = this.stacked ? 'ns-resize' : 'ew-resize';
@@ -77,6 +81,20 @@ export class PuzzlePanels {
     else this.split.setMinLeftPanelWidth(firstMinimum).setMinRightPanelWidth(secondMinimum);
     this.split.setSplitRatio(this.trayFirst ? fraction : 1 - fraction).setPosition(x, y).setMinSize(width, height).layout();
     this.layoutPanels();
+  }
+
+  fadeTray(duration: number) {
+    this.divider.disableInteractive();
+    this.scene.tweens.add({ targets: [this.tray, this.dividerLine, this.grip], alpha: 0, duration, ease: 'Sine.InOut' });
+  }
+
+  layoutBoardOnly(workspace: Bounds): Phaser.Geom.Rectangle {
+    this.tray.setVisible(false);
+    this.dividerLine.setVisible(false);
+    this.grip.setVisible(false);
+    const center = workspace.center;
+    this.board.setPosition(center.x, center.y).setDisplaySize(workspace.width, workspace.height);
+    return this.board.getBounds();
   }
 
   destroy() {

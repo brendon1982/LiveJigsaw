@@ -8,21 +8,25 @@ import { palette, styleWithTheme } from './theme';
 export class PannableBoard {
   readonly layer: Phaser.GameObjects.Layer;
   readonly camera: Phaser.Cameras.Scene2D.Camera;
+  private readonly guide: Phaser.GameObjects.Image;
   private readonly placedMask: Phaser.Textures.CanvasTexture;
   private readonly placedImage: Phaser.GameObjects.Image;
   private readonly placedPath = new Path2D();
   private viewport = new Phaser.Geom.Rectangle();
   private offset: Point;
   private usesFitZoom = false;
+  private showingFinishedArtwork = false;
 
-  constructor(scene: Phaser.Scene, private readonly size: Size, capture: LivePuzzleCapture) {
+  constructor(private readonly scene: Phaser.Scene, private readonly size: Size, capture: LivePuzzleCapture) {
     this.offset = { x: -size.width / 2, y: -size.height / 2 };
     this.layer = scene.add.layer();
     this.camera = scene.cameras.add().setName('Puzzle board').setOrigin(0);
     this.camera.inputEnabled = false;
     const guide = scene.add.image(0, 0, capture.texture.key, '__BASE').setOrigin(0)
       .setDisplaySize(size.width, size.height);
+    this.guide = guide;
     const setGuideOpacity = (colors: typeof palette) => {
+      if (this.showingFinishedArtwork) return;
       const filtered = activePuzzleFilter === 'grayscale' || activePuzzleFilter === 'faded';
       guide.setAlpha(filtered ? colors.filteredGuideOpacity : colors.guideOpacity);
     };
@@ -82,6 +86,19 @@ export class PannableBoard {
     context.fill(this.placedPath);
     this.placedMask.refresh();
     this.placedImage.setVisible(true);
+  }
+
+  revealFinishedArtwork() {
+    this.showingFinishedArtwork = true;
+    const artwork = this.scene.add.image(0, 0, this.placedImage.texture, '__BASE').setOrigin(0)
+      .setDisplaySize(this.size.width, this.size.height).setAlpha(0);
+    this.layer.add(artwork);
+    const fade = { duration: 420, ease: 'Sine.Out' };
+    this.scene.tweens.add({ ...fade, targets: this.guide, alpha: 0 });
+    this.scene.tweens.add({
+      ...fade, targets: artwork, alpha: 1,
+      onComplete: () => this.placedImage.setVisible(false),
+    });
   }
 
   destroy() {

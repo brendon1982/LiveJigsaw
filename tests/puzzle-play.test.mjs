@@ -535,7 +535,7 @@ test('Hex Coast captures continuous roads and animated water', async (t) => {
   for (let screenX = 690; screenX <= 770; screenX += 1) {
     const pixel = (roadY * width + screenX - board.x) * 4;
     const [red, green, blue] = data.subarray(pixel, pixel + 3);
-    assert.ok(Math.abs(red - 73) <= 2 && Math.abs(green - 80) <= 2 && Math.abs(blue - 59) <= 2,
+    assert.ok(Math.abs(red - 74) <= 2 && Math.abs(green - 77) <= 2 && Math.abs(blue - 59) <= 2,
       `Horizontal road should cover x=${screenX}, got ${red},${green},${blue}`);
   }
   await page.evaluate(async () => {
@@ -711,6 +711,16 @@ test('puzzle progress resumes, resets, and records each completion', async (t) =
   await waitForText('8 of 8 placed');
   assert.equal(await getAttempt(), undefined);
   assert.deepEqual((await getHistory()).map(({ setup }) => setup), [firstSave.setup]);
+  assert.equal(await page.evaluate(() => window.paintedText.includes('Choose puzzle')), false,
+    'The completed scene should have a moment before the next action');
+  await waitForText('Choose puzzle');
+  const finished = await canvas.screenshot();
+  assert.deepEqual(await pixelAt(page, finished, 75, 136), [32, 46, 42, 255], 'The board should reclaim the empty tray');
+  assert.deepEqual(await pixelAt(page, finished, 470, 305), [192, 221, 219, 255], 'The finished artwork should be centered in the reclaimed space');
+  const windmill = () => page.screenshot({ clip: { x: 597, y: 364, width: 126, height: 126 } });
+  const sails = await windmill();
+  await page.waitForTimeout(150);
+  assert.ok(!sails.equals(await windmill()), 'The finished puzzle should continue animating');
 
   await backToPicker();
   await waitForText('Completed 1 times');
@@ -862,6 +872,7 @@ test('picker tag and completion filters combine and refresh after play', async (
   await drag(75, 136, 734, 348);
   await waitForText('8 of 8 placed');
   assert.equal((await readSave(page)).history.Windmill.length, 1);
+  await waitForText('Choose puzzle');
   await page.evaluate(() => { window.paintedText = []; });
   await page.mouse.click(99, 43);
   await waitForText('Filters (3)');

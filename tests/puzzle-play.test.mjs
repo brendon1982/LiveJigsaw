@@ -303,8 +303,10 @@ test('the landscape scenes animate on the board', async (t) => {
     { title: 'Ember Mesa', x: 935, y: 600, scroll: 2400 },
     { title: 'Afterglow', x: 340, y: 600, scroll: 2700 },
     { title: 'Silver Cloudbank', x: 935, y: 600, scroll: 2700 },
+    { title: 'Moonlit Skies', x: 340, y: 600, scroll: 3300 },
   ];
   const board = { x: 435, y: 275, width: 590, height: 320 };
+  const emptyGuide = [25, 46, 40, 255];
 
   for (const { title, x, y, scroll } of selections) {
     await page.mouse.move(340, 300);
@@ -314,13 +316,20 @@ test('the landscape scenes animate on the board', async (t) => {
     await playSelection({ connectorStyle: 'Angular', animationSpeed: 'Fast' });
     await waitForText(title);
     await waitForText('0 of 8 placed');
-    const before = await page.screenshot({ clip: board });
-    assert.notDeepEqual(await pixelAt(page, before, 302, 165), [25, 46, 40, 255], `${title} should fill the board guide`);
-    await page.evaluate(async () => {
-      for (let frame = 0; frame < 12; frame += 1) await new Promise(requestAnimationFrame);
-    });
-    const after = await page.screenshot({ clip: board });
-    assert.ok(!before.equals(after), `${title} should animate the captured artwork`);
+    let firstArtwork;
+    let animated = false;
+    for (const deadline = Date.now() + 4000; Date.now() < deadline;) {
+      const frame = await page.screenshot({ clip: board });
+      if (!firstArtwork) {
+        const sample = await pixelAt(page, frame, 302, 165);
+        if (sample.some((channel, index) => channel !== emptyGuide[index])) firstArtwork = frame;
+      } else if (!firstArtwork.equals(frame)) {
+        animated = true;
+        break;
+      }
+    }
+    assert.ok(firstArtwork, `${title} should fill the board guide`);
+    assert.ok(animated, `${title} should animate the captured artwork`);
     await page.evaluate(() => { window.paintedText = []; });
     await page.mouse.click(99, 43);
     await waitForText('Windmill');

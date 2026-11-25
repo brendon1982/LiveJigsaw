@@ -7,6 +7,7 @@ import { hexCoastSource } from './hexCoast/hexCoastSource';
 import { lighthouseSource } from './lighthouse/lighthouseSource';
 import { meadowSource } from './meadow/meadowSource';
 import { medievalVillageSource } from './medievalVillage/medievalVillageSource';
+import { moonlitSkiesSource } from './moonlitSkies/moonlitSkiesSource';
 import { mountainsSource } from './mountains/mountainsSource';
 import { pineHighlandsSource } from './pineHighlands/pineHighlandsSource';
 import type { PuzzleSource } from './PuzzleSource';
@@ -29,4 +30,5 @@ export const puzzleSources: readonly PuzzleSource[] = [
   emberMesaSource,
   afterglowSource,
   silverCloudbankSource,
+  moonlitSkiesSource,
 ];

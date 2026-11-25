@@ -2,7 +2,6 @@ import Phaser from 'phaser';
 import type { Size } from '../../domain/geometry';
 import { puzzleAnimationRates, type PuzzleSourceSceneData } from '../PuzzleSource';
 
-
 const artworkSize = { width: 512, height: 288 };
 
 export class MountainsScene extends Phaser.Scene {
@@ -41,6 +40,24 @@ export function drawMountains(scene: Phaser.Scene, viewport: Size) {
     return { cloud, start: x, speed };
   });
 
+  const valley = drawValley(scene, width);
+
+  const artwork = scene.add.container(0, 0, [sky, ...clouds.map(({ cloud }) => cloud), valley])
+    .setScale(viewport.width / width, viewport.height / height);
+  let elapsed = 0;
+  const cloudMargin = 56;
+  return {
+    objects: [artwork],
+    animate(delta: number) {
+      elapsed += delta / 1000;
+      for (const { cloud, start, speed } of clouds) {
+        cloud.x = (start + elapsed * speed + cloudMargin) % (width + 2 * cloudMargin) - cloudMargin;
+      }
+    },
+  };
+}
+
+function drawValley(scene: Phaser.Scene, width: number) {
   const valley = scene.add.graphics();
   valley.fillStyle(0x809caa).fillTriangle(-75, 208, 81, 99, 222, 208)
     .fillTriangle(252, 208, 427, 99, 556, 208);
@@ -58,18 +75,5 @@ export function drawMountains(scene: Phaser.Scene, viewport: Size) {
   for (const [x, y, length] of [[181, 241, 50], [342, 245, 49], [250, 260, 72], [135, 272, 34]]) {
     valley.lineBetween(x, y, x + length, y);
   }
-
-  const artwork = scene.add.container(0, 0, [sky, ...clouds.map(({ cloud }) => cloud), valley])
-    .setScale(viewport.width / width, viewport.height / height);
-  let elapsed = 0;
-  const cloudMargin = 56;
-  return {
-    objects: [artwork],
-    animate(delta: number) {
-      elapsed += delta / 1000;
-      for (const { cloud, start, speed } of clouds) {
-        cloud.x = (start + elapsed * speed + cloudMargin) % (width + 2 * cloudMargin) - cloudMargin;
-      }
-    },
-  };
+  return valley;
 }

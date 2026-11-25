@@ -9,7 +9,8 @@ export function findRoute(
   turnCost: number,
 ): number[] | undefined {
   const frontier: RouteStep[] = [{ id: start, heading: -1, cost: 0, estimate: distance(start, target) }];
-  const best = new Map<string, number>();
+  // The cost to leave a tile depends on the direction of arrival.
+  const bestCostByArrival = new Map<string, number>();
 
   while (frontier.length) {
     frontier.sort((a, b) => b.estimate - a.estimate);
@@ -23,9 +24,10 @@ export function findRoute(
       const turns = step.heading !== -1 && step.heading !== heading;
       const cost = step.cost + travelCost + (turns ? turnCost : 0);
       const state = `${id}:${heading}`;
-      if (cost >= (best.get(state) ?? Infinity)) continue;
-      best.set(state, cost);
-      frontier.push({ id, heading, cost, estimate: cost + distance(id, target), previous: step });
+      if (cost >= (bestCostByArrival.get(state) ?? Infinity)) continue;
+      bestCostByArrival.set(state, cost);
+      const estimate = cost + distance(id, target);
+      frontier.push({ id, heading, cost, estimate, previous: step });
     }
   }
 }

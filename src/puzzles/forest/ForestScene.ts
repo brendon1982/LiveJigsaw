@@ -2,7 +2,6 @@ import Phaser from 'phaser';
 import type { Size } from '../../domain/geometry';
 import { puzzleAnimationRates, type PuzzleSourceSceneData } from '../PuzzleSource';
 
-
 const artworkSize = { width: 512, height: 288 };
 
 export class ForestScene extends Phaser.Scene {
@@ -25,18 +24,7 @@ export class ForestScene extends Phaser.Scene {
 
 export function drawForest(scene: Phaser.Scene, viewport: Size) {
   const { width, height } = artworkSize;
-  const clearing = scene.add.graphics();
-  clearing.fillStyle(0xc5d9bd).fillRect(0, 0, width, height);
-  clearing.fillStyle(0xebdfae).fillCircle(307, 65, 33);
-  clearing.fillStyle(0x96ad90).fillEllipse(128, 201, 392, 113).fillEllipse(441, 185, 366, 95);
-  clearing.fillStyle(0x7e9b80);
-  for (const [x, base, size] of [[12, 207, 83], [60, 186, 106], [145, 194, 79], [200, 199, 103], [340, 200, 92], [402, 196, 120], [491, 201, 104]]) {
-    clearing.fillTriangle(x - size / 4, base, x, base - size, x + size / 4, base);
-  }
-  clearing.fillStyle(0x68896f).fillEllipse(218, 256, 709, 151).fillRect(0, 253, width, 35);
-  const path = [[276, 182], [290, 198], [280, 220], [312, 245], [383, 288], [221, 288], [236, 255], [260, 221], [274, 199]];
-  clearing.fillStyle(0xacaa83).fillPoints(path.map(([x, y]) => new Phaser.Math.Vector2(x, y)), true);
-  clearing.fillStyle(0xbdb48c).fillEllipse(271, 245, 42, 6).fillEllipse(303, 274, 50, 5);
+  const clearing = drawClearing(scene);
 
   const trees = [
     { x: 177, y: 204, size: 0.63, shade: 0x678970, leaves: 0x7d9d78, phase: 0.2 },
@@ -73,4 +61,21 @@ export function drawForest(scene: Phaser.Scene, viewport: Size) {
       }
     },
   };
+}
+
+function drawClearing(scene: Phaser.Scene) {
+  const { width, height } = artworkSize;
+  const clearing = scene.add.graphics();
+  clearing.fillStyle(0xc5d9bd).fillRect(0, 0, width, height);
+  clearing.fillStyle(0xebdfae).fillCircle(307, 65, 33);
+  clearing.fillStyle(0x96ad90).fillEllipse(128, 201, 392, 113).fillEllipse(441, 185, 366, 95);
+  clearing.fillStyle(0x7e9b80);
+  for (const [x, base, size] of [[12, 207, 83], [60, 186, 106], [145, 194, 79], [200, 199, 103], [340, 200, 92], [402, 196, 120], [491, 201, 104]]) {
+    clearing.fillTriangle(x - size / 4, base, x, base - size, x + size / 4, base);
+  }
+  clearing.fillStyle(0x68896f).fillEllipse(218, 256, 709, 151).fillRect(0, 253, width, 35);
+  const path = [[276, 182], [290, 198], [280, 220], [312, 245], [383, 288], [221, 288], [236, 255], [260, 221], [274, 199]];
+  clearing.fillStyle(0xacaa83).fillPoints(path.map(([x, y]) => new Phaser.Math.Vector2(x, y)), true);
+  clearing.fillStyle(0xbdb48c).fillEllipse(271, 245, 42, 6).fillEllipse(303, 274, 50, 5);
+  return clearing;
 }

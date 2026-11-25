@@ -2,7 +2,6 @@ import Phaser from 'phaser';
 import type { Size } from '../../domain/geometry';
 import { puzzleAnimationRates, type PuzzleSourceSceneData } from '../PuzzleSource';
 
-
 const artworkSize = { width: 512, height: 288 };
 
 export class LighthouseScene extends Phaser.Scene {
@@ -24,20 +23,8 @@ export class LighthouseScene extends Phaser.Scene {
   }
 }
 
-export function drawLighthouse(scene: Phaser.Scene, { width, height }: Size) {
-  const coast = scene.add.graphics();
-  const fillPolygon = (color: number, coordinates: [number, number][]) => {
-    coast.fillStyle(color).fillPoints(coordinates.map(([x, y]) => new Phaser.Math.Vector2(x, y)), true);
-  };
-  coast.fillStyle(0x26364d).fillRect(0, 0, width, height);
-  coast.fillStyle(0xd0d9e6).fillCircle(95, 62, 29);
-  coast.fillStyle(0x2e4964).fillTriangle(0, 160, 132, 119, 259, 160);
-  coast.fillStyle(0x395a73).fillRect(0, 160, width, height - 160);
-  fillPolygon(0x294553, [[205, 288], [272, 231], [337, 215], [403, 204], [512, 225], [512, 288]]);
-  fillPolygon(0x54777b, [[249, 257], [272, 231], [337, 215], [403, 204], [512, 225], [512, 244]]);
-  fillPolygon(0xf3e2bf, [[328, 224], [340, 111], [368, 111], [382, 224]]);
-  fillPolygon(0xa65b51, [[335, 159], [373, 159], [377, 187], [332, 187]]);
-  coast.fillStyle(0x152835).fillRect(349, 203, 12, 21);
+export function drawLighthouse(scene: Phaser.Scene, viewport: Size) {
+  const coast = drawCoast(scene, viewport);
 
   const waves = scene.add.graphics();
   waves.lineStyle(2, 0x83a7b1, 0.7);
@@ -62,4 +49,21 @@ export function drawLighthouse(scene: Phaser.Scene, { width, height }: Size) {
       waves.x = Math.sin(elapsed / 900) * 7;
     },
   };
+}
+
+function drawCoast(scene: Phaser.Scene, { width, height }: Size) {
+  const coast = scene.add.graphics();
+  const fillPolygon = (color: number, coordinates: [number, number][]) => {
+    coast.fillStyle(color).fillPoints(coordinates.map(([x, y]) => new Phaser.Math.Vector2(x, y)), true);
+  };
+  coast.fillStyle(0x26364d).fillRect(0, 0, width, height);
+  coast.fillStyle(0xd0d9e6).fillCircle(95, 62, 29);
+  coast.fillStyle(0x2e4964).fillTriangle(0, 160, 132, 119, 259, 160);
+  coast.fillStyle(0x395a73).fillRect(0, 160, width, height - 160);
+  fillPolygon(0x294553, [[205, 288], [272, 231], [337, 215], [403, 204], [512, 225], [512, 288]]);
+  fillPolygon(0x54777b, [[249, 257], [272, 231], [337, 215], [403, 204], [512, 225], [512, 244]]);
+  fillPolygon(0xf3e2bf, [[328, 224], [340, 111], [368, 111], [382, 224]]);
+  fillPolygon(0xa65b51, [[335, 159], [373, 159], [377, 187], [332, 187]]);
+  coast.fillStyle(0x152835).fillRect(349, 203, 12, 21);
+  return coast;
 }

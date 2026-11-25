@@ -20,9 +20,14 @@ export function scatterHexScenery({ biome, wooded }: Pick<CoastTile, 'biome' | '
       const y = (random() - 0.5) * 56;
       // The ground face runs 32px from its center to the side and to either tip.
       // Inset the footprint from those edges, including the sloped sides.
-      const side = Math.abs(x) + radius;
-      if (side > 29 || Math.abs(y) + radius * 0.6 + side / 2 > 29) continue;
-      if (placements.some((other) => Math.hypot(x - other.x, (y - other.y) * 1.35) < radius + other.radius)) continue;
+      const sideReach = Math.abs(x) + radius;
+      const tipReach = Math.abs(y) + radius * 0.6 + sideReach / 2;
+      if (sideReach > 29 || tipReach > 29) continue;
+      const overlaps = placements.some((other) => {
+        const distance = Math.hypot(x - other.x, (y - other.y) * 1.35);
+        return distance < radius + other.radius;
+      });
+      if (overlaps) continue;
       placements.push({ ...sprite, x, y, radius });
       return;
     }

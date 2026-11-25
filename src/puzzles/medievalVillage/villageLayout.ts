@@ -56,6 +56,7 @@ type Building = { frames: readonly number[]; scale: number };
 type Bounds = { left: number; right: number; top: number; bottom: number };
 type Lot = { entrance: number; position: VillagePoint; cells: number[] };
 type RoadNetwork = Map<number, number>;
+type BladeReach = { hub: number; radius: number };
 
 const cells = Array.from({ length: columns * rows }, (_, id) => cellAt(id));
 const houseFrames = [9, 16, 17, 18, 19, 20, 21];
@@ -126,8 +127,9 @@ function buildRoads(start: Cell, end: Cell, terrain: Terrain[], roadCosts: numbe
       const from = cellId(path[index - 1]);
       const to = cellId(path[index]);
       const heading = directions.findIndex(({ column, row }) => to - from === column + row * columns);
+      const reverseHeading = (heading + 2) % directions.length;
       roads.set(from, (roads.get(from) ?? 0) | (1 << heading));
-      roads.set(to, (roads.get(to) ?? 0) | (1 << ((heading + 2) % directions.length)));
+      roads.set(to, (roads.get(to) ?? 0) | (1 << reverseHeading));
     }
   };
   const main = routeRoad(start, end, roadCosts)!;
@@ -163,6 +165,21 @@ function cellsUnder({ left, right, top, bottom }: Bounds) {
   return result;
 }
 
+function buildingReach(building: Building, structureSize: (frame: number) => Size, blades?: BladeReach) {
+  const sizes = building.frames.map(structureSize);
+  const halfWidth = Math.max(...sizes.map(({ width }) => width)) * building.scale / 2;
+  const height = sizes.reduce((sum, size) => sum + size.height, 0) * building.scale;
+  return {
+    side: Math.max(halfWidth, blades?.radius ?? 0),
+    above: Math.max(height, blades ? blades.hub + blades.radius : 0),
+    below: Math.max(0, blades ? blades.radius - blades.hub : 0),
+  };
+}
+
+function lotBoundary(lot: Lot) {
+  return new Set(lot.cells.flatMap((id) => neighbors(cellAt(id)).map(cellId)));
+}
+
 function developVillage(roads: RoadNetwork, terrain: Terrain[], structureSize: (frame: number) => Size, random: Random) {
   const developed = new Set<number>();
   const fields = new Set<number>();
@@ -170,13 +187,8 @@ function developVillage(roads: RoadNetwork, terrain: Terrain[], structureSize: (
   const free = (id: number) => !roads.has(id) && !developed.has(id);
   const clearingCost = (ids: number[]) => ids.filter((id) => terrain[id] !== 'meadow').length;
 
-  function lots(building: Building, mill?: { hub: number; radius: number }): Lot[] {
-    const sizes = building.frames.map(structureSize);
-    const halfWidth = Math.max(...sizes.map(({ width }) => width)) * building.scale / 2;
-    const height = sizes.reduce((sum, size) => sum + size.height, 0) * building.scale;
-    const side = Math.max(halfWidth, mill?.radius ?? 0);
-    const above = Math.max(height, mill ? mill.hub + mill.radius : 0);
-    const below = Math.max(0, mill ? mill.radius - mill.hub : 0);
+  function lots(building: Building, blades?: BladeReach): Lot[] {
+    const { side, above, below } = buildingReach(building, structureSize, blades);
     const result: Lot[] = [];
     for (const [entrance] of roads) {
       const frontage = cellAt(entrance);
@@ -225,7 +237,7 @@ function developVillage(roads: RoadNetwork, terrain: Terrain[], structureSize: (
   const availableFields = fieldPlots.filter((plot) => plot.every(free));
   const farmSites = millOptions.flatMap((building, preference) =>
     lots(building, { hub: building.hub, radius }).flatMap((lot) => {
-      const boundary = new Set(lot.cells.flatMap((id) => neighbors(cellAt(id)).map(cellId)));
+      const boundary = lotBoundary(lot);
       return availableFields
         .filter((plot) => plot.some((id) => boundary.has(id)) && plot.every((id) => !lot.cells.includes(id)))
         .map((plot) => ({ building, lot, plot, preference }));
@@ -242,7 +254,7 @@ function developVillage(roads: RoadNetwork, terrain: Terrain[], structureSize: (
 
   const stall = { frames: choose(random, [[22], [7, 3]]), scale: 0.3 };
   const marketSites = lots(stall).filter((lot) => lot.entrance !== farm.lot.entrance).flatMap((lot) => {
-    const boundary = new Set(lot.cells.flatMap((id) => neighbors(cellAt(id)).map(cellId)));
+    const boundary = lotBoundary(lot);
     return [...boundary]
       .filter((yard) => free(yard) && !lot.cells.includes(yard)
         && neighbors(cellAt(yard)).some((cell) => roads.has(cellId(cell))))
@@ -320,38 +332,45 @@ export function generateVillage(seed: number, structureSize: (frame: number) => 
   const random = seededRandom(seed);
   const terrain = generateTerrain(random);
   const roadCosts = terrain.map((type) => (type === 'meadow' ? 1 : 2.8) + random() * 0.45);
-  const remaining = [...approachPairs];
+  const remainingApproaches = [...approachPairs];
 
   // Try a different pair of approaches if the road leaves too little room for a settlement.
-  while (remaining.length) {
-    const [{ start, end }] = remaining.splice(between(random, 0, remaining.length - 1), 1);
+  while (remainingApproaches.length) {
+    const index = between(random, 0, remainingApproaches.length - 1);
+    const [{ start, end }] = remainingApproaches.splice(index, 1);
     const roads = buildRoads(start, end, terrain, roadCosts, random);
     const development = developVillage(roads, terrain, structureSize, random);
     if (!development) continue;
 
     const ground = paintVillage(terrain, roads, development, random);
     const { props, mill, destinations } = development;
-    const walks = Array.from({ length: between(random, 5, 7) }, (_, index) => {
-      const start = destinations[index % destinations.length];
-      const remaining = destinations.filter((id) => id !== start);
-      const second = remaining.splice(between(random, 0, remaining.length - 1), 1)[0];
-      const [front, back] = choose(random, villagers);
-      const villager: Villager = {
-        front,
-        back,
-        stops: [start, second, choose(random, remaining)],
-        phase: random(),
-        lane: 1.4 + random() * 1.4,
-        speed: between(random, 12, 22) / 1000,
-      };
-      return planWalk(villager, (from, to) => followRoad(from, to, roads), () => between(random, 550, 1650));
-    });
+    const walks = planVillageWalks(destinations, roads, random);
     return { ground, props, mill, walks };
   }
   throw new Error('No village road leaves enough room for a settlement');
 }
 
-function followRoad(from: number, to: number, roads: Map<number, number>): VillagePoint[] {
+function planVillageWalks(destinations: number[], roads: RoadNetwork, random: Random) {
+  const count = between(random, 5, 7);
+  return Array.from({ length: count }, (_, index) => {
+    const firstStop = destinations[index % destinations.length];
+    const otherStops = destinations.filter((id) => id !== firstStop);
+    const secondIndex = between(random, 0, otherStops.length - 1);
+    const [secondStop] = otherStops.splice(secondIndex, 1);
+    const [front, back] = choose(random, villagers);
+    const villager: Villager = {
+      front,
+      back,
+      stops: [firstStop, secondStop, choose(random, otherStops)],
+      phase: random(),
+      lane: 1.4 + random() * 1.4,
+      speed: between(random, 12, 22) / 1000,
+    };
+    return planWalk(villager, (from, to) => followRoad(from, to, roads), () => between(random, 550, 1650));
+  });
+}
+
+function followRoad(from: number, to: number, roads: RoadNetwork): VillagePoint[] {
   const queue = [from];
   const previous = new Map<number, number>([[from, from]]);
   for (let index = 0; index < queue.length; index += 1) {

@@ -2,7 +2,6 @@ import Phaser from 'phaser';
 import type { Size } from '../../domain/geometry';
 import { puzzleAnimationRates, type PuzzleSourceSceneData } from '../PuzzleSource';
 
-
 const artworkSize = { width: 512, height: 288 };
 
 export class MeadowScene extends Phaser.Scene {
@@ -25,26 +24,7 @@ export class MeadowScene extends Phaser.Scene {
 
 export function drawMeadow(scene: Phaser.Scene, viewport: Size) {
   const { width, height } = artworkSize;
-  const field = scene.add.graphics();
-  field.fillStyle(0xc7ded6).fillRect(0, 0, width, height);
-  field.fillStyle(0xf9ebba).fillCircle(123, 70, 31);
-  field.fillStyle(0xa3b88c).fillEllipse(412, 193, 370, 127).fillEllipse(111, 196, 358, 114);
-  field.fillStyle(0x83a475).fillEllipse(215, 251, 624, 177);
-  field.fillStyle(0x72966b).fillRect(0, 242, width, 46).fillEllipse(469, 255, 420, 110);
-  field.fillStyle(0x628360).fillEllipse(53, 296, 280, 89);
-
-  const flowers = [
-    [46, 253, 22, 0xf6df9e], [69, 270, 13, 0xf2dab8], [115, 255, 14, 0xefc2ab],
-    [159, 231, 12, 0xf6df9e], [191, 270, 21, 0xe5b4a7], [242, 247, 15, 0xf2dab8],
-    [288, 269, 18, 0xf6df9e], [331, 238, 16, 0xefc2ab], [358, 260, 12, 0xf2dab8],
-    [405, 272, 18, 0xf6df9e], [438, 231, 16, 0xefc2ab], [477, 252, 22, 0xf2dab8],
-  ];
-  for (const [x, y, stem, color] of flowers) {
-    field.lineStyle(2, 0x4d7255).lineBetween(x - 2, y, x, y - stem);
-    field.fillStyle(0x527b54).fillEllipse(x - 4, y - 6, 7, 3).fillEllipse(x + 2, y - 10, 7, 3);
-    field.fillStyle(color).fillCircle(x, y - stem, stem * 0.24);
-    field.fillStyle(0xc88e61).fillCircle(x, y - stem, 1.6);
-  }
+  const field = drawField(scene);
 
   const butterflies = [
     { x: 101, y: 178, color: 0xd58a72, phase: 0.5 },
@@ -76,4 +56,29 @@ export function drawMeadow(scene: Phaser.Scene, viewport: Size) {
       }
     },
   };
+}
+
+function drawField(scene: Phaser.Scene) {
+  const { width, height } = artworkSize;
+  const field = scene.add.graphics();
+  field.fillStyle(0xc7ded6).fillRect(0, 0, width, height);
+  field.fillStyle(0xf9ebba).fillCircle(123, 70, 31);
+  field.fillStyle(0xa3b88c).fillEllipse(412, 193, 370, 127).fillEllipse(111, 196, 358, 114);
+  field.fillStyle(0x83a475).fillEllipse(215, 251, 624, 177);
+  field.fillStyle(0x72966b).fillRect(0, 242, width, 46).fillEllipse(469, 255, 420, 110);
+  field.fillStyle(0x628360).fillEllipse(53, 296, 280, 89);
+
+  const flowers = [
+    [46, 253, 22, 0xf6df9e], [69, 270, 13, 0xf2dab8], [115, 255, 14, 0xefc2ab],
+    [159, 231, 12, 0xf6df9e], [191, 270, 21, 0xe5b4a7], [242, 247, 15, 0xf2dab8],
+    [288, 269, 18, 0xf6df9e], [331, 238, 16, 0xefc2ab], [358, 260, 12, 0xf2dab8],
+    [405, 272, 18, 0xf6df9e], [438, 231, 16, 0xefc2ab], [477, 252, 22, 0xf2dab8],
+  ];
+  for (const [x, y, stem, color] of flowers) {
+    field.lineStyle(2, 0x4d7255).lineBetween(x - 2, y, x, y - stem);
+    field.fillStyle(0x527b54).fillEllipse(x - 4, y - 6, 7, 3).fillEllipse(x + 2, y - 10, 7, 3);
+    field.fillStyle(color).fillCircle(x, y - stem, stem * 0.24);
+    field.fillStyle(0xc88e61).fillCircle(x, y - stem, 1.6);
+  }
+  return field;
 }

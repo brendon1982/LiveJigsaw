@@ -55,64 +55,18 @@ export class MedievalVillageScene extends Phaser.Scene {
     super(MedievalVillageScene.key);
   }
 
-  create({ width, height, seed, animationSpeed }: PuzzleSourceSceneData) {
+  create(data: PuzzleSourceSceneData) {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => { this.animate = undefined; });
-    const drawVillage = () => {
-      const village = this.add.container().setScale(width / villageSize.width, height / villageSize.height);
-      const atlas = this.textures.get(atlasKey);
-      const { ground, props, mill, walks } = generateVillage(seed, (id) => {
-        const frame = atlas.get(frameName('Structure', id));
-        return { width: frame.realWidth, height: frame.realHeight };
-      });
-      const sprite = (x: number, y: number, kind: string, frame: number, scale: number) =>
-        this.add.image(x, y, atlasKey, frameName(kind, frame)).setScale(scale);
-      const columns = villageSize.width / cellSize;
-      const tileScale = cellSize / 128;
-      ground.forEach(({ frame, road }, index) => {
-        const x = (index % columns) * cellSize;
-        const y = Math.floor(index / columns) * cellSize;
-        village.add(sprite(x, y, 'Tile', frame, tileScale).setOrigin(0));
-        if (road) {
-          village.add(sprite(x + road.x * tileScale, y + road.y * tileScale, 'Tile', road.frame, tileScale).setOrigin(0));
-        }
-      });
-      const scenery = this.add.container();
-      village.add(scenery);
-      for (const { x, y, kind, frames, scale } of props) {
-        const image = frames.length === 1
-          ? sprite(x, y, kind, frames[0], scale)
-          : this.add.image(x, y, assembledBuilding(this.textures, frames)).setScale(scale);
-        scenery.add(image.setOrigin(0.5, 1).setDepth(y));
-      }
-      const blades = this.add.image(mill.x, mill.y - mill.hub, windmillBlades(this.textures, mill.blades))
-        .setScale(mill.bladeScale).setDepth(mill.y + 0.01);
-      scenery.add(blades);
-      const villagers = walks.map((walk) => {
-        const image = sprite(0, 0, 'Unit', walk.front, 0.28).setOrigin(0.5, 1);
-        scenery.add(image);
-        return { walk, image };
-      });
-
-      let elapsed = 0;
-      this.animate = (delta) => {
-        elapsed += delta * puzzleAnimationRates[animationSpeed];
-        blades.rotation = elapsed * 0.00085;
-        for (const { walk, image } of villagers) {
-          const { x, y, bob, frame, flip } = walkPose(walk, elapsed);
-          const name = frameName('Unit', frame);
-          if (image.frame.name !== name) image.setFrame(name);
-          image.setPosition(x, y - bob).setDepth(y).setFlipX(flip);
-        }
-        scenery.sort('depth');
-      };
-      this.animate(0);
-    };
-
     if (this.textures.exists(atlasKey)) {
-      drawVillage();
+      this.drawVillage(data);
       return;
     }
 
+    this.loadVillageArtwork(data);
+  }
+
+  private loadVillageArtwork(data: PuzzleSourceSceneData) {
+    const { width, height } = data;
     const centerX = width / 2;
     const centerY = height / 2;
     const unit = Math.min(width / villageSize.width, height / villageSize.height);
@@ -138,13 +92,68 @@ export class MedievalVillageScene extends Phaser.Scene {
         return;
       }
       [backdrop, label, track, bar].forEach((object) => object.destroy());
-      drawVillage();
+      this.drawVillage(data);
     };
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, cleanUp);
     this.load.on(Phaser.Loader.Events.PROGRESS, showProgress);
     this.load.once(Phaser.Loader.Events.COMPLETE, onComplete);
     // Start inside create so the scene can be captured while the loader is running.
     this.load.atlasXML(atlasKey, atlasImage, atlasData).start();
+  }
+
+  private drawVillage({ width, height, seed, animationSpeed }: PuzzleSourceSceneData) {
+    const village = this.add.container().setScale(width / villageSize.width, height / villageSize.height);
+    const atlas = this.textures.get(atlasKey);
+    const { ground, props, mill, walks } = generateVillage(seed, (id) => {
+      const frame = atlas.get(frameName('Structure', id));
+      return { width: frame.realWidth, height: frame.realHeight };
+    });
+    const sprite = (x: number, y: number, kind: string, frame: number, scale: number) =>
+      this.add.image(x, y, atlasKey, frameName(kind, frame)).setScale(scale);
+    const columns = villageSize.width / cellSize;
+    const tileScale = cellSize / 128;
+    // Each road overlay follows its tile. The depth-sorted scenery goes above the entire ground.
+    ground.forEach(({ frame, road }, index) => {
+      const x = (index % columns) * cellSize;
+      const y = Math.floor(index / columns) * cellSize;
+      village.add(sprite(x, y, 'Tile', frame, tileScale).setOrigin(0));
+      if (road) {
+        const roadX = x + road.x * tileScale;
+        const roadY = y + road.y * tileScale;
+        village.add(sprite(roadX, roadY, 'Tile', road.frame, tileScale).setOrigin(0));
+      }
+    });
+    const scenery = this.add.container();
+    village.add(scenery);
+    for (const { x, y, kind, frames, scale } of props) {
+      const image = frames.length === 1
+        ? sprite(x, y, kind, frames[0], scale)
+        : this.add.image(x, y, assembledBuilding(this.textures, frames)).setScale(scale);
+      scenery.add(image.setOrigin(0.5, 1).setDepth(y));
+    }
+    const bladeTexture = windmillBlades(this.textures, mill.blades);
+    const blades = this.add.image(mill.x, mill.y - mill.hub, bladeTexture)
+      .setScale(mill.bladeScale).setDepth(mill.y + 0.01);
+    scenery.add(blades);
+    const villagers = walks.map((walk) => {
+      const image = sprite(0, 0, 'Unit', walk.front, 0.28).setOrigin(0.5, 1);
+      scenery.add(image);
+      return { walk, image };
+    });
+
+    let elapsed = 0;
+    this.animate = (delta) => {
+      elapsed += delta * puzzleAnimationRates[animationSpeed];
+      blades.rotation = elapsed * 0.00085;
+      for (const { walk, image } of villagers) {
+        const { x, y, bob, frame, flip } = walkPose(walk, elapsed);
+        const name = frameName('Unit', frame);
+        if (image.frame.name !== name) image.setFrame(name);
+        image.setPosition(x, y - bob).setDepth(y).setFlipX(flip);
+      }
+      scenery.sort('depth');
+    };
+    this.animate(0);
   }
 
   update(_time: number, delta: number) {

@@ -29,15 +29,32 @@ const neighbors = grid.map(({ column, row }) => {
 });
 
 function distance(from: number, to: number) {
-  const a = grid[from];
-  const b = grid[to];
-  const row = a.row - b.row;
-  const column = a.column - Math.floor(a.row / 2) - b.column + Math.floor(b.row / 2);
-  return Math.max(Math.abs(row), Math.abs(column), Math.abs(row + column));
+  const start = grid[from];
+  const end = grid[to];
+  const rowDelta = start.row - end.row;
+  // Remove the stagger from the grid columns to measure along the hex axes.
+  const axialColumnDelta = start.column - Math.floor(start.row / 2) - end.column + Math.floor(end.row / 2);
+  return Math.max(Math.abs(rowDelta), Math.abs(axialColumnDelta), Math.abs(rowDelta + axialColumnDelta));
 }
 
 function buildable({ level, x, y }: CoastTile) {
   return level === 1 && x >= 56 && x <= 968 && y >= 110 && y <= 523;
+}
+
+function elevation(shoreline: number, mountain: number) {
+  if (shoreline < 0) return 0;
+  if (shoreline < 0.25 || mountain < 0.14) return 1;
+  if (mountain < 0.53) return 2;
+  if (mountain < 0.83) return 3;
+  return 4;
+}
+
+function tileBiome(level: number, shoreline: number, autumn: boolean): Biome {
+  if (level === 0) return 'water';
+  if (level === 4) return 'snow';
+  if (level === 3) return 'rock';
+  if (shoreline < 0.22) return 'sand';
+  return autumn ? 'autumn' : 'grass';
 }
 
 function terrain(random: Random): CoastTile[] {
@@ -69,10 +86,8 @@ function terrain(random: Random): CoastTile[] {
     const mountain = hill(x - peakX, y - peakY, ridgeWidth, ridgeHeight) + Math.sin((x + y) / 63) * 0.12;
     const forest = Math.sin(x / 140 + y / 77 + forestPhase) + Math.cos(x / 118 - y / 115 + forestPhase);
     const autumn = Math.sin(x / 137 - y / 106 + autumnPhase) > 0.60;
-    const level = shoreline < 0 ? 0 : shoreline < 0.25 || mountain < 0.14 ? 1
-      : mountain < 0.53 ? 2 : mountain < 0.83 ? 3 : 4;
-    const biome = level === 0 ? 'water' : level === 4 ? 'snow' : level === 3 ? 'rock'
-      : shoreline < 0.22 ? 'sand' : autumn ? 'autumn' : 'grass';
+    const level = elevation(shoreline, mountain);
+    const biome = tileBiome(level, shoreline, autumn);
     const wooded = (biome === 'grass' || biome === 'autumn') && forest + random() * 0.28 > -0.12;
     return { id, x, y, level, biome, wooded };
   });

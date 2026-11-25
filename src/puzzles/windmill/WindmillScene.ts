@@ -2,7 +2,6 @@ import Phaser from 'phaser';
 import type { Size } from '../../domain/geometry';
 import { puzzleAnimationRates, type PuzzleSourceSceneData } from '../PuzzleSource';
 
-
 const artworkSize = { width: 512, height: 288 };
 
 export class WindmillScene extends Phaser.Scene {
@@ -24,16 +23,8 @@ export class WindmillScene extends Phaser.Scene {
   }
 }
 
-export function drawWindmill(scene: Phaser.Scene, { width, height }: Size) {
-  const landscape = scene.add.graphics();
-  landscape.fillStyle(0xc0dddb).fillRect(0, 0, width, height);
-  landscape.fillStyle(0xfdf0ba).fillCircle(393, 66, 27);
-  landscape.fillStyle(0x91ae87).fillEllipse(115, 223, 360, 115);
-  landscape.fillStyle(0x789774).fillEllipse(385, 243, 355, 150);
-  landscape.fillStyle(0x587f68).fillRect(0, 235, width, height - 235);
-  landscape.fillStyle(0xead7ac).fillRect(226, 151, 60, 91);
-  landscape.fillStyle(0xa25b48).fillTriangle(216, 151, 256, 118, 296, 151);
-  landscape.fillStyle(0x755344).fillRect(249, 206, 14, 36);
+export function drawWindmill(scene: Phaser.Scene, viewport: Size) {
+  const landscape = drawLandscape(scene, viewport);
 
   const sails = scene.add.graphics({ x: 256, y: 151 });
   for (let turn = 0; turn < 4; turn += 1) {
@@ -51,4 +42,17 @@ export function drawWindmill(scene: Phaser.Scene, { width, height }: Size) {
       sails.rotation += delta * 0.00035;
     },
   };
+}
+
+function drawLandscape(scene: Phaser.Scene, { width, height }: Size) {
+  const landscape = scene.add.graphics();
+  landscape.fillStyle(0xc0dddb).fillRect(0, 0, width, height);
+  landscape.fillStyle(0xfdf0ba).fillCircle(393, 66, 27);
+  landscape.fillStyle(0x91ae87).fillEllipse(115, 223, 360, 115);
+  landscape.fillStyle(0x789774).fillEllipse(385, 243, 355, 150);
+  landscape.fillStyle(0x587f68).fillRect(0, 235, width, height - 235);
+  landscape.fillStyle(0xead7ac).fillRect(226, 151, 60, 91);
+  landscape.fillStyle(0xa25b48).fillTriangle(216, 151, 256, 118, 296, 151);
+  landscape.fillStyle(0x755344).fillRect(249, 206, 14, 36);
+  return landscape;
 }

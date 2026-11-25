@@ -49,13 +49,18 @@ function walkingLane(path: VillagePoint[], lane: number): VillagePoint[] {
   for (let index = 1; index < path.length; index += 1) {
     const from = path[index - 1];
     const to = path[index];
-    const length = Math.hypot(to.x - from.x, to.y - from.y);
-    const dx = (to.x - from.x) / length;
-    const dy = (to.y - from.y) / length;
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const length = Math.hypot(dx, dy);
+    const forwardX = dx / length;
+    const forwardY = dy / length;
     const inset = 4;
+    // Offset to the right of travel and leave room to turn at each end.
+    const sideX = forwardY * lane;
+    const sideY = forwardX * lane;
     result.push(
-      { x: from.x + dx * inset - dy * lane, y: from.y + dy * inset + dx * lane },
-      { x: to.x - dx * inset - dy * lane, y: to.y - dy * inset + dx * lane },
+      { x: from.x + forwardX * inset - sideX, y: from.y + forwardY * inset + sideY },
+      { x: to.x - forwardX * inset - sideX, y: to.y - forwardY * inset + sideY },
     );
   }
   result.push(path[path.length - 1]);

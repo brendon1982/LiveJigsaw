@@ -2,7 +2,6 @@ import Phaser from 'phaser';
 import type { Size } from '../../domain/geometry';
 import { puzzleAnimationRates, type PuzzleSourceSceneData } from '../PuzzleSource';
 
-
 const artworkSize = { width: 512, height: 288 };
 const cycleDuration = 44_000;
 const orbitRadius = 196;
@@ -56,18 +55,8 @@ export function drawDesert(scene: Phaser.Scene, viewport: Size) {
   // The dunes hide the lower half of the path as the sky turns from left to right.
   const orbit = scene.add.container(width / 2, 221, [stars, sun, moon]);
 
-  const dunes = scene.add.graphics();
-  dunes.fillStyle(0xbb876e).fillRect(0, 202, width, 86);
-  dunes.fillStyle(0xb47f67).fillTriangle(243, 213, 366, 171, 448, 213);
-  dunes.fillStyle(0xad765f).fillTriangle(320, 201, 366, 171, 383, 201);
-  dunes.fillStyle(0xd9ae7e).fillEllipse(73, 224, 402, 91).fillEllipse(424, 245, 357, 75);
-  dunes.fillStyle(0xc99468).fillEllipse(232, 281, 538, 98);
-  dunes.fillStyle(0xe3bb84).fillEllipse(419, 302, 377, 94);
-  dunes.fillStyle(0x9b765f).fillEllipse(109, 262, 20, 7).fillEllipse(122, 267, 9, 4)
-    .fillEllipse(398, 253, 14, 5);
-  dunes.lineStyle(5, 0x536f5b).lineBetween(432, 244, 428, 213)
-    .lineBetween(430, 233, 419, 229).lineBetween(419, 229, 418, 222)
-    .lineBetween(429, 226, 438, 222).lineBetween(438, 222, 439, 215);
+  const dunes = drawDunes(scene, width);
+
   const nightShade = scene.add.rectangle(0, 0, width, height, 0x23304e).setOrigin(0);
 
   const artwork = scene.add.container(0, 0, [nightSky, sunset, daySky, orbit, dunes, nightShade])
@@ -91,4 +80,20 @@ export function drawDesert(scene: Phaser.Scene, viewport: Size) {
       lightSky();
     },
   };
+}
+
+function drawDunes(scene: Phaser.Scene, width: number) {
+  const dunes = scene.add.graphics();
+  dunes.fillStyle(0xbb876e).fillRect(0, 202, width, 86);
+  dunes.fillStyle(0xb47f67).fillTriangle(243, 213, 366, 171, 448, 213);
+  dunes.fillStyle(0xad765f).fillTriangle(320, 201, 366, 171, 383, 201);
+  dunes.fillStyle(0xd9ae7e).fillEllipse(73, 224, 402, 91).fillEllipse(424, 245, 357, 75);
+  dunes.fillStyle(0xc99468).fillEllipse(232, 281, 538, 98);
+  dunes.fillStyle(0xe3bb84).fillEllipse(419, 302, 377, 94);
+  dunes.fillStyle(0x9b765f).fillEllipse(109, 262, 20, 7).fillEllipse(122, 267, 9, 4)
+    .fillEllipse(398, 253, 14, 5);
+  dunes.lineStyle(5, 0x536f5b).lineBetween(432, 244, 428, 213)
+    .lineBetween(430, 233, 419, 229).lineBetween(419, 229, 418, 222)
+    .lineBetween(429, 226, 438, 222).lineBetween(438, 222, 439, 215);
+  return dunes;
 }

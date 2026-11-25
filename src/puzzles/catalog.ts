@@ -1,5 +1,6 @@
 import { canyonDriftSource } from './canyonDrift/canyonDriftSource';
 import { desertSource } from './desert/desertSource';
+import { emberMesaSource } from './emberMesa/emberMesaSource';
 import { forestSource } from './forest/forestSource';
 import { hexCoastSource } from './hexCoast/hexCoastSource';
 import { lighthouseSource } from './lighthouse/lighthouseSource';
@@ -23,4 +24,5 @@ export const puzzleSources: readonly PuzzleSource[] = [
   canyonDriftSource,
   twilightRidgeSource,
   pineHighlandsSource,
+  emberMesaSource,
 ];

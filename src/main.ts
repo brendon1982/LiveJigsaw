@@ -16,6 +16,7 @@ const game = new Phaser.Game({
   seed: [String(seed)],
   width: '100%',
   height: '100%',
+  roundPixels: true,
   backgroundColor: palette.background,
   scale: { mode: Phaser.Scale.RESIZE },
   input: { activePointers: 2 },

@@ -10,6 +10,7 @@ import { crescentCryptSource } from './crescentCrypt/crescentCryptSource';
 import { cupcakeCrossingSource } from './cupcakeCrossing/cupcakeCrossingSource';
 import { daybreakPassSource } from './daybreakPass/daybreakPassSource';
 import { desertSource } from './desert/desertSource';
+import { eclipseOrbitSource } from './eclipseOrbit/eclipseOrbitSource';
 import { emberMesaSource } from './emberMesa/emberMesaSource';
 import { emberworldSource } from './emberworld/emberworldSource';
 import { evergreenHorizonSource } from './evergreenHorizon/evergreenHorizonSource';
@@ -95,4 +96,5 @@ export const puzzleSources: readonly PuzzleSource[] = [
   verdigrisFrontierSource,
   twinPlanetsSource,
   violetNebulaSource,
+  eclipseOrbitSource,
 ];

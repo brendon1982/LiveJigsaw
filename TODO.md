@@ -9,3 +9,4 @@
 - [x] Add colour filters for the image drawn on the board, such as black and white or sepia.
 - [x] Add an animation speed setting with **Slow**, **Normal**, and **Fast** as part of the puzzle source contract. Each puzzle source must define how those speeds affect its animation.
 - [ ] Challenge modes e.g. pieces must be placed in a particular sequence, limited pool of placeable pieces.
+- [ ] Filters on puzzle selection screen e.g. never completed, type based ... etc

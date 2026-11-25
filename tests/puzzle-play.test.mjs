@@ -926,6 +926,20 @@ test('the picker scrolls past two cards and clips previews', async (t) => {
     const initial = await canvas.screenshot();
     assert.deepEqual(await pixelAt(page, initial, 120, 175), [192, 221, 219, 255]);
     assert.notDeepEqual(await pixelAt(page, initial, 800, 175), [38, 58, 54, 255], 'The second card should sit beside the first');
+    await page.mouse.move(1208, 43);
+    const hoveredButton = await pixelAt(page, await canvas.screenshot(), 1208, 43);
+    await page.mouse.down();
+    assert.notDeepEqual(await pixelAt(page, await canvas.screenshot(), 1208, 43), hoveredButton, 'A held mouse button should look pressed');
+    await page.mouse.move(1100, 43);
+    await page.mouse.up();
+    await page.mouse.move(1208, 43);
+    assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 1208, 43), hoveredButton, 'Moving off the button should clear the press');
+    await page.mouse.move(340, 180);
+    await page.mouse.down();
+    assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 86, 116), [60, 81, 74, 255], 'The card should respond to a mouse press');
+    await page.mouse.move(360, 180);
+    assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 86, 116), [48, 69, 63, 255], 'Crossing the drag threshold should clear the press');
+    await page.mouse.up();
     const assertColumnSpacing = (screenshot) => {
       const { width, data } = PNG.sync.read(screenshot);
       const rowStart = width * 116 * 4;
@@ -1052,17 +1066,26 @@ test('the picker scrolls past two cards and clips previews', async (t) => {
       isMobile: true,
     }, path);
     const touch = await page.context().newCDPSession(page);
-    const swipeUp = async (x, startY, endY) => {
+    const swipeUp = async (x, startY, endY, onMove = async () => {}) => {
       await touch.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y: startY }] });
+      await onMove(0);
       for (let step = 1; step <= 10; step += 1) {
         const y = startY + (endY - startY) * step / 10;
         await touch.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y }] });
+        await onMove(step);
       }
       await touch.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
     };
 
     const initial = await canvas.screenshot();
-    await swipeUp(400, 265, 43);
+    await swipeUp(400, 265, 43, async (step) => {
+      if (step === 0) {
+        assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 108, 160), [60, 81, 74, 255], 'The card should respond to a touch press');
+      }
+      if (step === 1) {
+        assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 108, 160), [48, 69, 63, 255], 'The card should release while the finger is scrolling');
+      }
+    });
     assert.notDeepEqual(await pixelAt(page, await canvas.screenshot(), 140, 244), await pixelAt(page, initial, 140, 244));
     assert.equal(await page.evaluate(() => window.paintedText.includes('Connector style')), false, 'A swipe should keep the options closed');
     await swipeUp(170, 700, 180);

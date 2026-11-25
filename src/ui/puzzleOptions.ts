@@ -3,7 +3,7 @@ import { connectorStyles, type ConnectorStyleId } from '../domain/connectorStyle
 import { availablePuzzleSizes, type PuzzleSize } from '../domain/puzzleSizes';
 import type { PuzzleOptions } from '../persistence/GameSave';
 import { puzzleAnimationSpeeds, type PuzzleAnimationSpeed, type PuzzleSource } from '../puzzles/PuzzleSource';
-import { makeButtonLabel, type UIScene } from './button';
+import { addPressFeedback, makeButtonLabel, type UIScene } from './button';
 import { palette } from './theme';
 
 const optionWidth = 96;
@@ -165,6 +165,7 @@ export function showPickerDialog(
 }
 
 function makeRadioButtons(scene: UIScene, options: readonly Option[], selectedName: string) {
+  const dragThreshold = 12;
   const tiles = options.map(({ name, label, drawIcon }) => {
     const background = scene.rexUI.add.roundRectangle(0, 0, 1, 1, 9, palette.background)
       .setStrokeStyle(1, palette.optionBorder).setDepth(depth.controls);
@@ -175,17 +176,23 @@ function makeRadioButtons(scene: UIScene, options: readonly Option[], selectedNa
         .setDepth(depth.tileContents),
       space: { icon: 4 },
     }).setDepth(depth.controls, true);
-    return { button, background };
+    let selected = false;
+    let pressed = false;
+    const restyle = () => {
+      background.setFillStyle(pressed ? palette.buttonPressed : selected ? palette.selectedOption : palette.background)
+        .setStrokeStyle(selected ? 2 : 1, selected ? palette.primaryButton : palette.optionBorder);
+    };
+    addPressFeedback(button, (value) => { pressed = value; restyle(); }, dragThreshold);
+    return { button, setSelected(value: boolean) { selected = value; restyle(); } };
   });
 
   const buttons = scene.rexUI.add.buttons({
     orientation: 'x', type: 'radio', buttons: tiles.map(({ button }) => button),
-    click: { threshold: 12, clickInterval: 0 },
+    click: { threshold: dragThreshold, clickInterval: 0 },
     space: { item: optionGap },
     setValueCallback: (button, selected) => {
       const tile = tiles.find((entry) => entry.button === button)!;
-      tile.background.setFillStyle(selected ? palette.selectedOption : palette.background)
-        .setStrokeStyle(selected ? 2 : 1, selected ? palette.primaryButton : palette.optionBorder);
+      tile.setSelected(selected);
     },
   });
   for (const { button } of tiles) button.input!.cursor = 'pointer';

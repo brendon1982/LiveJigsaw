@@ -4,14 +4,14 @@ import { availablePuzzleSizes, puzzleSizes } from '../domain/puzzleSizes';
 import { gameSave } from '../persistence';
 import { puzzleSources } from '../puzzles/catalog';
 import type { PuzzleSource } from '../puzzles/PuzzleSource';
-import { makeButton } from './button';
+import { addPressFeedback, makeButton } from './button';
 import type { PuzzleSelection } from './PlayPuzzleScene';
 import { showPuzzleFilters } from './puzzleFilterDialog';
 import { activeFilterCount, matchesPuzzleFilters, noPuzzleFilters, samePuzzleFilters, type PuzzleFilters } from './puzzleFilters';
 import { headerControlGap, headerGap, headerInset, makeSettingsButton, puzzleHeader } from './puzzleHeader';
 import { showPuzzleOptions, showResumePuzzle } from './puzzleOptions';
 import { openSettings } from './SettingsScene';
-import { styleWithTheme } from './theme';
+import { palette, styleWithTheme } from './theme';
 
 const cardWidth = 560;
 const cardHeight = 387;
@@ -223,13 +223,19 @@ export class SelectPuzzleScene extends Phaser.Scene {
     const completions = this.add.text(cardWidth - 24, cardHeight - 16, `Completed ${completionCount} times`, {
       fontFamily: 'system-ui', fontSize: '17px',
     }).setOrigin(1, 1);
-    styleWithTheme(background, (colors) => {
-      background.setFillStyle(colors.surface);
+    let pressed = false;
+    const restyle = (colors: typeof palette) => {
+      background.setFillStyle(pressed ? colors.surfacePressed : colors.surface);
       title.setColor(colors.text);
       tags.setColor(colors.mutedText);
       completions.setColor(colors.mutedText);
-    });
+    };
+    styleWithTheme(background, restyle);
     if (availablePuzzleSizes(source.maxViewport).length > 0) {
+      addPressFeedback(background, (value) => { pressed = value; restyle(palette); }, scrollThreshold, (pointer) => {
+        const point = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
+        return listBounds.contains(point.x, point.y);
+      });
       this.rexUI.add.click(background, { threshold: scrollThreshold, clickInterval: 0 })
         .on('click', (_button: unknown, _object: unknown, pointer: Phaser.Input.Pointer) => {
           const camera = this.cameras.main;

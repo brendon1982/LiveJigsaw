@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import type { Point, Size } from '../domain/geometry';
+import type { Bounds, Point, Size } from '../domain/geometry';
 import type { PuzzlePiece } from '../domain/Puzzle';
 import type { LivePuzzleCapture } from '../rendering/LivePuzzleCapture';
 import { activePuzzleFilter, onPuzzleFilterChange, type PuzzleArtworkFilter } from './puzzleFilter';
@@ -109,8 +109,7 @@ export class PannableBoard {
     const keepFitted = this.usesFitZoom && !this.isViewAdjusted;
     const dx = (bounds.width - this.viewport.width) / 2;
     const dy = (bounds.height - this.viewport.height) / 2;
-    this.viewport = bounds;
-    this.camera.setViewport(bounds.x, bounds.y, bounds.width, bounds.height);
+    this.setViewport(bounds);
     if (keepFitted) this.fit();
     else this.pan(dx, dy);
   }
@@ -145,6 +144,22 @@ export class PannableBoard {
     this.pan(0, 0);
   }
 
+  beginFitTransition(workspace: Bounds) {
+    const startZoom = this.zoom;
+    const startingCenter = this.centeredOffset(startZoom);
+    const panX = this.offset.x - startingCenter.x;
+    const panY = this.offset.y - startingCenter.y;
+    const zoomToFit = this.zoomToFit(workspace);
+    return (bounds: Phaser.Geom.Rectangle, progress: number) => {
+      this.setViewport(bounds);
+      const zoom = Phaser.Math.Linear(startZoom, zoomToFit, progress);
+      this.camera.setZoom(zoom);
+      const center = this.centeredOffset(zoom);
+      this.offset = { x: center.x + panX * (1 - progress), y: center.y + panY * (1 - progress) };
+      this.pan(0, 0);
+    };
+  }
+
   zoomAt(point: Point, scale: number, previousPoint: Point = point) {
     const anchor = this.toLocal(previousPoint);
     const minimumZoom = Math.min(0.5, this.fitZoom);
@@ -165,7 +180,16 @@ export class PannableBoard {
   }
 
   private get fitZoom(): number {
-    return Math.min(1, this.viewport.width / this.size.width, this.viewport.height / this.size.height);
+    return this.zoomToFit(this.viewport);
+  }
+
+  private zoomToFit({ width, height }: Size): number {
+    return Math.min(1, width / this.size.width, height / this.size.height);
+  }
+
+  private setViewport(bounds: Phaser.Geom.Rectangle) {
+    this.viewport = bounds;
+    this.camera.setViewport(bounds.x, bounds.y, bounds.width, bounds.height);
   }
 
   private centeredOffset(zoom: number): Point {

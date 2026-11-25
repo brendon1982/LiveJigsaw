@@ -709,6 +709,20 @@ test('puzzle progress resumes, resets, and records each completion', async (t) =
   assert.deepEqual(await pixelAt(page, await canvas.screenshot(), firstTarget.x, firstTarget.y), placedColor);
   for (let count = 1; count < targets.length; count += 1) await placeNextPiece();
   await waitForText('8 of 8 placed');
+  const findBoardEdge = (screenshot) => {
+    const { width, data } = PNG.sync.read(screenshot);
+    for (let x = 24; x < width; x += 1) {
+      const offset = (105 * width + x) * 4;
+      if (data[offset] === 32 && data[offset + 1] === 46 && data[offset + 2] === 42) return x;
+    }
+    assert.fail('Expected to find the board background');
+  };
+  const startingEdge = findBoardEdge(guide);
+  let sliding = await canvas.screenshot();
+  if (findBoardEdge(sliding) === startingEdge) sliding = await canvas.screenshot();
+  const boardEdge = findBoardEdge(sliding);
+  assert.ok(boardEdge > 24 && boardEdge < startingEdge, 'The board should grow while the tray is still sliding away');
+  assert.deepEqual(await pixelAt(page, sliding, 37, 43), [58, 81, 75, 255], 'Navigation should stay visible during the reveal');
   assert.equal(await getAttempt(), undefined);
   assert.deepEqual((await getHistory()).map(({ setup }) => setup), [firstSave.setup]);
   assert.equal(await page.evaluate(() => window.paintedText.includes('Choose puzzle')), false,

@@ -20,7 +20,7 @@ export class PuzzlePanels {
   private readonly layoutPanels: () => void;
 
   constructor(
-    private readonly scene: UIScene,
+    scene: UIScene,
     side: TraySide,
     onLayout: (trayBounds: Phaser.Geom.Rectangle, boardBounds: Phaser.Geom.Rectangle) => void,
     onResizeTray: (fraction: number) => void,
@@ -83,9 +83,44 @@ export class PuzzlePanels {
     this.layoutPanels();
   }
 
-  fadeTray(duration: number) {
+  beginTraySlide(): Phaser.Geom.Rectangle {
     this.divider.disableInteractive();
-    this.scene.tweens.add({ targets: [this.tray, this.dividerLine, this.grip], alpha: 0, duration, ease: 'Sine.InOut' });
+    return this.board.getBounds();
+  }
+
+  layoutTraySlide(workspace: Bounds, start: Phaser.Geom.Rectangle, progress: number): Phaser.Geom.Rectangle {
+    const mix = Phaser.Math.Linear;
+    const { x, y, width, height } = workspace;
+    const board = new Phaser.Geom.Rectangle(
+      mix(start.x, x, progress), mix(start.y, y, progress),
+      mix(start.width, width, progress), mix(start.height, height, progress),
+    );
+    this.board.setPosition(board.centerX, board.centerY).setDisplaySize(board.width, board.height);
+
+    const workspaceStart = this.stacked ? y : x;
+    const workspaceEnd = this.stacked ? y + height : x + width;
+    const boardEdge = this.trayFirst
+      ? (this.stacked ? board.top : board.left)
+      : (this.stacked ? board.bottom : board.right);
+    const remaining = this.trayFirst ? boardEdge - workspaceStart : workspaceEnd - boardEdge;
+    const gap = Phaser.Math.Clamp(remaining, 0, dividerThickness);
+    const traySize = Math.max(0, remaining - gap);
+    const trayCenter = this.trayFirst ? workspaceStart + traySize / 2 : workspaceEnd - traySize / 2;
+    const dividerCenter = boardEdge + (this.trayFirst ? -gap : gap) / 2;
+
+    if (this.stacked) {
+      this.tray.setPosition(board.centerX, trayCenter).setDisplaySize(width, traySize);
+      this.dividerLine.setPosition(board.centerX, Math.floor(dividerCenter));
+      this.grip.setPosition(board.centerX, dividerCenter);
+    } else {
+      this.tray.setPosition(trayCenter, board.centerY).setDisplaySize(traySize, height);
+      this.dividerLine.setPosition(Math.floor(dividerCenter), board.centerY);
+      this.grip.setPosition(dividerCenter, board.centerY);
+    }
+    this.tray.setVisible(traySize > 0);
+    this.dividerLine.setVisible(gap >= 1);
+    this.grip.setVisible(gap >= 8);
+    return board;
   }
 
   layoutBoardOnly(workspace: Bounds): Phaser.Geom.Rectangle {

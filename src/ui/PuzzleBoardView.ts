@@ -35,7 +35,7 @@ type TraySettings = {
 const pieceDragThreshold = 8;
 const pieceDragSlope = Math.tan(70 * Math.PI / 180);
 const trayScrollThreshold = 20;
-const trayFadeDuration = 360;
+const traySlideDuration = 560;
 const boardDirection: Record<TraySide, number> = { Left: 1, Right: -1, Top: 1, Bottom: -1 };
 
 function measurePinch(a: Point, b: Point) {
@@ -61,7 +61,7 @@ export class PuzzleBoardView {
   private gesture?: Gesture;
   private pinch?: Pinch;
   private completionStage: 'playing' | 'revealing' | 'finished' = 'playing';
-  private tuckTrayTimer?: Phaser.Time.TimerEvent;
+  private traySlide?: Phaser.Tweens.Tween;
 
   constructor(
     private readonly scene: UIScene,
@@ -113,8 +113,18 @@ export class PuzzleBoardView {
       const { gameSize } = scene.scale;
       const workspace = playWorkspace(gameSize);
       dragCamera.setViewport(0, 0, gameSize.width, gameSize.height);
-      if (this.completionStage === 'finished') {
+      if (this.completionStage !== 'playing') {
+        const finishSlide = this.completionStage === 'revealing';
+        if (finishSlide) {
+          this.traySlide?.remove();
+          this.traySlide = undefined;
+          this.completionStage = 'finished';
+        }
         this.layoutBoard(this.panels!.layoutBoardOnly(workspace));
+        if (finishSlide) {
+          this.board.fit();
+          this.updateFitButton();
+        }
         return;
       }
       const side = resolveTraySide(this.trayPosition, gameSize);
@@ -132,7 +142,6 @@ export class PuzzleBoardView {
           trayFractions = { ...trayFractions, [orientation]: fraction };
           traySettings.onResize(trayFractions);
         });
-        if (this.completionStage === 'revealing') this.panels.fadeTray(trayFadeDuration);
         clipLayers();
       }
       this.panels.layout(workspace, this.tray.minimumSize, trayFractions[orientation]);
@@ -155,7 +164,7 @@ export class PuzzleBoardView {
     this.scene.input.off('pointerupoutside', this.cancelGesture);
     this.scene.input.off(Phaser.Input.Events.POINTER_WHEEL, this.handleWheel);
     this.scene.input.setDefaultCursor('default');
-    this.tuckTrayTimer?.remove(false);
+    this.traySlide?.remove();
     this.tray.destroy();
     this.clearLiftShadow();
     this.placementEffects.destroy();
@@ -173,14 +182,23 @@ export class PuzzleBoardView {
     this.completionStage = 'revealing';
     this.updateFitButton();
     this.board.revealFinishedArtwork();
-    this.panels!.fadeTray(trayFadeDuration);
-    this.tuckTrayTimer = this.scene.time.delayedCall(trayFadeDuration, () => {
-      this.completionStage = 'finished';
-      this.tray.hide();
-      this.trayBounds.setTo(0, 0, 0, 0);
-      this.resize();
-      this.board.fit();
-      this.updateFitButton();
+    this.tray.hide();
+    this.trayBounds.setTo(0, 0, 0, 0);
+
+    const workspace = playWorkspace(this.scene.scale.gameSize);
+    const panels = this.panels!;
+    const startingBounds = panels.beginTraySlide();
+    const fitFrame = this.board.beginFitTransition(workspace);
+    this.traySlide = this.scene.tweens.addCounter({
+      from: 0, to: 1, duration: traySlideDuration, ease: 'Sine.InOut',
+      onUpdate: (tween) => {
+        const progress = tween.getValue() ?? 0;
+        fitFrame(panels.layoutTraySlide(workspace, startingBounds, progress), progress);
+      },
+      onComplete: () => {
+        this.traySlide = undefined;
+        this.resize();
+      },
     });
   }
 

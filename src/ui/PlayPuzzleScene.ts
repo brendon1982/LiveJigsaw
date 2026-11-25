@@ -77,10 +77,9 @@ export class PlayPuzzleScene extends Phaser.Scene {
       updateProgress();
       if (puzzle.isComplete) {
         gameSave.completeAttempt(source.scene.key, { setup, completedAt: new Date().toISOString() });
-        backButton.setVisible(false);
         board.showCompletion();
         completionAction = this.time.delayedCall(completionPreviewDuration, () => {
-          backButton.setText('Choose puzzle').setData('primary', true).layout().setVisible(true);
+          backButton.setText('Choose puzzle').setData('primary', true).layout();
         });
       } else {
         gameSave.saveProgress(source.scene.key, { setup, placedPieceIds: puzzle.snapshotPlacements() });

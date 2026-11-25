@@ -1,15 +1,19 @@
 # Live Jigsaw TODO
 
 - [x] Save puzzle progress so players can leave a partially completed puzzle and resume it later.
+- [ ] Add piece rotation option, when on pieces in the puzzle tray are randomly rotated. Tapping the piece rotates it in the tray.
+- [ ] Add bigger puzzle size.
+- [ ] Add badges to puzzle selection cards for completing at different sizes and in different challenge modes.
 - [ ] Add unlockable effects that play when a piece is placed. Decide how players unlock them.
-- [ ] Add more puzzle piece shapes.
+- [ ] Consider adding more puzzle piece shapes.
+- [ ] Consider allowing for pieces to be placed and assembled off the board. This would also have to allow for rotation when pieces are in this state.
 - [x] Vary the shape of piece connectors and where they sit along each edge.
 - [x] Add UI themes.
-- [ ] Add a loading screen.
+- [x] Add a loading screen.
 - [x] Add colour filters for the image drawn on the board, such as black and white or sepia.
 - [x] Add an animation speed setting with **Slow**, **Normal**, and **Fast** as part of the puzzle source contract. Each puzzle source must define how those speeds affect its animation.
-- [ ] Challenge modes e.g. pieces must be placed in a particular sequence, limited pool of placeable pieces.
-- [ ] Filters on puzzle selection screen e.g. never completed, type based ... etc
+- [x] Challenge modes e.g. pieces must be placed in a particular sequence, limited pool of placeable pieces.
+- [x] Filters on puzzle selection screen e.g. never completed, type based ... etc
 
 ## UI polish
 

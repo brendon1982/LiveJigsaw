@@ -4,7 +4,12 @@ Live Jigsaw is a Phaser 4 jigsaw game with RexUI controls. Each puzzle samples o
 
 ## Code style
 
-Prefer cohesive, readable, and simple code. Keep related behavior together, use names that reflect the game, and make the main flow easy to follow. Add an abstraction when it clarifies the code or serves a concrete need.
+Apply cohesion, readability, and simplicity at every level, from modules and classes down to functions, loops, and expressions.
+
+- **Make the main flow easy to narrate.** When a function performs several meaningful steps, give those steps names through local variables, straightforward control flow, or focused helpers. A reader should be able to follow the main flow and then inspect the details they care about.
+- **Express the domain operation directly.** Choose names and control flow that reveal what the game is doing. For a grid built row by row, loops over `row` and `column` make the traversal visible. Use names like `cellWidth` when more than one kind of width is in scope.
+- **Keep each step cohesive.** Group calculations and assembly that a reader naturally understands together. Extract a helper when it names a distinct rule or phase and makes sense on its own. Keep small, closely related steps together where the reader uses them.
+- **Review for what the reader must infer.** After checking where the code belongs, read the implementation in execution order. Look for changing meanings, implicit ordering, coordinate conversions, and expressions that combine several steps. Make the important ones visible in the code.
 
 ## Where changes belong
 

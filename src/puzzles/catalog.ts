@@ -10,6 +10,7 @@ import { fallenTimberSource } from './fallenTimber/fallenTimberSource';
 import { fernwoodGroveSource } from './fernwoodGrove/fernwoodGroveSource';
 import { forestSource } from './forest/forestSource';
 import { hexCoastSource } from './hexCoast/hexCoastSource';
+import { lanternManorSource } from './lanternManor/lanternManorSource';
 import { lighthouseSource } from './lighthouse/lighthouseSource';
 import { lollipopLaneSource } from './lollipopLane/lollipopLaneSource';
 import { meadowSource } from './meadow/meadowSource';
@@ -49,4 +50,5 @@ export const puzzleSources: readonly PuzzleSource[] = [
   lollipopLaneSource,
   chocolateHillsSource,
   cupcakeCrossingSource,
+  lanternManorSource,
 ];

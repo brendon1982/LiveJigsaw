@@ -44,10 +44,6 @@ export class SelectPuzzleScene extends Phaser.Scene {
     super(SelectPuzzleScene.key);
   }
 
-  preload() {
-    for (const source of puzzleSources) source.preloadPreview?.(this);
-  }
-
   create() {
     const listBounds = new Phaser.Geom.Rectangle();
     let dialogOpen = false;
@@ -97,7 +93,6 @@ export class SelectPuzzleScene extends Phaser.Scene {
         scrollThreshold, () => openCard(source, progress));
       return { card, tags: source.tags, completions };
     });
-    this.textures.remove(cutout);
     const grid = this.rexUI.add.gridSizer({
       column: 1, row: 1,
     });
@@ -214,12 +209,26 @@ export class SelectPuzzleScene extends Phaser.Scene {
         emptyState.layout().setPosition(width / 2, panelTop + 36);
       }
     };
+    const loadNearbyPreviews = () => {
+      let queuedImages = false;
+      for (const { card } of visibleCards) {
+        const { y, height } = card.container;
+        const buffer = height + rowGap;
+        if (y + height <= listBounds.top - buffer || y >= listBounds.bottom + buffer) continue;
+        if (card.preparePreview()) queuedImages = true;
+      }
+      if (queuedImages) this.load.start();
+    };
     const fitPicker = () => layoutPicker(panel.childOY);
     this.scale.on(Phaser.Scale.Events.RESIZE, fitPicker);
+    this.events.on(Phaser.Scenes.Events.UPDATE, loadNearbyPreviews);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.scale.off(Phaser.Scale.Events.RESIZE, fitPicker);
+      this.events.off(Phaser.Scenes.Events.UPDATE, loadNearbyPreviews);
+      this.textures.remove(cutout);
     });
     updateFilterCaption();
     layoutPicker(this.scrollOffset);
+    loadNearbyPreviews();
   }
 }

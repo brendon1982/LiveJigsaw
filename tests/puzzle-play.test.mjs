@@ -156,13 +156,14 @@ async function openPuzzle(t, options, path = '/') {
   return { page, canvas, waitForText, errors, clickDialog, clickSetup, playSelection };
 }
 
-scenario('the startup indicator stays visible until the picker renders', async (t) => {
+scenario('the picker renders before requesting offscreen previews', async (t) => {
   const { page, canvas, waitForText, errors, origin } = await openGamePage(t, {
     viewport: { width: 768, height: 1024 },
     reducedMotion: 'reduce',
   });
   const gameScript = /\/assets\/index-[\w-]+\.js$/;
   const previewAsset = /\/assets\/preview-[\w-]+\.png$/;
+  const requestedPreviews = [];
   const scriptGate = Promise.withResolvers();
   const previewGate = Promise.withResolvers();
   await page.route(gameScript, async (route) => {
@@ -170,9 +171,10 @@ scenario('the startup indicator stays visible until the picker renders', async (
     await route.continue();
   }, { times: 1 });
   await page.route(previewAsset, async (route) => {
+    requestedPreviews.push(route.request().url());
     await previewGate.promise;
     await route.continue();
-  }, { times: 1 });
+  });
 
   const status = page.getByRole('status');
   try {
@@ -187,16 +189,31 @@ scenario('the startup indicator stays visible until the picker renders', async (
     await page.emulateMedia({ reducedMotion: 'no-preference' });
     assert.equal(await spinner.evaluate((element) => getComputedStyle(element).animationName), 'startup-spin');
 
-    const previewRequested = page.waitForRequest(previewAsset);
     scriptGate.resolve();
-    await previewRequested;
-    await canvas.waitFor({ state: 'visible' });
-    await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
-    assert.ok(await status.isVisible(), 'The indicator should cover the canvas while previews load');
-
-    previewGate.resolve();
     await waitForText('Select a Puzzle');
-    await status.waitFor({ state: 'detached' });
+    await status.waitFor({ state: 'detached', timeout: 4000 });
+    assert.deepEqual(requestedPreviews, [], 'The first screen contains only drawn previews');
+
+    await page.mouse.move(380, 400);
+    const previewRequested = page.waitForRequest(previewAsset, { timeout: 4000 });
+    await page.mouse.wheel(0, 30000);
+    await previewRequested;
+    const placeholder = [48, 69, 63, 255];
+    const bottomPreview = async () => pixelAt(page, await canvas.screenshot(), 380, 780);
+    assert.deepEqual(await bottomPreview(), placeholder, 'A pending preview should leave the card in place');
+    assert.ok(requestedPreviews.length >= 3 && requestedPreviews.length <= 4,
+      `Expected only previews near the bottom, got ${requestedPreviews.length}`);
+    previewGate.resolve();
+    let artwork = await bottomPreview();
+    for (let frame = 0; frame < 30 && artwork.every((channel, i) => channel === placeholder[i]); frame++) {
+      artwork = await bottomPreview();
+    }
+    assert.notDeepEqual(artwork, placeholder, 'The preview should appear in the same card when it loads');
+    await page.mouse.wheel(0, -30000);
+    await canvas.screenshot();
+    await page.mouse.wheel(0, 30000);
+    assert.deepEqual(await bottomPreview(), artwork);
+    assert.equal(new Set(requestedPreviews).size, requestedPreviews.length, 'Revisited cards should reuse their preview');
     assert.deepEqual(errors, []);
   } finally {
     scriptGate.resolve();

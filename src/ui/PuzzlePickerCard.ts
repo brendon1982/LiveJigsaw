@@ -38,7 +38,8 @@ export function makePuzzlePickerCard(
   openOptions: () => void,
 ) {
   const background = scene.rexUI.add.roundRectangle(0, 0, 1, 1, cornerRadius).setOrigin(0);
-  const preview = makePreview(scene, source, cutout);
+  let preview: Phaser.GameObjects.RenderTexture | undefined;
+  let previewRequested = false;
   const metadata = `${source.tags.theme} · ${source.tags.type}`;
   const title = scene.add.text(0, 0, source.title, { fontFamily: 'system-ui', fontSize: '22px' }).setOrigin(0, 0.5);
   const metadataStyle = { fontFamily: 'system-ui', fontSize: '15px' };
@@ -61,7 +62,7 @@ export function makePuzzlePickerCard(
     addPressFeedback(background, (value) => {
       pressed = value;
       background.setFillStyle(pressed ? palette.surfacePressed : palette.surface);
-      preview.setTint(pressed ? 0xececec : 0xffffff);
+      preview?.setTint(pressed ? 0xececec : 0xffffff);
     }, scrollThreshold, (pointer) => isInsideList(pointer.x, pointer.y));
     scene.rexUI.add.click(background, { threshold: scrollThreshold, clickInterval: 0 })
       .on('click', (_button: unknown, _object: unknown, pointer: Phaser.Input.Pointer) => {
@@ -73,9 +74,24 @@ export function makePuzzlePickerCard(
   }
 
   const container = scene.rexUI.add.container(0, 0, 0, 0).setOrigin(0)
-    .addLocal([background, preview, title, tags, statusLabel]);
+    .addLocal([background, title, tags, statusLabel]);
   return {
     container,
+    preparePreview() {
+      if (preview) return false;
+      const image = source.previewImage;
+      if (image && !scene.textures.exists(image.key)) {
+        if (previewRequested) return false;
+        previewRequested = true;
+        scene.load.image(image.key, image.url);
+        return true;
+      }
+
+      preview = makePreview(scene, source, cutout).setTint(pressed ? 0xececec : 0xffffff);
+      const scale = container.width / maxPickerCardWidth;
+      container.addLocal(preview).setChildLocalScale(preview, scale, scale);
+      return false;
+    },
     needsStatusRow(width: number) { return inlineStatusWidth > width - 2 * footerInset; },
     layout(width: number, stackStatus: boolean) {
       const scale = width / maxPickerCardWidth;
@@ -87,7 +103,7 @@ export function makePuzzlePickerCard(
       container.setSize(width, height);
       background.setRadius(cornerRadius * scale).resize(width, height);
       if (background.input) background.input.hitArea.setSize(width, height);
-      container.setChildLocalScale(preview, scale, scale);
+      if (preview) container.setChildLocalScale(preview, scale, scale);
       fitLabel(title, source.title, textWidth);
       fitLabel(tags, metadata, textWidth);
       fitLabel(statusLabel, status, textWidth);

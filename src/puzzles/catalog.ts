@@ -2,6 +2,7 @@ import { afterglowSource } from './afterglow/afterglowSource';
 import { amberWoodsSource } from './amberWoods/amberWoodsSource';
 import { birchGladeSource } from './birchGlade/birchGladeSource';
 import { blueMoonValleySource } from './blueMoonValley/blueMoonValleySource';
+import { blueStarSource } from './blueStar/blueStarSource';
 import { canyonDriftSource } from './canyonDrift/canyonDriftSource';
 import { chocolateHillsSource } from './chocolateHills/chocolateHillsSource';
 import { cobaltWorldSource } from './cobaltWorld/cobaltWorldSource';
@@ -97,4 +98,5 @@ export const puzzleSources: readonly PuzzleSource[] = [
   twinPlanetsSource,
   violetNebulaSource,
   eclipseOrbitSource,
+  blueStarSource,
 ];

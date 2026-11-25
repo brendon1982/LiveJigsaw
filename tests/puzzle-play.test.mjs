@@ -1,9 +1,13 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { test } from 'node:test';
+import { describe, test } from 'node:test';
+import { setTimeout as delay } from 'node:timers/promises';
 import { chromium } from 'playwright-core';
 import { PNG } from 'pngjs';
 import { build, preview } from 'vite';
+
+const scenarios = [];
+const scenario = (name, run) => scenarios.push({ name, run });
 
 const settingsY = { theme: -159, firstFilter: -60, secondFilter: 2, firstTray: 98, secondTray: 160, done: 232 };
 const setupY = { size: -155, connector: -29, speed: 82, challenge: 178, action: 248 };
@@ -21,6 +25,17 @@ async function seedNextAttempt(page, seed) {
 
 function readSave(page) {
   return page.evaluate(() => JSON.parse(localStorage.getItem('live-jigsaw.save')));
+}
+
+function paceRepeatClicks(click) {
+  // RexUI ignores another click on the same button within 100 ms.
+  let nextClick = 0;
+  return async () => {
+    const remaining = Math.ceil(nextClick - performance.now());
+    if (remaining > 0) await delay(remaining);
+    await click();
+    nextClick = performance.now() + 101;
+  };
 }
 
 async function pixelAt(page, png, x, y) {
@@ -63,7 +78,7 @@ async function openGamePage(t, options) {
   const { port } = server.httpServer.address();
   const browser = await chromium.launch({
     channel: process.env.LIVE_JIGSAW_BROWSER ?? 'chrome',
-    args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'],
+    args: ['--enable-gpu', '--enable-unsafe-swiftshader'],
   });
   t.after(() => browser.close());
 
@@ -141,7 +156,7 @@ async function openPuzzle(t, options, path = '/') {
   return { page, canvas, waitForText, errors, clickDialog, clickSetup, playSelection };
 }
 
-test('the startup indicator stays visible until the picker renders', async (t) => {
+scenario('the startup indicator stays visible until the picker renders', async (t) => {
   const { page, canvas, waitForText, errors, origin } = await openGamePage(t, {
     viewport: { width: 768, height: 1024 },
     reducedMotion: 'reduce',
@@ -189,13 +204,14 @@ test('the startup indicator stays visible until the picker renders', async (t) =
   }
 });
 
-test('live pieces scroll, reflow, and snap to the pannable board', async (t) => {
+scenario('live pieces scroll, reflow, and snap to the pannable board', async (t) => {
   const { page, canvas, waitForText, errors, clickDialog, playSelection } = await openPuzzle(t, { viewport: { width: 1320, height: 780 } });
   const bounds = await canvas.boundingBox();
   assert.equal(bounds.width, 1320);
   assert.equal(bounds.height, 780);
   const move = (x, y, steps) => page.mouse.move(bounds.x + x, bounds.y + y, { steps });
   const click = (x, y) => page.mouse.click(bounds.x + x, bounds.y + y);
+  const clickSettings = paceRepeatClicks(() => click(1246, 43));
   const drag = async (x, y, endX, endY) => {
     await move(x, y);
     await page.mouse.down();
@@ -253,7 +269,7 @@ test('live pieces scroll, reflow, and snap to the pannable board', async (t) => 
   await waitForText('1 of 8 placed');
   const placed = await canvas.screenshot();
   assert.deepEqual(await pixelAt(page, placed, 735, 348), sky, 'Zooming at the drop target should keep it under the pointer');
-  await click(1246, 43);
+  await clickSettings();
   await waitForText('Color theme');
   await clickDialog(21, settingsY.theme);
   await clickDialog(101, settingsY.done);
@@ -261,13 +277,13 @@ test('live pieces scroll, reflow, and snap to the pannable board', async (t) => 
   assert.deepEqual(await pixelAt(page, slate, 1290, 100), [33, 44, 59, 255], 'Settings should restyle the active board');
   assert.deepEqual(await pixelAt(page, slate, 735, 348), sky, 'The placed piece should stay at its zoomed position');
   await page.evaluate(() => { window.paintedText = []; });
-  await click(1246, 43);
+  await clickSettings();
   await waitForText('Color theme');
   await clickDialog(102, settingsY.theme);
   await clickDialog(101, settingsY.done);
   assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 1290, 100), [27, 28, 30, 255], 'Dark should use its own board colour');
   await page.evaluate(() => { window.paintedText = []; });
-  await click(1246, 43);
+  await clickSettings();
   await waitForText('Color theme');
   await clickDialog(-95, settingsY.theme);
   await page.waitForFunction(() => JSON.parse(localStorage.getItem('live-jigsaw.save')).settings.theme === 'Forest');
@@ -287,7 +303,7 @@ test('live pieces scroll, reflow, and snap to the pannable board', async (t) => 
 
   const selectFilter = async (x, y, name) => {
     await page.evaluate(() => { window.paintedText = []; });
-    await click(1246, 43);
+    await clickSettings();
     await waitForText('Black and White');
     const before = await guidePixel(await canvas.screenshot());
     await clickDialog(x, y);
@@ -400,7 +416,7 @@ test('live pieces scroll, reflow, and snap to the pannable board', async (t) => 
   assert.deepEqual(errors, []);
 });
 
-test('the landscape scenes animate on the board', async (t) => {
+scenario('the landscape scenes animate on the board', async (t) => {
   const { page, waitForText, errors, playSelection } = await openPuzzle(t, { viewport: { width: 1320, height: 780 } });
   const selections = [
     ['Mountains', 'Meadow'],
@@ -445,7 +461,7 @@ test('the landscape scenes animate on the board', async (t) => {
   assert.deepEqual(errors, []);
 });
 
-test('parallax seeds place both foreground and background artwork', async (t) => {
+scenario('parallax seeds place both foreground and background artwork', async (t) => {
   const { page, waitForText, errors, playSelection } = await openPuzzle(t, { viewport: { width: 1320, height: 780 } });
 
   const artworkPosition = async ({ name, cardX, scroll, rowY, matches }, seed) => {
@@ -503,7 +519,7 @@ test('parallax seeds place both foreground and background artwork', async (t) =>
   assert.deepEqual(errors, []);
 });
 
-test('the medieval village is captured during loading and animates after reopening', async (t) => {
+scenario('the medieval village is captured during loading and animates after reopening', async (t) => {
   const { page, canvas, waitForText, errors, playSelection } = await openPuzzle(t, {
     viewport: { width: 1320, height: 780 },
   });
@@ -552,7 +568,7 @@ test('the medieval village is captured during loading and animates after reopeni
   assert.deepEqual(errors, []);
 });
 
-test('Hex Coast captures continuous roads and animated water', async (t) => {
+scenario('Hex Coast captures continuous roads and animated water', async (t) => {
   const { page, waitForText, errors, playSelection } = await openPuzzle(t, {
     viewport: { width: 1320, height: 780 },
   });
@@ -625,7 +641,7 @@ test('Hex Coast captures continuous roads and animated water', async (t) => {
   assert.deepEqual(errors, []);
 });
 
-test('picker Settings remembers the theme and filter on a narrow touch screen', async (t) => {
+scenario('picker Settings remembers the theme and filter on a narrow touch screen', async (t) => {
   const { page, canvas, waitForText, errors, clickDialog } = await openPuzzle(t, {
     viewport: { width: 375, height: 640 }, hasTouch: true, isMobile: true,
   });
@@ -670,7 +686,7 @@ test('picker Settings remembers the theme and filter on a narrow touch screen', 
   assert.deepEqual(errors, []);
 });
 
-test('version 1 and 2 saves migrate with settings, options, progress, and history intact', async (t) => {
+scenario('version 1 and 2 saves migrate with settings, options, progress, and history intact', async (t) => {
   const { page, canvas, waitForText, errors, clickDialog } = await openPuzzle(t, { viewport: { width: 1320, height: 780 } });
   const setup = {
     size: { label: 'Classic', width: 512, height: 288, columns: 4, rows: 2, snapTolerance: 28 },
@@ -732,7 +748,7 @@ test('version 1 and 2 saves migrate with settings, options, progress, and histor
   assert.deepEqual(errors, []);
 });
 
-test('Sequential locks tray pieces while keeping touch scrolling and saves the active order', async (t) => {
+scenario('Sequential locks tray pieces while keeping touch scrolling and saves the active order', async (t) => {
   const { page, canvas, waitForText, errors, clickDialog, playSelection } = await openPuzzle(t, {
     viewport: { width: 1320, height: 780 }, hasTouch: true, isMobile: true,
   });
@@ -784,7 +800,7 @@ test('Sequential locks tray pieces while keeping touch scrolling and saves the a
   assert.deepEqual(errors, []);
 });
 
-test('Seed previews an on-target disconnected drop without saving it', async (t) => {
+scenario('Seed previews an on-target disconnected drop without saving it', async (t) => {
   const { page, canvas, waitForText, errors, playSelection } = await openPuzzle(t, {
     viewport: { width: 1320, height: 780 }, hasTouch: true, isMobile: true,
   });
@@ -842,7 +858,7 @@ test('Seed previews an on-target disconnected drop without saving it', async (t)
   assert.deepEqual(errors, []);
 });
 
-test('No Guide progress resumes, resets, and records each completion', async (t) => {
+scenario('No Guide progress resumes, resets, and records each completion', async (t) => {
   const { page, canvas, waitForText, errors, clickDialog, clickSetup, playSelection } = await openPuzzle(t, {
     viewport: { width: 1320, height: 780 },
   });
@@ -1011,7 +1027,7 @@ test('No Guide progress resumes, resets, and records each completion', async (t)
   assert.deepEqual(errors, []);
 });
 
-test('picker tag and completion filters combine and refresh after play', async (t) => {
+scenario('picker tag and completion filters combine and refresh after play', async (t) => {
   const { page, canvas, waitForText, errors, clickDialog } = await openPuzzle(t, {
     viewport: { width: 1320, height: 780 },
   });
@@ -1036,8 +1052,9 @@ test('picker tag and completion filters combine and refresh after play', async (
   await waitForText('Countryside · Flat Illustration');
   await waitForText('Coast · Flat Illustration');
 
+  const clickFilters = paceRepeatClicks(() => clickDialog(460, -347));
   const openFilters = async () => {
-    await clickDialog(460, -347);
+    await clickFilters();
     await waitForText('Completion');
   };
   const pickFirst = async (x = 340) => {
@@ -1138,7 +1155,7 @@ test('picker tag and completion filters combine and refresh after play', async (
   assert.deepEqual(errors, []);
 });
 
-test('the picker preserves an active filter and its scroll offset until reload', async (t) => {
+scenario('the picker preserves an active filter and its scroll offset until reload', async (t) => {
   const { page, canvas, waitForText, errors, clickDialog, playSelection } = await openPuzzle(t, {
     viewport: { width: 1320, height: 780 },
   });
@@ -1164,7 +1181,7 @@ test('the picker preserves an active filter and its scroll offset until reload',
   assert.deepEqual(errors, []);
 });
 
-test('touch can scroll the filter dialog and apply choices on a short screen', async (t) => {
+scenario('touch can scroll the filter dialog and apply choices on a short screen', async (t) => {
   const { page, canvas, waitForText, errors } = await openPuzzle(t, {
     viewport: { width: 640, height: 375 }, hasTouch: true, isMobile: true,
   });
@@ -1182,7 +1199,7 @@ test('touch can scroll the filter dialog and apply choices on a short screen', a
   assert.deepEqual(errors, []);
 });
 
-test('the picker scrolls past two cards and clips previews', async (t) => {
+scenario('the picker scrolls past two cards and clips previews', async (t) => {
   await build({
     base: '/picker-fixture/',
     build: {
@@ -1378,7 +1395,7 @@ test('the picker scrolls past two cards and clips previews', async (t) => {
   });
 });
 
-test('tablet touch scrolls, resizes, zooms, cancels, and places pieces', async (t) => {
+scenario('tablet touch scrolls, resizes, zooms, cancels, and places pieces', async (t) => {
   const { page, canvas, waitForText, errors, clickDialog, playSelection } = await openPuzzle(t, {
     viewport: { width: 1024, height: 768 },
     hasTouch: true,
@@ -1453,7 +1470,7 @@ test('tablet touch scrolls, resizes, zooms, cancels, and places pieces', async (
   assert.deepEqual(errors, []);
 });
 
-test('tray settings move the live tray and rotate touch gestures with it', async (t) => {
+scenario('tray settings move the live tray and rotate touch gestures with it', async (t) => {
   const portrait = { width: 680, height: 860 };
   const landscape = { width: 1024, height: 768 };
   const { page, canvas, waitForText, errors, clickDialog, playSelection } = await openPuzzle(t, {
@@ -1484,9 +1501,10 @@ test('tray settings move the live tray and rotate touch gestures with it', async
     assert.deepEqual(await pixelAt(page, frame, ...trayPoint), trayColor, `Expected tray on the ${side}`);
     assert.deepEqual(await pixelAt(page, frame, ...boardPoint), boardColor, `Expected board opposite the ${side} tray`);
   };
+  const tapSettings = paceRepeatClicks(() => page.touchscreen.tap(page.viewportSize().width - 74, 43));
   const openTraySettings = async () => {
     await page.evaluate(() => { window.paintedText = []; });
-    await page.touchscreen.tap(page.viewportSize().width - 74, 43);
+    await tapSettings();
     await waitForText('Puzzle tray');
   };
   const closeSettings = () => clickDialog(101, settingsY.done);
@@ -1608,4 +1626,9 @@ test('tray settings move the live tray and rotate touch gestures with it', async
   assert.deepEqual(await sample(26, 565), trayColor, 'The saved tray height should return after reopening the puzzle');
   assert.deepEqual((await readSave(page)).settings.trayFractions, savedSizes);
   assert.deepEqual(errors, []);
+});
+
+const concurrency = Number(process.env.LIVE_JIGSAW_BROWSER_CONCURRENCY ?? 8);
+describe('puzzle play', { concurrency }, () => {
+  for (const { name, run } of scenarios) test(name, { concurrency: 1 }, run);
 });

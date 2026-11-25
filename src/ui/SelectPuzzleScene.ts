@@ -14,7 +14,7 @@ import { openSettings } from './SettingsScene';
 import { styleWithTheme } from './theme';
 
 const cardWidth = 560;
-const cardHeight = 382;
+const cardHeight = 387;
 const columnGap = 32;
 const rowGap = 16;
 const listPadding = 16;
@@ -86,12 +86,14 @@ export class SelectPuzzleScene extends Phaser.Scene {
       return { card, tags: source.tags, completions };
     });
     const grid = this.rexUI.add.gridSizer({
-      column: 1, row: 1, space: { top: listPadding, bottom: listPadding },
+      column: 1, row: 1,
     });
+    const list = this.rexUI.add.sizer({ orientation: 'y', space: { top: listPadding, bottom: listPadding } })
+      .add(grid, { align: 'center' });
     const track = this.rexUI.add.roundRectangle(0, 0, 8, 10, 4);
     const thumb = this.rexUI.add.roundRectangle(0, 0, scrollbarWidth, 36, 5);
     const panel = this.rexUI.add.scrollablePanel({
-      panel: { child: grid, mask: { maskType: 'stencil' } },
+      panel: { child: list, mask: { maskType: 'stencil' } },
       clampChildOY: true,
       scrollDetectionMode: 'rectBounds',
       scroller: { threshold: scrollThreshold },
@@ -173,7 +175,7 @@ export class SelectPuzzleScene extends Phaser.Scene {
       const columns = Math.min(Math.max(1, fittingColumns), Math.max(1, visibleCards.length));
       const rows = Math.max(1, Math.ceil(visibleCards.length / columns));
       if (currentColumns !== columns) {
-        grid.resetGrid(columns, rows, 1, 0, { column: columnGap, row: rowGap });
+        grid.resetGrid(columns, rows, 0, 0, { column: columnGap, row: rowGap });
         for (const { card } of cards) card.setVisible(false);
         visibleCards.forEach(({ card }, index) => {
           card.setVisible(true);

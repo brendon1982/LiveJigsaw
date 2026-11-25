@@ -325,7 +325,7 @@ test('the landscape scenes animate on the board', async (t) => {
 
   for (const [index, title] of selections.flat().entries()) {
     const rows = [1, 2, 4, 5, 6, 7, 8, 9];
-    const scroll = Math.round((rows[Math.floor(index / 2)] * 398 - 300) / 0.75);
+    const scroll = Math.round((rows[Math.floor(index / 2)] * 403 - 300) / 0.75);
     await scrollPickerTo(page, scroll);
     await page.evaluate(() => { window.paintedText = []; });
     await page.mouse.click(index % 2 ? 935 : 340, 570);
@@ -762,8 +762,8 @@ test('picker tag and completion filters combine and refresh after play', async (
   };
   await page.evaluate((save) => localStorage.setItem('live-jigsaw.save', JSON.stringify(save)), original);
   await page.reload();
-  await waitForText('Countryside · Animated');
-  await waitForText('Coast · Animated');
+  await waitForText('Countryside · Flat Illustration');
+  await waitForText('Coast · Flat Illustration');
 
   const openFilters = async () => {
     await clickDialog(460, -347);
@@ -783,7 +783,7 @@ test('picker tag and completion filters combine and refresh after play', async (
   await openFilters();
   await clickDialog(93, -180); // Coast
   await clickDialog(-119, -118); // Countryside
-  await clickDialog(-119, 96); // Animated
+  await clickDialog(-109, 96); // Flat Illustration
   await clickDialog(-66, 187); // Completed
   await clickDialog(125, 257);
   await waitForText('Filters (4)');
@@ -803,7 +803,7 @@ test('picker tag and completion filters combine and refresh after play', async (
   await openFilters();
   await clickDialog(-61, 257);
   await clickDialog(93, -180); // Coast
-  await clickDialog(-13, 96); // Parallax
+  await clickDialog(2, 96); // Parallax
   await clickDialog(125, 257);
   await waitForText('No puzzles match your filters');
   const emptyImage = PNG.sync.read(await canvas.screenshot());
@@ -867,7 +867,7 @@ test('the picker preserves an active filter and its scroll offset until reload',
   });
   await page.mouse.click(1120, 43);
   await waitForText('Type');
-  await clickDialog(-13, 96); // Parallax
+  await clickDialog(2, 96); // Parallax
   await clickDialog(125, 257);
   await waitForText('Filters (1)');
   await scrollPickerTo(page, 1000);
@@ -920,6 +920,29 @@ test('the picker scrolls past two cards and clips previews', async (t) => {
     const initial = await canvas.screenshot();
     assert.deepEqual(await pixelAt(page, initial, 120, 175), [192, 221, 219, 255]);
     assert.notDeepEqual(await pixelAt(page, initial, 800, 175), [38, 58, 54, 255], 'The second card should sit beside the first');
+    const assertColumnSpacing = (screenshot) => {
+      const { width, data } = PNG.sync.read(screenshot);
+      const rowStart = width * 116 * 4;
+      const background = data.subarray(rowStart, rowStart + 4);
+      const listWidth = width - 24;
+      const edges = [];
+      let insideCard = false;
+      for (let x = 0; x < listWidth; x += 1) {
+        const offset = rowStart + x * 4;
+        const onCard = !data.subarray(offset, offset + 4).equals(background);
+        if (onCard !== insideCard) edges.push(x);
+        insideCard = onCard;
+      }
+      assert.equal(edges.length, 4);
+      const [firstLeft, firstRight, secondLeft, secondRight] = edges;
+      assert.equal(secondLeft - firstRight, 32, 'The inter-column gap should stay fixed');
+      assert.ok(Math.abs(firstLeft - (listWidth - secondRight)) <= 2,
+        'Extra space should go to the outside margins');
+    };
+    assertColumnSpacing(initial);
+    await page.setViewportSize({ width: 1470, height: 540 });
+    await page.waitForFunction(() => document.querySelector('canvas').width === 1470);
+    assertColumnSpacing(await canvas.screenshot());
     await page.setViewportSize({ width: 768, height: 540 });
     await page.waitForFunction(() => document.querySelector('canvas').width === 768);
     const narrow = await canvas.screenshot();
@@ -931,9 +954,24 @@ test('the picker scrolls past two cards and clips previews', async (t) => {
     await page.mouse.wheel(0, 1000);
     const scrolled = await canvas.screenshot();
     assert.deepEqual(await pixelAt(page, scrolled, 120, 175), previewColor);
-    for (const [x, y] of [[50, 175], [582, 175], [120, 158], [120, 462]]) {
+    for (const [x, y] of [[86, 175], [618, 175], [120, 158], [120, 462]]) {
       assert.notDeepEqual(await pixelAt(page, scrolled, x, y), previewColor, `Artwork should stay inside all four preview edges (${x}, ${y})`);
     }
+    const { width, data } = PNG.sync.read(scrolled);
+    const textBands = [];
+    let onText = false;
+    for (let y = 450; y < 510; y += 1) {
+      const row = y * width * 4;
+      const background = data.subarray(row + 360 * 4, row + 361 * 4);
+      let hasInk = false;
+      for (let x = 96; x < 350 && !hasInk; x += 1) {
+        hasInk = !data.subarray(row + x * 4, row + (x + 1) * 4).equals(background);
+      }
+      if (hasInk !== onText) textBands.push(y);
+      onText = hasInk;
+    }
+    assert.equal(textBands.length, 4, 'The preview title and tags should form two distinct text lines');
+    assert.ok(textBands[2] - textBands[1] >= 4, 'The title descenders should clear the tag text');
     await page.mouse.click(340, 175);
     await waitForText('Connector style');
     assert.equal(await page.evaluate(() => window.paintedText.includes('Large · 32')), false);

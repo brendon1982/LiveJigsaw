@@ -8,12 +8,12 @@ test('picker filters match any selected tag within a group and require each acti
   assert.ok(matchesPuzzleFilters({ theme: 'Ocean', type: 'Parallax' }, 2, filters));
   assert.ok(matchesPuzzleFilters({ theme: 'Space', type: 'Parallax' }, 1, filters));
   assert.ok(!matchesPuzzleFilters({ theme: 'Coast', type: 'Parallax' }, 1, filters));
-  assert.ok(!matchesPuzzleFilters({ theme: 'Ocean', type: 'Animated' }, 1, filters));
+  assert.ok(!matchesPuzzleFilters({ theme: 'Ocean', type: 'Flat Illustration' }, 1, filters));
   assert.ok(!matchesPuzzleFilters({ theme: 'Ocean', type: 'Parallax' }, 0, filters));
 });
 
 test('empty groups match any tags and completion history determines completion status', () => {
-  const tags = { theme: 'Woodland', type: 'Animated' };
+  const tags = { theme: 'Woodland', type: 'Flat Illustration' };
   assert.ok(matchesPuzzleFilters(tags, 0, noPuzzleFilters));
   assert.ok(matchesPuzzleFilters(tags, 3, noPuzzleFilters));
 

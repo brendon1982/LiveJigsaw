@@ -54,7 +54,7 @@ export function showPuzzleFilters(
   addSection('Theme', puzzleThemes, [100, 100, 100], (tag) => draft.themes.includes(tag), (tag) => {
     draft = { ...draft, themes: toggleChoice(draft.themes, tag) };
   });
-  addSection('Type', puzzleTypes, [100, 100, 100], (tag) => draft.types.includes(tag), (tag) => {
+  addSection('Type', puzzleTypes, [120, 90, 104], (tag) => draft.types.includes(tag), (tag) => {
     draft = { ...draft, types: toggleChoice(draft.types, tag) };
   });
   addSection('Completion', completionFilters, [50, 94, 156], (status) => draft.completion === status, (status) => {

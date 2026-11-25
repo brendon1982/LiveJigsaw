@@ -443,6 +443,15 @@ test('picker Settings remembers the theme and filter on a narrow touch screen', 
   await page.touchscreen.tap(301, 39);
   await waitForText('Faded');
   assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 64, 400), [200, 222, 248, 255], 'The saved filter should be selected after reload');
+  await clickDialog(102, -80);
+  await page.waitForFunction(() => localStorage.getItem('live-jigsaw.theme') === 'Dark');
+  await clickDialog(101, 153);
+  const dark = await canvas.screenshot();
+  assert.deepEqual(await pixelAt(page, dark, 5, 105), [33, 33, 33, 255]);
+  assert.deepEqual(await pixelAt(page, dark, 75, 170), await pixelAt(page, forest, 75, 170), 'Dark should preserve preview artwork');
+  await page.reload();
+  await waitForText('Select a Puzzle');
+  assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 5, 105), [33, 33, 33, 255]);
   assert.deepEqual(errors, []);
 });
 

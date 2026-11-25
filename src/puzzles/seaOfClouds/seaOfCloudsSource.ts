@@ -10,6 +10,7 @@ import preview from './assets/preview.png';
 export const seaOfCloudsSource = parallaxSource({
   key: 'SeaOfClouds',
   title: 'Sea of Clouds',
+  theme: 'Sky',
   preview,
   layers: [
     { name: 'sky', url: sky, travel: 0, anchorY: 0.5 },

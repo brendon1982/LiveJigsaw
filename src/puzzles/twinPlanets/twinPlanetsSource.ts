@@ -8,6 +8,7 @@ import preview from './assets/preview.png';
 export const twinPlanetsSource = parallaxSource({
   key: 'TwinPlanets',
   title: 'Twin Planets',
+  theme: 'Space',
   preview,
   layers: [
     { name: 'nebula', url: nebula, travel: 0, anchorY: 0.5 },

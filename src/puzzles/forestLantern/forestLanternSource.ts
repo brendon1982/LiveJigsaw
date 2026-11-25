@@ -10,6 +10,7 @@ import preview from './assets/preview.png';
 export const forestLanternSource = parallaxSource({
   key: 'ForestLantern',
   title: 'Forest Lantern',
+  theme: 'Woodland',
   preview,
   artworkSize: { width: 2019, height: 1020 },
   layers: [

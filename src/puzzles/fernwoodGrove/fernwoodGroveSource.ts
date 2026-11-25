@@ -11,6 +11,7 @@ import preview from './assets/preview.png';
 export const fernwoodGroveSource = parallaxSource({
   key: 'FernwoodGrove',
   title: 'Fernwood Grove',
+  theme: 'Woodland',
   preview,
   layers: [
     { name: 'sky', url: sky, travel: 0, anchorY: 0.5 },

@@ -12,6 +12,7 @@ import preview from './assets/preview.png';
 export const coralGardenSource = parallaxSource({
   key: 'CoralGarden',
   title: 'Coral Garden',
+  theme: 'Ocean',
   preview,
   layers: [
     { name: 'sky', url: sky, travel: 0, anchorY: 0.5 },

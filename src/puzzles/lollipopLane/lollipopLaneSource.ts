@@ -9,6 +9,7 @@ import preview from './assets/preview.png';
 export const lollipopLaneSource = parallaxSource({
   key: 'LollipopLane',
   title: 'Lollipop Lane',
+  theme: 'Candy',
   preview,
   layers: [
     { name: 'sky', url: sky, travel: 0, anchorY: 0.5 },

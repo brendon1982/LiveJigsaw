@@ -9,6 +9,7 @@ import preview from './assets/preview.png';
 export const silverCloudbankSource = parallaxSource({
   key: 'SilverCloudbank',
   title: 'Silver Cloudbank',
+  theme: 'Sky',
   preview,
   layers: [
     { name: 'sky', url: sky, travel: 0, anchorY: 0.5 },

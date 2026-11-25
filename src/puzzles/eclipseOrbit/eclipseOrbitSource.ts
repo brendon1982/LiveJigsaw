@@ -10,6 +10,7 @@ import preview from './assets/preview.png';
 export const eclipseOrbitSource = parallaxSource({
   key: 'EclipseOrbit',
   title: 'Eclipse Orbit',
+  theme: 'Space',
   preview,
   layers: [
     { name: 'nebula', url: nebula, travel: 0, anchorY: 0.5 },

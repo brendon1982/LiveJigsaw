@@ -14,6 +14,7 @@ import tree from './assets/tree.png';
 export const twilightRidgeSource = parallaxSource({
   key: 'TwilightRidge',
   title: 'Twilight Ridge',
+  theme: 'Mountains',
   preview,
   layers: [
     { name: 'sky', url: sky, travel: 0 },

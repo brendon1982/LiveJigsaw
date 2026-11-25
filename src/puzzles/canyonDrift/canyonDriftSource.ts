@@ -12,6 +12,7 @@ import sky from './assets/sky.png';
 export const canyonDriftSource = parallaxSource({
   key: 'CanyonDrift',
   title: 'Canyon Drift',
+  theme: 'Desert',
   preview,
   layers: [
     { name: 'sky', url: sky, travel: 0 },

@@ -7,6 +7,7 @@ import preview from './assets/preview.png';
 export const violetNebulaSource = parallaxSource({
   key: 'VioletNebula',
   title: 'Violet Nebula',
+  theme: 'Space',
   preview,
   layers: [
     { name: 'nebula', url: nebula, travel: 0, anchorY: 0.5 },

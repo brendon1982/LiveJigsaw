@@ -39,6 +39,12 @@ async function touchController(page) {
   return { dispatch, moveFinger };
 }
 
+async function scrollPickerTo(page, wheelDelta) {
+  await page.mouse.move(340, 300);
+  await page.mouse.wheel(0, -30000);
+  await page.mouse.wheel(0, wheelDelta);
+}
+
 async function openPuzzle(t, options, path = '/') {
   const server = await preview({ preview: { host: '127.0.0.1', port: 0 } });
   t.after(() => server.close());
@@ -293,31 +299,24 @@ test('live pieces scroll, reflow, and snap to the pannable board', async (t) => 
 test('the landscape scenes animate on the board', async (t) => {
   const { page, waitForText, errors, playSelection } = await openPuzzle(t, { viewport: { width: 1320, height: 780 } });
   const selections = [
-    { title: 'Mountains', x: 340, y: 613, scroll: 320 },
-    { title: 'Meadow', x: 1003, y: 613, scroll: 320 },
-    { title: 'Desert', x: 340, y: 500, scroll: 720 },
-    { title: 'Forest', x: 1003, y: 500, scroll: 720 },
-    { title: 'Canyon Drift', x: 340, y: 600, scroll: 1750 },
-    { title: 'Twilight Ridge', x: 935, y: 600, scroll: 1750 },
-    { title: 'Pine Highlands', x: 340, y: 600, scroll: 2400 },
-    { title: 'Ember Mesa', x: 935, y: 600, scroll: 2400 },
-    { title: 'Afterglow', x: 340, y: 600, scroll: 2700 },
-    { title: 'Silver Cloudbank', x: 935, y: 600, scroll: 2700 },
-    { title: 'Moonlit Skies', x: 340, y: 600, scroll: 3300 },
-    { title: 'Sea of Clouds', x: 935, y: 600, scroll: 3300 },
-    { title: 'Birch Glade', x: 340, y: 600, scroll: 3850 },
-    { title: 'Fallen Timber', x: 935, y: 600, scroll: 3850 },
-    { title: 'Fernwood Grove', x: 340, y: 600, scroll: 4400 },
-    { title: 'Amber Woods', x: 935, y: 600, scroll: 4400 },
+    ['Mountains', 'Meadow'],
+    ['Desert', 'Forest'],
+    ['Canyon Drift', 'Twilight Ridge'],
+    ['Pine Highlands', 'Ember Mesa'],
+    ['Afterglow', 'Silver Cloudbank'],
+    ['Moonlit Skies', 'Sea of Clouds'],
+    ['Birch Glade', 'Fallen Timber'],
+    ['Fernwood Grove', 'Amber Woods'],
   ];
   const board = { x: 435, y: 275, width: 590, height: 320 };
   const emptyGuide = [25, 46, 40, 255];
 
-  for (const { title, x, y, scroll } of selections) {
-    await page.mouse.move(340, 300);
-    await page.mouse.wheel(0, scroll);
+  for (const [index, title] of selections.flat().entries()) {
+    const rows = [1, 2, 4, 5, 6, 7, 8, 9];
+    const scroll = Math.round((rows[Math.floor(index / 2)] * 398 - 300) / 0.75);
+    await scrollPickerTo(page, scroll);
     await page.evaluate(() => { window.paintedText = []; });
-    await page.mouse.click(x, y);
+    await page.mouse.click(index % 2 ? 935 : 340, 570);
     await playSelection({ connectorStyle: 'Angular', animationSpeed: 'Fast' });
     await waitForText(title);
     await waitForText('0 of 8 placed');
@@ -346,8 +345,7 @@ test('parallax seeds place both foreground and background artwork', async (t) =>
   const { page, waitForText, errors, playSelection } = await openPuzzle(t, { viewport: { width: 1320, height: 780 } });
 
   const artworkPosition = async ({ name, cardX, scroll, rowY, matches }, seed) => {
-    await page.mouse.move(340, 300);
-    await page.mouse.wheel(0, scroll);
+    await scrollPickerTo(page, scroll);
     await page.mouse.click(cardX, 600);
     await waitForText('Animation speed');
     await page.evaluate((seed) => {
@@ -383,11 +381,11 @@ test('parallax seeds place both foreground and background artwork', async (t) =>
 
   const seededArtwork = [
     {
-      name: 'cactus', cardX: 340, scroll: 1750, rowY: 552,
+      name: 'cactus', cardX: 340, scroll: 1700, rowY: 552,
       matches: (red, green, blue) => green > red + 10 && green > blue + 5,
     },
     {
-      name: 'sun', cardX: 935, scroll: 2400, rowY: 331,
+      name: 'sun', cardX: 935, scroll: 2300, rowY: 331,
       matches: (red, green) => red >= 75 && green >= 75,
     },
   ];
@@ -417,8 +415,7 @@ test('the medieval village is captured during loading and animates after reopeni
 
   const openVillage = async () => {
     await page.evaluate(() => { window.paintedText = []; });
-    await page.mouse.move(340, 300);
-    await page.mouse.wheel(0, 1250);
+    await scrollPickerTo(page, 1210);
     await page.mouse.click(340, 600);
     await playSelection({ animationSpeed: 'Fast' });
     await waitForText('Medieval Village');
@@ -458,8 +455,7 @@ test('Hex Coast captures continuous roads and animated water', async (t) => {
   const atlasLoaded = (name) => page.waitForResponse((response) =>
     new RegExp(`/${name}-[^/]+\\.png$`).test(response.url()) && response.ok());
   const atlases = Promise.all([atlasLoaded('fullTiles'), atlasLoaded('buildings')]);
-  await page.mouse.move(935, 300);
-  await page.mouse.wheel(0, 1250);
+  await scrollPickerTo(page, 1210);
   await page.mouse.click(935, 600);
   await waitForText('Animation speed');
   await page.evaluate(() => {
@@ -732,6 +728,171 @@ test('puzzle progress resumes, resets, and records each completion', async (t) =
   assert.deepEqual(errors, []);
 });
 
+test('picker tag and completion filters combine and refresh after play', async (t) => {
+  const { page, canvas, waitForText, errors, clickDialog } = await openPuzzle(t, {
+    viewport: { width: 1320, height: 780 },
+  });
+  const setup = {
+    size: { label: 'Classic', width: 512, height: 288, columns: 4, rows: 2, snapTolerance: 28 },
+    seed: 42, connectorStyle: 'none', animationSpeed: 'Normal',
+  };
+  const original = {
+    version: 2,
+    settings: { trayFractions: { vertical: 0, horizontal: 0 } },
+    progress: {
+      Lighthouse: { setup, placedPieceIds: ['piece-0-0'] },
+      Windmill: {
+        setup,
+        placedPieceIds: ['piece-0-1', 'piece-0-2', 'piece-0-3', 'piece-1-0', 'piece-1-1', 'piece-1-2', 'piece-1-3'],
+      },
+    },
+    history: { Lighthouse: [{ setup, completedAt: '2025-01-01T12:00:00.000Z' }] },
+  };
+  await page.evaluate((save) => localStorage.setItem('live-jigsaw.save', JSON.stringify(save)), original);
+  await page.reload();
+  await waitForText('Countryside · Animated');
+  await waitForText('Coast · Animated');
+
+  const openFilters = async () => {
+    await clickDialog(460, -347);
+    await waitForText('Completion');
+  };
+  const pickFirst = async (x = 340) => {
+    await page.evaluate(() => { window.paintedText = []; });
+    await clickDialog(x - 660, -210);
+  };
+  const drag = async (fromX, fromY, toX, toY) => {
+    await page.mouse.move(fromX, fromY);
+    await page.mouse.down();
+    await page.mouse.move(toX, toY, { steps: 8 });
+    await page.mouse.up();
+  };
+
+  await openFilters();
+  await clickDialog(93, -180); // Coast
+  await clickDialog(-119, -118); // Countryside
+  await clickDialog(-119, 96); // Animated
+  await clickDialog(-66, 187); // Completed
+  await clickDialog(125, 257);
+  await waitForText('Filters (4)');
+  assert.deepEqual(await readSave(page), original);
+  await pickFirst(660);
+  await waitForText('Lighthouse');
+  await waitForText('1 of 8 pieces placed');
+  await page.keyboard.press('Escape');
+
+  await openFilters();
+  await clickDialog(-61, 257); // Clear the draft
+  await clickDialog(29, 257); // Cancel
+  await pickFirst(660);
+  await waitForText('Lighthouse');
+  await page.keyboard.press('Escape');
+
+  await openFilters();
+  await clickDialog(-61, 257);
+  await clickDialog(93, -180); // Coast
+  await clickDialog(-13, 96); // Parallax
+  await clickDialog(125, 257);
+  await waitForText('No puzzles match your filters');
+  const emptyImage = PNG.sync.read(await canvas.screenshot());
+  const centerOfVisibleContent = (startY, endY) => {
+    let left = emptyImage.width;
+    let right = -1;
+    let top = emptyImage.height;
+    let bottom = -1;
+    for (let y = startY; y < endY; y += 1) {
+      const background = emptyImage.data.subarray(y * emptyImage.width * 4, y * emptyImage.width * 4 + 4);
+      for (let x = 400; x < 920; x += 1) {
+        const pixel = (y * emptyImage.width + x) * 4;
+        if (emptyImage.data.subarray(pixel, pixel + 4).equals(background)) continue;
+        left = Math.min(left, x);
+        right = Math.max(right, x);
+        top = Math.min(top, y);
+        bottom = Math.max(bottom, y);
+      }
+    }
+    assert.ok(left < right && top < bottom, 'The empty state element should be visible');
+    return { x: (left + right) / 2, y: (top + bottom) / 2 };
+  };
+  const message = centerOfVisibleContent(120, 146);
+  const button = centerOfVisibleContent(150, 208);
+  assert.ok(Math.abs(message.x - button.x) < 2 && Math.abs(button.x - emptyImage.width / 2) < 2,
+    'The stacked message and Clear filters button should share the center line of the picker');
+  await page.mouse.click(button.x, button.y);
+
+  await openFilters();
+  await clickDialog(93, -180); // Coast
+  await clickDialog(-119, -118); // Countryside
+  await clickDialog(65, 187); // Never completed
+  await clickDialog(125, 257);
+  await waitForText('Filters (3)');
+  const topOfResults = await canvas.screenshot();
+  await scrollPickerTo(page, 200);
+  assert.ok(!topOfResults.equals(await canvas.screenshot()), 'Three results should scroll across two rows');
+  await pickFirst();
+  await waitForText('7 of 8 pieces placed');
+  await clickDialog(100, 44); // Resume the unfinished first attempt.
+  await waitForText('7 of 8 placed');
+  await drag(146, 420, 552, 420);
+  await drag(75, 136, 734, 348);
+  await waitForText('8 of 8 placed');
+  assert.equal((await readSave(page)).history.Windmill.length, 1);
+  await page.evaluate(() => { window.paintedText = []; });
+  await page.mouse.click(99, 43);
+  await waitForText('Filters (3)');
+  const shortenedResults = await canvas.screenshot();
+  assert.notDeepEqual(await pixelAt(page, shortenedResults, 120, 405),
+    await pixelAt(page, shortenedResults, 20, 405), 'The shorter result list should clamp back to the top');
+  await pickFirst();
+  await waitForText('Meadow');
+  await waitForText('Puzzle size');
+  assert.deepEqual(errors, []);
+});
+
+test('the picker preserves an active filter and its scroll offset until reload', async (t) => {
+  const { page, canvas, waitForText, errors, clickDialog, playSelection } = await openPuzzle(t, {
+    viewport: { width: 1320, height: 780 },
+  });
+  await page.mouse.click(1120, 43);
+  await waitForText('Type');
+  await clickDialog(-13, 96); // Parallax
+  await clickDialog(125, 257);
+  await waitForText('Filters (1)');
+  await scrollPickerTo(page, 1000);
+  const scrolled = await canvas.screenshot();
+  await page.mouse.click(340, 340);
+  await playSelection();
+  await waitForText('0 of 8 placed');
+  await page.evaluate(() => { window.paintedText = []; });
+  await page.mouse.click(99, 43);
+  await waitForText('Filters (1)');
+  assert.ok(scrolled.equals(await canvas.screenshot()), 'The filtered list should return at the same offset');
+  await page.reload();
+  await waitForText('Windmill');
+  await page.mouse.click(340, 180);
+  await waitForText('Puzzle size');
+  await waitForText('Windmill');
+  assert.deepEqual(errors, []);
+});
+
+test('touch can scroll the filter dialog and apply choices on a short screen', async (t) => {
+  const { page, canvas, waitForText, errors } = await openPuzzle(t, {
+    viewport: { width: 640, height: 375 }, hasTouch: true, isMobile: true,
+  });
+  const { moveFinger } = await touchController(page);
+  const firstPreview = await pixelAt(page, await canvas.screenshot(), 120, 165);
+  await page.touchscreen.tap(445, 49);
+  await waitForText('Theme');
+  await page.touchscreen.tap(413, 135); // Coast
+  await moveFinger(311, 247, 311, 90);
+  await moveFinger(311, 247, 311, 90);
+  await page.touchscreen.tap(385, 247); // Never completed, after scrolling the dialog body.
+  await page.touchscreen.tap(445, 317);
+  await waitForText('Filters (2)');
+  assert.notDeepEqual(await pixelAt(page, await canvas.screenshot(), 120, 165), firstPreview);
+  assert.deepEqual(errors, []);
+});
+
 test('the picker scrolls past two cards and clips previews', async (t) => {
   await build({
     base: '/picker-fixture/',
@@ -745,23 +906,23 @@ test('the picker scrolls past two cards and clips previews', async (t) => {
   await t.test('mouse wheel scrolls to a selectable third card', async (t) => {
     const { page, canvas, waitForText, errors, clickDialog, playSelection } = await openPuzzle(t, { viewport: { width: 1320, height: 540 } }, path);
     const initial = await canvas.screenshot();
-    assert.deepEqual(await pixelAt(page, initial, 120, 165), [192, 221, 219, 255]);
-    assert.notDeepEqual(await pixelAt(page, initial, 800, 165), [38, 58, 54, 255], 'The second card should sit beside the first');
+    assert.deepEqual(await pixelAt(page, initial, 120, 175), [192, 221, 219, 255]);
+    assert.notDeepEqual(await pixelAt(page, initial, 800, 175), [38, 58, 54, 255], 'The second card should sit beside the first');
     await page.setViewportSize({ width: 768, height: 540 });
     await page.waitForFunction(() => document.querySelector('canvas').width === 768);
     const narrow = await canvas.screenshot();
-    assert.deepEqual(await pixelAt(page, narrow, 140, 165), [192, 221, 219, 255]);
-    assert.deepEqual(await pixelAt(page, narrow, 700, 165), [38, 58, 54, 255], 'The same picker should reflow to one column');
+    assert.deepEqual(await pixelAt(page, narrow, 140, 175), [192, 221, 219, 255]);
+    assert.deepEqual(await pixelAt(page, narrow, 700, 175), [38, 58, 54, 255], 'The same picker should reflow to one column');
     await page.setViewportSize({ width: 1320, height: 540 });
     await page.waitForFunction(() => document.querySelector('canvas').width === 1320);
     await page.mouse.move(340, 300);
     await page.mouse.wheel(0, 1000);
     const scrolled = await canvas.screenshot();
-    assert.deepEqual(await pixelAt(page, scrolled, 120, 165), previewColor);
-    for (const [x, y] of [[50, 165], [582, 165], [120, 148], [120, 452]]) {
+    assert.deepEqual(await pixelAt(page, scrolled, 120, 175), previewColor);
+    for (const [x, y] of [[50, 175], [582, 175], [120, 158], [120, 462]]) {
       assert.notDeepEqual(await pixelAt(page, scrolled, x, y), previewColor, `Artwork should stay inside all four preview edges (${x}, ${y})`);
     }
-    await page.mouse.click(340, 165);
+    await page.mouse.click(340, 175);
     await waitForText('Connector style');
     assert.equal(await page.evaluate(() => window.paintedText.includes('Large · 32')), false);
     const selectedFill = [75, 108, 94, 255];
@@ -780,33 +941,32 @@ test('the picker scrolls past two cards and clips previews', async (t) => {
     assert.ok(cornerRed < 38, 'The modal backdrop should still reach the corner after resizing');
     await page.setViewportSize({ width: 1320, height: 540 });
     await page.waitForFunction(() => document.querySelector('canvas').width === 1320);
-    await page.mouse.move(340, 165);
+    await page.mouse.move(340, 175);
     await page.mouse.wheel(0, -1000);
     await clickDialog(58, 200);
-    assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 120, 165), previewColor, 'Cancel should preserve the picker scroll position');
-    await page.mouse.click(340, 165);
+    assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 120, 175), previewColor, 'Cancel should preserve the picker scroll position');
+    await page.mouse.click(340, 175);
     await playSelection();
     await waitForText('0 of 8 placed');
     await page.waitForFunction(() => window.sourceAnimationSpeed === 'Normal');
     await page.evaluate(() => { window.paintedText = []; });
     await page.mouse.click(99, 43);
     await waitForText('Select a Puzzle');
-    await page.mouse.move(340, 300);
-    await page.mouse.wheel(0, 1000);
-    assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 120, 165), previewColor);
-    await page.mouse.click(340, 165);
+    assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 120, 175), previewColor, 'Returning from play should restore the picker offset');
+    await page.mouse.click(340, 175);
     await playSelection({ animationSpeed: 'Slow' });
     await page.waitForFunction(() => window.sourceAnimationSpeed === 'Slow');
 
     await page.evaluate(() => { window.paintedText = []; });
     await page.mouse.click(99, 43);
     await waitForText('Select a Puzzle');
-    await page.mouse.click(340, 165);
+    await scrollPickerTo(page, 0);
+    await page.mouse.click(340, 175);
     await playSelection({ size: 'Large · 32', connectorStyle: 'None', animationSpeed: 'Fast' });
     await waitForText('0 of 32 placed');
     await page.reload();
     await waitForText('Windmill');
-    await page.mouse.click(1003, 165);
+    await page.mouse.click(1003, 175);
     await playSelection();
     await waitForText('0 of 32 placed');
     assert.deepEqual((await readSave(page)).recentOptions, {
@@ -818,8 +978,8 @@ test('the picker scrolls past two cards and clips previews', async (t) => {
     await waitForText('Select a Puzzle');
     await page.mouse.move(340, 300);
     await page.mouse.wheel(0, 1000);
-    assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 120, 165), previewColor);
-    await page.mouse.click(340, 165);
+    assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 120, 175), previewColor);
+    await page.mouse.click(340, 175);
     await playSelection();
     await waitForText('0 of 8 placed');
     await page.waitForFunction(() => window.sourceAnimationSpeed === 'Fast');
@@ -855,6 +1015,11 @@ test('the picker scrolls past two cards and clips previews', async (t) => {
     await playSelection({ connectorStyle: 'None', animationSpeed: 'Fast' });
     await waitForText('0 of 8 placed');
     await page.waitForFunction(() => window.sourceAnimationSpeed === 'Fast');
+    await page.evaluate(() => { window.paintedText = []; });
+    await page.touchscreen.tap(99, 49);
+    await waitForText('Select a Puzzle');
+    assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 140, 410), previewColor,
+      'Returning by touch should restore the swiped picker offset');
     assert.deepEqual(errors, []);
   });
 });

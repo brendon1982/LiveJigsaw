@@ -10,6 +10,7 @@ import preview from './assets/preview.png';
 export const jadeRidgeSource = parallaxSource({
   key: 'JadeRidge',
   title: 'Jade Ridge',
+  theme: 'Mountains',
   preview,
   artworkSize: { width: 2019, height: 1020 },
   layers: [

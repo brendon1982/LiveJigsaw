@@ -10,6 +10,7 @@ import preview from './assets/preview.png';
 export const evergreenHorizonSource = parallaxSource({
   key: 'EvergreenHorizon',
   title: 'Evergreen Horizon',
+  theme: 'Woodland',
   preview,
   artworkSize: { width: 2019, height: 1020 },
   layers: [

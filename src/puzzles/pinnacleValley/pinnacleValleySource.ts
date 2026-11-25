@@ -10,6 +10,7 @@ import preview from './assets/preview.png';
 export const pinnacleValleySource = parallaxSource({
   key: 'PinnacleValley',
   title: 'Pinnacle Valley',
+  theme: 'Mountains',
   preview,
   artworkSize: { width: 2019, height: 1020 },
   layers: [

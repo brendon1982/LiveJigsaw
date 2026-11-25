@@ -10,6 +10,7 @@ import preview from './assets/preview.png';
 export const cobaltWorldSource = parallaxSource({
   key: 'CobaltWorld',
   title: 'Cobalt World',
+  theme: 'Alien Worlds',
   preview,
   layers: [
     { name: 'sky', url: sky, travel: 0, anchorY: 0.5 },

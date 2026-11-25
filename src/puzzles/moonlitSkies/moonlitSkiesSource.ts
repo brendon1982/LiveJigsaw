@@ -11,6 +11,7 @@ import preview from './assets/preview.png';
 export const moonlitSkiesSource = parallaxSource({
   key: 'MoonlitSkies',
   title: 'Moonlit Skies',
+  theme: 'Sky',
   preview,
   layers: [
     { name: 'sky', url: sky, travel: 0, anchorY: 0.5 },

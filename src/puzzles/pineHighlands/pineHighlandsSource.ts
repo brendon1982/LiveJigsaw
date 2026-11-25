@@ -13,6 +13,7 @@ import tree from './assets/tree.png';
 export const pineHighlandsSource = parallaxSource({
   key: 'PineHighlands',
   title: 'Pine Highlands',
+  theme: 'Mountains',
   preview,
   layers: [
     { name: 'sky', url: sky, travel: 0 },

@@ -13,6 +13,7 @@ import preview from './assets/preview.png';
 export const crescentCryptSource = parallaxSource({
   key: 'CrescentCrypt',
   title: 'Crescent Crypt',
+  theme: 'Halloween',
   preview,
   layers: [
     { name: 'sky', url: sky, travel: 0, anchorY: 0.5 },

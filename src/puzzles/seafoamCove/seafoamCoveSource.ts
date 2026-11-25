@@ -12,6 +12,7 @@ import preview from './assets/preview.png';
 export const seafoamCoveSource = parallaxSource({
   key: 'SeafoamCove',
   title: 'Seafoam Cove',
+  theme: 'Ocean',
   preview,
   layers: [
     { name: 'sky', url: sky, travel: 0, anchorY: 0.5 },

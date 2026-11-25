@@ -9,6 +9,7 @@ import preview from './assets/preview.png';
 export const peppermintGladeSource = parallaxSource({
   key: 'PeppermintGlade',
   title: 'Peppermint Glade',
+  theme: 'Candy',
   preview,
   layers: [
     { name: 'sky', url: sky, travel: 0, anchorY: 0.5 },

@@ -9,6 +9,7 @@ import preview from './assets/preview.png';
 export const cupcakeCrossingSource = parallaxSource({
   key: 'CupcakeCrossing',
   title: 'Cupcake Crossing',
+  theme: 'Candy',
   preview,
   layers: [
     { name: 'sky', url: sky, travel: 0, anchorY: 0.5 },

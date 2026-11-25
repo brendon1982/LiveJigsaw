@@ -10,6 +10,7 @@ import preview from './assets/preview.png';
 export const thornwoodHollowSource = parallaxSource({
   key: 'ThornwoodHollow',
   title: 'Thornwood Hollow',
+  theme: 'Halloween',
   preview,
   layers: [
     { name: 'sky', url: sky, travel: 0, anchorY: 0.5 },

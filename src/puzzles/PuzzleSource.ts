@@ -1,5 +1,6 @@
 import type Phaser from 'phaser';
 import type { Size } from '../domain/geometry';
+import type { PuzzleTags } from './PuzzleTags';
 
 export const puzzleAnimationSpeeds = ['Slow', 'Normal', 'Fast'] as const;
 export type PuzzleAnimationSpeed = typeof puzzleAnimationSpeeds[number];
@@ -22,6 +23,7 @@ export type PuzzleSourceSceneData = Size & Readonly<{ seed: number; animationSpe
  */
 export type PuzzleSource = Readonly<{
   title: string;
+  tags: PuzzleTags;
   maxViewport: Size;
   scene: {
     readonly key: string;

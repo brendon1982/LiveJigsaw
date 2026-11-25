@@ -11,6 +11,7 @@ import preview from './assets/preview.png';
 export const lanternManorSource = parallaxSource({
   key: 'LanternManor',
   title: 'Lantern Manor',
+  theme: 'Halloween',
   preview,
   layers: [
     { name: 'sky', url: sky, travel: 0, anchorY: 0.5 },

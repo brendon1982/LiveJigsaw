@@ -10,6 +10,7 @@ import preview from './assets/preview.png';
 export const opalPlanetSource = parallaxSource({
   key: 'OpalPlanet',
   title: 'Opal Planet',
+  theme: 'Alien Worlds',
   preview,
   layers: [
     { name: 'sky', url: sky, travel: 0, anchorY: 0.5 },

@@ -13,6 +13,7 @@ import sun from './assets/sun.png';
 export const emberMesaSource = parallaxSource({
   key: 'EmberMesa',
   title: 'Ember Mesa',
+  theme: 'Desert',
   preview,
   layers: [
     { name: 'sky', url: sky, travel: 0 },

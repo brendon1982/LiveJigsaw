@@ -11,6 +11,7 @@ import preview from './assets/preview.png';
 export const witchlightHearthSource = parallaxSource({
   key: 'WitchlightHearth',
   title: 'Witchlight Hearth',
+  theme: 'Halloween',
   preview,
   layers: [
     { name: 'sky', url: sky, travel: 0, anchorY: 0.5 },

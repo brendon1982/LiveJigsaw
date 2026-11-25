@@ -10,6 +10,7 @@ import preview from './assets/preview.png';
 export const daybreakPassSource = parallaxSource({
   key: 'DaybreakPass',
   title: 'Daybreak Pass',
+  theme: 'Mountains',
   preview,
   artworkSize: { width: 2019, height: 1020 },
   layers: [

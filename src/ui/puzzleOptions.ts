@@ -11,6 +11,7 @@ const optionGap = 8;
 const contentWidth = 4 * optionWidth + 3 * optionGap;
 // RexUI sizer children are separate entries in the Phaser display list.
 const depth = { cover: 1, panel: 2, controls: 3, tileContents: 4 };
+export const pickerControlDepth = depth.controls;
 
 type Option = {
   name: string;
@@ -94,12 +95,16 @@ export function showResumePuzzle(
   });
 }
 
-function showPickerDialog(
+export function showPickerDialog(
   scene: UIScene,
   title: string,
-  content: ReturnType<UIScene['rexUI']['add']['sizer']>,
+  content: Phaser.GameObjects.GameObject & { height: number },
   actions: ReturnType<typeof makeButtonLabel>[],
   onClose: (action?: number) => void,
+  options?: {
+    fitContent?: (height: number) => void;
+    handleAction?: (index: number) => boolean;
+  },
 ) {
   const cover = scene.add.rectangle(0, 0, 1, 1, palette.modalBackdrop, 0.72)
     .setOrigin(0).setDepth(depth.cover).setInteractive();
@@ -121,6 +126,12 @@ function showPickerDialog(
   const fit = () => {
     const { width, height } = scene.scale.gameSize;
     const { zoom } = scene.cameras.main;
+    if (options?.fitContent) {
+      const widthScale = Math.min(1, Math.max(1, width - 24) / dialog.width);
+      const chromeHeight = dialog.height - content.height;
+      options.fitContent(Math.max(1, (height - 24) / widthScale - chromeHeight));
+      dialog.layout();
+    }
     const scale = Math.min(1, Math.max(1, width - 24) / dialog.width, Math.max(1, height - 24) / dialog.height);
     cover.setSize(width / zoom, height / zoom);
     dialog.setPosition(width / (2 * zoom), height / (2 * zoom)).setScale(scale / zoom);
@@ -128,7 +139,7 @@ function showPickerDialog(
   const cancel = () => dialog.modalClose();
   let action: number | undefined;
   dialog.on('action.click', (_button: Phaser.GameObjects.GameObject, index: number, pointer: Phaser.Input.Pointer) => {
-    if (pointer.wasCanceled) return;
+    if (pointer.wasCanceled || options?.handleAction?.(index)) return;
     action = index;
     dialog.modalClose();
   });

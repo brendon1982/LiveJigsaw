@@ -8,6 +8,7 @@ import preview from './assets/preview.png';
 export const blueStarSource = parallaxSource({
   key: 'BlueStar',
   title: 'Blue Star',
+  theme: 'Space',
   preview,
   layers: [
     { name: 'nebula', url: nebula, travel: 0, anchorY: 0.5 },

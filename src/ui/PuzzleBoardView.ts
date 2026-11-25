@@ -3,7 +3,7 @@ import type { Point } from '../domain/geometry';
 import type { Puzzle } from '../domain/Puzzle';
 import type { TrayFractions, TrayPosition } from '../persistence/GameSave';
 import type { LivePuzzleCapture } from '../rendering/LivePuzzleCapture';
-import { makeButton, type UIScene } from './button';
+import { makeIconButton, type UIScene } from './button';
 import { drawEffectImage, effectImageResolution, traceEffectPath } from './effectImage';
 import { PannableBoard } from './PannableBoard';
 import { PieceTray } from './PieceTray';
@@ -45,10 +45,21 @@ function measurePinch(a: Point, b: Point) {
   };
 }
 
+function drawFitBoardIcon(art: Phaser.GameObjects.Graphics, color: number) {
+  art.clear().lineStyle(2, color).beginPath();
+  art.moveTo(-10, 0).lineTo(10, 0);
+  art.moveTo(0, -10).lineTo(0, 10);
+  art.moveTo(-6, -4).lineTo(-10, 0).lineTo(-6, 4);
+  art.moveTo(6, -4).lineTo(10, 0).lineTo(6, 4);
+  art.moveTo(-4, -6).lineTo(0, -10).lineTo(4, -6);
+  art.moveTo(-4, 6).lineTo(0, 10).lineTo(4, 6);
+  art.strokePath();
+}
+
 export class PuzzleBoardView {
   private readonly tray: PieceTray;
   private readonly board: PannableBoard;
-  private readonly fitButton: ReturnType<typeof makeButton>;
+  private readonly fitButton: ReturnType<typeof makeIconButton>;
   private readonly placementEffects: PlacementEffects;
   private readonly floatingPieces: Phaser.GameObjects.Layer;
   private liftShadow?: Phaser.GameObjects.Image;
@@ -81,12 +92,12 @@ export class PuzzleBoardView {
     this.tray = new PieceTray(scene, this.pieces, puzzle.board.cellSize, trayPieceSize, trayScrollAxis(this.side));
     this.board = new PannableBoard(scene, puzzle.board.size, capture);
     this.board.addPieces(placedPieces);
-    this.fitButton = makeButton(scene, 0, 0, 'Fit board', (pointer) => {
+    this.fitButton = makeIconButton(scene, 'Fit board', drawFitBoardIcon, (pointer) => {
       if (pointer.wasCanceled) return;
       this.cancelInteraction();
       this.board.fit();
       this.updateFitButton();
-    }, 104).setVisible(false);
+    }).setVisible(false);
     this.placementEffects = new PlacementEffects(scene, this.board.layer);
     this.floatingPieces = scene.add.layer();
     this.fitButton.addToLayer(this.floatingPieces);

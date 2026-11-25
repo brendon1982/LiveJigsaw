@@ -12,6 +12,7 @@ import { evergreenHorizonSource } from './evergreenHorizon/evergreenHorizonSourc
 import { fallenTimberSource } from './fallenTimber/fallenTimberSource';
 import { fernwoodGroveSource } from './fernwoodGrove/fernwoodGroveSource';
 import { forestSource } from './forest/forestSource';
+import { forestLanternSource } from './forestLantern/forestLanternSource';
 import { goldenPeaksSource } from './goldenPeaks/goldenPeaksSource';
 import { hexCoastSource } from './hexCoast/hexCoastSource';
 import { jadeRidgeSource } from './jadeRidge/jadeRidgeSource';
@@ -71,4 +72,5 @@ export const puzzleSources: readonly PuzzleSource[] = [
   jadeRidgeSource,
   evergreenHorizonSource,
   pinnacleValleySource,
+  forestLanternSource,
 ];

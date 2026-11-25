@@ -56,13 +56,16 @@ export class PuzzlePanels {
       this.grip.setPosition(divider.x, divider.y);
       onLayout(tray.getBounds(), board.getBounds());
     };
-    this.split.on('splitter.drag', () => {
-      onResizeTray(this.trayFirst ? this.split.splitRatio : 1 - this.split.splitRatio);
-      this.layoutPanels();
+    let initialRatio = 0;
+    this.split.on('splitter.dragstart', () => { initialRatio = this.split.splitRatio; });
+    this.split.on('splitter.drag', this.layoutPanels);
+    this.split.on('splitter.dragend', () => {
+      const { splitRatio } = this.split;
+      if (splitRatio !== initialRatio) onResizeTray(this.trayFirst ? splitRatio : 1 - splitRatio);
     });
   }
 
-  layout({ x, y, width, height }: Bounds, minimumTraySize: number, trayFraction = 0) {
+  layout({ x, y, width, height }: Bounds, minimumTraySize: number, trayFraction: number) {
     const usable = Math.max(2, (this.stacked ? height : width) - dividerThickness);
     const minimumTray = Math.min(minimumTraySize, usable / 2);
     const minimumBoard = Math.min(preferredBoardMinimum, usable - minimumTray);

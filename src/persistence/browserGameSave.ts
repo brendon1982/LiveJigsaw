@@ -1,38 +1,42 @@
 import { connectorStyles, type ConnectorStyleId } from '../domain/connectorStyles';
 import { createPuzzle, puzzleSizes, type PuzzleSize } from '../domain/puzzleSizes';
 import { puzzleAnimationSpeeds, type PuzzleAnimationSpeed } from '../puzzles/PuzzleSource';
-import { trayPositions } from './GameSave';
-import type { PuzzleCompletion, PuzzleOptions, PuzzleProgress, PuzzleSetup, SaveData, SaveStorage } from './GameSave';
+import {
+  defaultTrayFractions, trayPositions,
+  type PuzzleCompletion, type PuzzleOptions, type PuzzleProgress, type PuzzleSetup, type SaveData, type SaveStorage,
+} from './GameSave';
+import { isRecord, migrateSave, saveVersion } from './saveMigrations';
 
 const storageKey = 'live-jigsaw.save';
 const themeKey = 'live-jigsaw.theme';
 const filterKey = 'live-jigsaw.puzzle-filter';
-const version = 1;
-const emptySave: SaveData = { settings: {}, progress: {}, history: {} };
+const emptySave: SaveData = { settings: { trayFractions: defaultTrayFractions }, progress: {}, history: {} };
 
 export class BrowserSaveStorage implements SaveStorage {
-  private newerVersion = false;
+  private preserveStoredSave = false;
 
   load(): SaveData {
     try {
       const storage = window.localStorage;
       const stored = storage.getItem(storageKey);
-      const parsed = stored === null ? undefined : readJson(stored);
-      if (isRecord(parsed) && parsed.version === version) return readSave(parsed);
-      this.newerVersion = isRecord(parsed) && typeof parsed.version === 'number' && parsed.version > version;
+      const original = stored === null ? readLegacySettings(storage) : readJson(stored);
+      const migrated = migrateSave(original);
+      if (!migrated) {
+        this.preserveStoredSave = stored !== null;
+        return emptySave;
+      }
 
-      const theme = storage.getItem(themeKey) ?? undefined;
-      const filter = storage.getItem(filterKey) ?? undefined;
-      const data = { ...emptySave, settings: { theme, filter } };
-      if ((theme || filter) && this.write(data)) this.removeLegacySettings(storage);
+      const data = readSave(migrated);
+      if (migrated !== original && this.writeDocument(migrated) && stored === null) this.removeLegacySettings(storage);
       return data;
     } catch {
+      this.preserveStoredSave = true;
       return emptySave;
     }
   }
 
   save(data: SaveData) {
-    this.write(data);
+    this.writeDocument({ version: saveVersion, ...data });
   }
 
   private removeLegacySettings(storage: Storage) {
@@ -44,15 +48,21 @@ export class BrowserSaveStorage implements SaveStorage {
     }
   }
 
-  private write(data: SaveData): boolean {
-    if (this.newerVersion) return false;
+  private writeDocument(document: Record<string, unknown>): boolean {
+    if (this.preserveStoredSave) return false;
     try {
-      window.localStorage.setItem(storageKey, JSON.stringify({ version, ...data }));
+      window.localStorage.setItem(storageKey, JSON.stringify(document));
       return true;
     } catch {
       return false;
     }
   }
+}
+
+function readLegacySettings(storage: Storage) {
+  const theme = storage.getItem(themeKey) ?? undefined;
+  const filter = storage.getItem(filterKey) ?? undefined;
+  if (theme !== undefined || filter !== undefined) return { version: 0, theme, filter };
 }
 
 function readJson(value: string): unknown {
@@ -63,17 +73,18 @@ function readJson(value: string): unknown {
   }
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
 function readSave(data: Record<string, unknown>): SaveData {
   const settings = isRecord(data.settings) ? data.settings : {};
+  const trayFractions = isRecord(settings.trayFractions) ? settings.trayFractions : {};
   return {
     settings: {
       theme: typeof settings.theme === 'string' ? settings.theme : undefined,
       filter: typeof settings.filter === 'string' ? settings.filter : undefined,
       trayPosition: trayPositions.find((position) => position === settings.trayPosition),
+      trayFractions: {
+        vertical: readFraction(trayFractions.vertical) ?? defaultTrayFractions.vertical,
+        horizontal: readFraction(trayFractions.horizontal) ?? defaultTrayFractions.horizontal,
+      },
     },
     recentOptions: readOptions(data.recentOptions),
     progress: readEntries(data.progress, readProgress),
@@ -81,6 +92,10 @@ function readSave(data: Record<string, unknown>): SaveData {
       ? value.map(readCompletion).filter((entry): entry is PuzzleCompletion => entry !== undefined)
       : undefined),
   };
+}
+
+function readFraction(value: unknown): number | undefined {
+  if (typeof value === 'number' && value >= 0 && value <= 1) return value;
 }
 
 function readEntries<T>(data: unknown, readEntry: (value: unknown) => T | undefined): Record<string, T> {

@@ -5,7 +5,15 @@ import type { PuzzleAnimationSpeed } from '../puzzles/PuzzleSource';
 export const trayPositions = ['Left', 'Right', 'Bottom', 'Top', 'Auto'] as const;
 export type TrayPosition = typeof trayPositions[number];
 
-export type SavedSettings = Readonly<{ theme?: string; filter?: string; trayPosition?: TrayPosition }>;
+export type TrayFractions = Readonly<{ vertical: number; horizontal: number }>;
+export const defaultTrayFractions: TrayFractions = { vertical: 0, horizontal: 0 };
+
+export type SavedSettings = Readonly<{
+  theme?: string;
+  filter?: string;
+  trayPosition?: TrayPosition;
+  trayFractions: TrayFractions;
+}>;
 
 export type PuzzleOptions = Readonly<{
   sizeLabel: string;

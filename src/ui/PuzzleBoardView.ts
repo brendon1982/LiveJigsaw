@@ -1,12 +1,12 @@
 import Phaser from 'phaser';
 import type { Point } from '../domain/geometry';
 import type { Puzzle } from '../domain/Puzzle';
-import type { TrayPosition } from '../persistence/GameSave';
+import type { TrayFractions, TrayPosition } from '../persistence/GameSave';
 import type { LivePuzzleCapture } from '../rendering/LivePuzzleCapture';
 import type { UIScene } from './button';
 import { PannableBoard } from './PannableBoard';
 import { PieceTray } from './PieceTray';
-import { playWorkspace, resolveTraySide, trayScrollAxis, type TrayScrollAxis, type TraySide } from './playLayout';
+import { playWorkspace, resolveTraySide, trayScrollAxis, type TraySide } from './playLayout';
 import { PuzzlePanels } from './PuzzlePanels';
 import { PuzzlePieceView } from './PuzzlePieceView';
 
@@ -21,6 +21,12 @@ type Pinch = {
   fingers: readonly [Phaser.Input.Pointer, Phaser.Input.Pointer];
   center: Point;
   span: number;
+};
+
+type TraySettings = {
+  position: TrayPosition;
+  fractions: TrayFractions;
+  onResize: (fractions: TrayFractions) => void;
 };
 
 const pieceDragThreshold = 8;
@@ -40,8 +46,8 @@ export class PuzzleBoardView {
   private readonly board: PannableBoard;
   private readonly floatingPieces: Phaser.GameObjects.Layer;
   private readonly pieces: PuzzlePieceView[];
-  private readonly trayFractions: Partial<Record<TrayScrollAxis, number>> = {};
   private trayBounds = new Phaser.Geom.Rectangle();
+  private trayPosition: TrayPosition;
   private side: TraySide;
   private panels?: PuzzlePanels;
   private readonly resize: () => void;
@@ -53,7 +59,7 @@ export class PuzzleBoardView {
     private readonly puzzle: Puzzle,
     capture: LivePuzzleCapture,
     trayPieceSize: number,
-    private trayPosition: TrayPosition,
+    traySettings: TraySettings,
     private readonly onPlacement: () => void,
   ) {
     const remainingPieces = puzzle.pieces.filter(({ id }) => !puzzle.isPlaced(id));
@@ -61,7 +67,8 @@ export class PuzzleBoardView {
     this.pieces = Phaser.Math.RND.shuffle(remainingPieces)
       .map((piece) => new PuzzlePieceView(scene, capture, piece));
 
-    this.side = resolveTraySide(trayPosition, scene.scale.gameSize);
+    this.trayPosition = traySettings.position;
+    this.side = resolveTraySide(this.trayPosition, scene.scale.gameSize);
     this.tray = new PieceTray(scene, this.pieces, puzzle.board.cellSize, trayPieceSize, trayScrollAxis(this.side));
     this.board = new PannableBoard(scene, puzzle.board.size, capture);
     this.board.addPieces(placedPieces);
@@ -84,11 +91,13 @@ export class PuzzleBoardView {
       }
     };
 
+    let trayFractions = traySettings.fractions;
     this.resize = () => {
       this.cancelInteraction();
       const { gameSize } = scene.scale;
       const side = resolveTraySide(this.trayPosition, gameSize);
       const axis = trayScrollAxis(side);
+      const orientation = axis === 'y' ? 'vertical' : 'horizontal';
       if (!this.panels || side !== this.side) {
         this.panels?.destroy();
         this.side = side;
@@ -97,10 +106,13 @@ export class PuzzleBoardView {
           this.trayBounds = trayBounds;
           this.tray.layout(trayBounds);
           this.board.layout(boardBounds);
-        }, (fraction) => { this.trayFractions[axis] = fraction; });
+        }, (fraction) => {
+          trayFractions = { ...trayFractions, [orientation]: fraction };
+          traySettings.onResize(trayFractions);
+        });
         clipLayers();
       }
-      this.panels.layout(playWorkspace(gameSize), this.tray.minimumSize, this.trayFractions[axis]);
+      this.panels.layout(playWorkspace(gameSize), this.tray.minimumSize, trayFractions[orientation]);
       dragCamera.setViewport(0, 0, gameSize.width, gameSize.height);
     };
     scene.scale.on(Phaser.Scale.Events.RESIZE, this.resize);

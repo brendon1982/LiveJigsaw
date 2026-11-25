@@ -484,8 +484,47 @@ test('picker Settings remembers the theme and filter on a narrow touch screen', 
   });
   await page.reload();
   await waitForText('Select a Puzzle');
-  assert.deepEqual((await readSave(page)).settings, { theme: 'Slate', filter: 'sepia' });
+  assert.deepEqual((await readSave(page)).settings, {
+    theme: 'Slate', filter: 'sepia', trayFractions: { vertical: 0, horizontal: 0 },
+  });
   assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 5, 105), [39, 51, 68, 255]);
+  assert.deepEqual(errors, []);
+});
+
+test('version 1 saves migrate with settings, options, progress, and history intact', async (t) => {
+  const { page, canvas, waitForText, errors, clickDialog } = await openPuzzle(t, { viewport: { width: 1320, height: 780 } });
+  const setup = {
+    size: { label: 'Classic', width: 512, height: 288, columns: 4, rows: 2, snapTolerance: 28 },
+    seed: 42, connectorStyle: 'classic', animationSpeed: 'Normal',
+  };
+  const original = {
+    version: 1,
+    settings: { theme: 'Slate', filter: 'sepia', trayPosition: 'Right' },
+    recentOptions: { sizeLabel: 'Classic', connectorStyle: 'classic', animationSpeed: 'Normal' },
+    progress: { Windmill: { setup, placedPieceIds: ['piece-0-0'] } },
+    history: { Lighthouse: [{ setup, completedAt: '2025-01-01T12:00:00.000Z' }] },
+  };
+  const storeSave = (data) => page.evaluate((value) => localStorage.setItem('live-jigsaw.save', JSON.stringify(value)), data);
+  await storeSave(original);
+  await page.reload();
+  await waitForText('Completed 1 times');
+  assert.deepEqual(await readSave(page), {
+    ...original, version: 2, settings: { ...original.settings, trayFractions: { vertical: 0, horizontal: 0 } },
+  });
+  await canvas.screenshot();
+  await page.mouse.click(340, 180);
+  await waitForText('1 of 8 pieces placed');
+
+  const future = { ...original, version: 99, futureField: { keep: true } };
+  await storeSave(future);
+  await page.reload();
+  await waitForText('Windmill');
+  await page.mouse.click(1246, 43);
+  await waitForText('Color theme');
+  await clickDialog(102, settingsY.theme);
+  await clickDialog(101, settingsY.done);
+  assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 5, 105), [33, 33, 33, 255], 'The new setting should apply in memory');
+  assert.deepEqual(await readSave(page), future, 'A settings change should leave a newer save intact');
   assert.deepEqual(errors, []);
 });
 
@@ -934,9 +973,15 @@ test('tray settings move the live tray and rotate touch gestures with it', async
   await selectSide('Left');
   await moveFinger(146, 460, 245, 460);
   assert.deepEqual(await sample(200, 86), trayColor);
+  const sideSizes = (await readSave(page)).settings.trayFractions;
+  assert.ok(sideSizes.vertical > 0);
+  assert.equal(sideSizes.horizontal, 0);
   await selectSide('Top');
   await moveFinger(340, 216, 340, 340);
   assert.deepEqual(await sample(26, 300), trayColor);
+  const savedSizes = (await readSave(page)).settings.trayFractions;
+  assert.equal(savedSizes.vertical, sideSizes.vertical);
+  assert.ok(savedSizes.horizontal > 0);
   await selectSide('Bottom');
   assert.deepEqual(await sample(26, 630), trayColor, 'Top and Bottom should share the adjusted tray size');
   await selectSide('Right');
@@ -954,5 +999,9 @@ test('tray settings move the live tray and rotate touch gestures with it', async
   await clickDialog(100, 44);
   await waitForText('1 of 8 placed');
   await assertSide('Right');
+  assert.deepEqual(await sample(725, 86), trayColor, 'The saved tray width should return after reopening the puzzle');
+  await selectSide('Bottom');
+  assert.deepEqual(await sample(26, 565), trayColor, 'The saved tray height should return after reopening the puzzle');
+  assert.deepEqual((await readSave(page)).settings.trayFractions, savedSizes);
   assert.deepEqual(errors, []);
 });

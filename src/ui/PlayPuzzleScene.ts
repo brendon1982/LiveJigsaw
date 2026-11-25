@@ -77,8 +77,12 @@ export class PlayPuzzleScene extends Phaser.Scene {
         gameSave.saveProgress(source.scene.key, { setup, placedPieceIds: puzzle.snapshotPlacements() });
       }
     };
-    const trayPosition = gameSave.settings.trayPosition ?? 'Auto';
-    const board = new PuzzleBoardView(this, puzzle, capture, trayPieceSize, trayPosition, onPlacement);
+    const { trayPosition = 'Auto', trayFractions } = gameSave.settings;
+    const board = new PuzzleBoardView(this, puzzle, capture, trayPieceSize, {
+      position: trayPosition,
+      fractions: trayFractions,
+      onResize: (fractions) => gameSave.updateSettings({ trayFractions: fractions }),
+    }, onPlacement);
     updateProgress();
     capture.start();
 

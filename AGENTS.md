@@ -20,6 +20,13 @@ Apply cohesion, readability, and simplicity at every level, from modules and cla
 
 Keep extensions small. Add board layouts and cut rules to the domain when a concrete game mode requires them. Keep a specific TODO next to any prototype assumption that blocks that work.
 
+## Save data
+
+- Treat browser saves as live data. Keep the game model and save decoder on the current schema. When the stored shape changes, append a one-version transformation in [saveMigrations.ts](src/persistence/saveMigrations.ts). The pipeline increments the version after each step and runs before the current decoder.
+- Keep each migration independent of Phaser, the browser, and current model defaults. Preserve unrelated settings, puzzle progress, and completion history. Version 0 represents imported standalone theme and filter settings.
+- Write successfully migrated documents back in the current version. Keep unreadable or unsupported documents in storage and use session defaults when they cannot be loaded. Verify a migration with a save in the previous format that contains existing progress and history.
+- Store tray sizes as separate fractions of the available split space for vertical and horizontal trays. Save on divider release and clamp for the current viewport during layout.
+
 ## Touch input
 
 - Treat touch as a primary input. Keep the picker and play area usable in both tablet orientations. Give touch controls generous hit areas and make every essential action available without hover or a mouse wheel.

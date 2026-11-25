@@ -21,6 +21,6 @@ export const canyonDriftSource = parallaxSource({
     { name: 'fog', url: fog, travel: 0.018 },
     { name: 'clouds', url: clouds, travel: 0.008 },
     { name: 'ground', url: ground, travel: 0.036 },
-    { name: 'cactus', url: cactus, travel: 0.05 },
+    { name: 'cactus', url: cactus, travel: 0.05, foregroundOriginX: 0.711 },
   ],
 });

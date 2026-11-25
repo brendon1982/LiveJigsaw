@@ -23,6 +23,6 @@ export const pineHighlandsSource = parallaxSource({
     { name: 'fog', url: fog, travel: 0.016 },
     { name: 'near-forest', url: nearForest, travel: 0.031 },
     { name: 'ground', url: ground, travel: 0.04 },
-    { name: 'tree', url: tree, travel: 0.05 },
+    { name: 'tree', url: tree, travel: 0.05, foregroundOriginX: 0.701 },
   ],
 });

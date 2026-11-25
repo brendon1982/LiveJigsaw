@@ -25,6 +25,6 @@ export const twilightRidgeSource = parallaxSource({
     { name: 'foothills', url: foothills, travel: 0.028 },
     { name: 'air', url: air, travel: 0.013 },
     { name: 'ground', url: ground, travel: 0.039 },
-    { name: 'tree', url: tree, travel: 0.05 },
+    { name: 'tree', url: tree, travel: 0.05, foregroundOriginX: 0.683 },
   ],
 });

@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { seededRandom } from '../../domain/seededRandom';
 import { imagePreview } from '../imagePreview';
 import { puzzleAnimationRates, type PuzzleSource, type PuzzleSourceSceneData } from '../PuzzleSource';
 
@@ -9,6 +10,8 @@ type ParallaxLayer = Readonly<{
   travel: number;
   /** Vertical point to keep in frame when enlarging the artwork. Defaults to the bottom. */
   anchorY?: number;
+  /** Horizontal ground contact in the source image. Supplying it enables seeded foreground placement. */
+  foregroundOriginX?: number;
 }>;
 
 type ParallaxArtwork = Readonly<{
@@ -24,6 +27,7 @@ const firstEdge = Math.PI / 2;
 const oppositeEdge = 3 * Math.PI / 2;
 const minPause = 600;
 const maxPause = 1_800;
+const foregroundOverhang = 0.06;
 
 export function parallaxSource({ key, title, preview, layers }: ParallaxArtwork): PuzzleSource {
   const textureKey = (name: string) => `parallax-${key}-${name}`;
@@ -50,14 +54,18 @@ export function parallaxSource({ key, title, preview, layers }: ParallaxArtwork)
       });
     }
 
-    create({ width, height, animationSpeed }: PuzzleSourceSceneData) {
-      const centerX = width / 2;
-      const movingLayers = layers.map(({ name, travel, anchorY = 1 }) => ({
-        image: this.add.image(centerX, height * anchorY, textureKey(name))
-          .setOrigin(0.5, anchorY)
-          .setDisplaySize(width * overscan, height * overscan),
-        travel: width * travel,
-      }));
+    create({ width, height, seed, animationSpeed }: PuzzleSourceSceneData) {
+      const random = seededRandom(seed);
+      const movingLayers = layers.map(({ name, travel, anchorY = 1, foregroundOriginX }) => {
+        const position = foregroundOriginX === undefined
+          ? 0.5
+          : Phaser.Math.Linear(-foregroundOverhang, 1 + foregroundOverhang, random());
+        const restX = width * position;
+        const image = this.add.image(restX, height * anchorY, textureKey(name))
+          .setOrigin(foregroundOriginX ?? 0.5, anchorY)
+          .setDisplaySize(width * overscan, height * overscan);
+        return { image, restX, travel: width * travel };
+      });
 
       const drift = { angle: 0 };
       const rate = puzzleAnimationRates[animationSpeed];
@@ -69,8 +77,8 @@ export function parallaxSource({ key, title, preview, layers }: ParallaxArtwork)
           delay: pause / rate,
           onUpdate: () => {
             const pan = Math.sin(drift.angle);
-            for (const { image, travel } of movingLayers) {
-              image.x = centerX - pan * travel;
+            for (const { image, restX, travel } of movingLayers) {
+              image.x = restX - pan * travel;
             }
           },
           onComplete: () => {

@@ -326,6 +326,54 @@ test('the landscape scenes animate on the board', async (t) => {
   assert.deepEqual(errors, []);
 });
 
+test('Canyon Drift places its foreground cactus from the puzzle seed', async (t) => {
+  const { page, waitForText, errors, playSelection } = await openPuzzle(t, { viewport: { width: 1320, height: 780 } });
+
+  const cactusPosition = async (seed) => {
+    await page.mouse.move(340, 300);
+    await page.mouse.wheel(0, 1750);
+    await page.mouse.click(340, 600);
+    await waitForText('Animation speed');
+    await page.evaluate((seed) => {
+      const getRandomValues = crypto.getRandomValues.bind(crypto);
+      crypto.getRandomValues = (values) => {
+        if (!(values instanceof Uint32Array) || values.length !== 1) return getRandomValues(values);
+        crypto.getRandomValues = getRandomValues;
+        values[0] = seed;
+        return values;
+      };
+    }, seed);
+    await playSelection({ animationSpeed: 'Slow' });
+    await waitForText('0 of 8 placed');
+    await page.evaluate(async () => {
+      for (let frame = 0; frame < 12; frame += 1) await new Promise(requestAnimationFrame);
+    });
+
+    // Sample the lower edge of the guide where the cactus stem meets the rust-colored ground.
+    const row = await page.screenshot({ clip: { x: 478, y: 552, width: 512, height: 1 } });
+    const { width, data } = PNG.sync.read(row);
+    const stem = [];
+    for (let x = 0; x < width; x += 1) {
+      const [red, green, blue] = data.subarray(x * 4, x * 4 + 3);
+      if (green > red + 10 && green > blue + 5) stem.push(x);
+    }
+    assert.ok(stem.length > 0, `The cactus should be visible for seed ${seed}`);
+    const position = (stem[0] + stem.at(-1)) / 2 / width;
+
+    await page.evaluate(() => { window.paintedText = []; });
+    await page.mouse.click(99, 43);
+    await waitForText('Windmill');
+    return position;
+  };
+
+  const left = await cactusPosition(0);
+  const right = await cactusPosition(2);
+  const repeated = await cactusPosition(0);
+  assert.ok(left < 0.35 && right > 0.65, 'Different seeds should place the cactus on different sides of the board');
+  assert.ok(Math.abs(left - repeated) < 0.05, 'The same seed should place the cactus at the same spot, allowing for the pan');
+  assert.deepEqual(errors, []);
+});
+
 test('the medieval village is captured during loading and animates after reopening', async (t) => {
   const { page, canvas, waitForText, errors, playSelection } = await openPuzzle(t, {
     viewport: { width: 1320, height: 780 },

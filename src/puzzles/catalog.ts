@@ -9,6 +9,7 @@ import { fernwoodGroveSource } from './fernwoodGrove/fernwoodGroveSource';
 import { forestSource } from './forest/forestSource';
 import { hexCoastSource } from './hexCoast/hexCoastSource';
 import { lighthouseSource } from './lighthouse/lighthouseSource';
+import { lollipopLaneSource } from './lollipopLane/lollipopLaneSource';
 import { meadowSource } from './meadow/meadowSource';
 import { medievalVillageSource } from './medievalVillage/medievalVillageSource';
 import { moonlitSkiesSource } from './moonlitSkies/moonlitSkiesSource';
@@ -43,4 +44,5 @@ export const puzzleSources: readonly PuzzleSource[] = [
   fernwoodGroveSource,
   amberWoodsSource,
   peppermintGladeSource,
+  lollipopLaneSource,
 ];

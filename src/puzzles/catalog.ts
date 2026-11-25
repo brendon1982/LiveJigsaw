@@ -1,4 +1,5 @@
 import { afterglowSource } from './afterglow/afterglowSource';
+import { amberWoodsSource } from './amberWoods/amberWoodsSource';
 import { birchGladeSource } from './birchGlade/birchGladeSource';
 import { canyonDriftSource } from './canyonDrift/canyonDriftSource';
 import { desertSource } from './desert/desertSource';
@@ -39,4 +40,5 @@ export const puzzleSources: readonly PuzzleSource[] = [
   birchGladeSource,
   fallenTimberSource,
   fernwoodGroveSource,
+  amberWoodsSource,
 ];

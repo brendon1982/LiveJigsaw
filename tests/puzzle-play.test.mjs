@@ -308,6 +308,7 @@ test('the landscape scenes animate on the board', async (t) => {
     { title: 'Birch Glade', x: 340, y: 600, scroll: 3850 },
     { title: 'Fallen Timber', x: 935, y: 600, scroll: 3850 },
     { title: 'Fernwood Grove', x: 340, y: 600, scroll: 4400 },
+    { title: 'Amber Woods', x: 935, y: 600, scroll: 4400 },
   ];
   const board = { x: 435, y: 275, width: 590, height: 320 };
   const emptyGuide = [25, 46, 40, 255];

@@ -2,6 +2,7 @@ import { afterglowSource } from './afterglow/afterglowSource';
 import { amberWoodsSource } from './amberWoods/amberWoodsSource';
 import { birchGladeSource } from './birchGlade/birchGladeSource';
 import { canyonDriftSource } from './canyonDrift/canyonDriftSource';
+import { chocolateHillsSource } from './chocolateHills/chocolateHillsSource';
 import { desertSource } from './desert/desertSource';
 import { emberMesaSource } from './emberMesa/emberMesaSource';
 import { fallenTimberSource } from './fallenTimber/fallenTimberSource';
@@ -45,4 +46,5 @@ export const puzzleSources: readonly PuzzleSource[] = [
   amberWoodsSource,
   peppermintGladeSource,
   lollipopLaneSource,
+  chocolateHillsSource,
 ];

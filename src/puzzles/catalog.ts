@@ -28,6 +28,7 @@ import { meadowSource } from './meadow/meadowSource';
 import { medievalVillageSource } from './medievalVillage/medievalVillageSource';
 import { moonlitSkiesSource } from './moonlitSkies/moonlitSkiesSource';
 import { mountainsSource } from './mountains/mountainsSource';
+import { opalPlanetSource } from './opalPlanet/opalPlanetSource';
 import { peppermintGladeSource } from './peppermintGlade/peppermintGladeSource';
 import { pineHighlandsSource } from './pineHighlands/pineHighlandsSource';
 import { pinnacleValleySource } from './pinnacleValley/pinnacleValleySource';
@@ -87,4 +88,5 @@ export const puzzleSources: readonly PuzzleSource[] = [
   sapphireLagoonSource,
   emberworldSource,
   cobaltWorldSource,
+  opalPlanetSource,
 ];

@@ -47,7 +47,7 @@ export class Puzzle {
   private readonly piecesById: ReadonlyMap<string, PuzzlePiece>;
   private readonly trayOrder: readonly PuzzlePiece[];
   private placedPieceIds = new Set<string>();
-  private trayOrientations = new Map<string, number>();
+  private trayOrientations: Map<string, number>;
 
   constructor(
     board: Board,
@@ -65,14 +65,10 @@ export class Puzzle {
     this.challengeMode = challengeMode;
     this.pieceRotation = pieceRotation;
     this.snapTolerance = snapTolerance;
-    const outlines = PieceOutline.forBoard(board, connectorStyle, seed);
-    this.pieces = board.cells.map((cell, cellIndex) => new PuzzlePiece(cell, outlines[cellIndex]));
+    this.pieces = buildPieces(board, connectorStyle, seed);
     this.piecesById = new Map(this.pieces.map((piece) => [piece.id, piece]));
     this.trayOrder = shufflePieces(this.pieces, seed);
-    if (pieceRotation) {
-      const random = seededRandom((seed ^ 0x9e3779b9) >>> 0);
-      for (const { id } of this.pieces) this.trayOrientations.set(id, Math.floor(random() * 4));
-    }
+    this.trayOrientations = pieceRotation ? startingOrientations(this.pieces, seed) : new Map();
   }
 
   get placedCount(): number {
@@ -176,6 +172,11 @@ export class Puzzle {
   }
 }
 
+function buildPieces(board: Board, connectorStyle: ConnectorStyleId, seed: number): readonly PuzzlePiece[] {
+  const outlines = PieceOutline.forBoard(board, connectorStyle, seed);
+  return board.cells.map((cell, cellIndex) => new PuzzlePiece(cell, outlines[cellIndex]));
+}
+
 function neighboringEdges(piece: PuzzlePiece) {
   const { row, column } = piece.cell;
   const { top, right, bottom, left } = piece.outline.edges;
@@ -196,4 +197,11 @@ function shufflePieces(pieces: readonly PuzzlePiece[], seed: number): readonly P
     [order[index], order[swapIndex]] = [order[swapIndex], order[index]];
   }
   return order;
+}
+
+function startingOrientations(pieces: readonly PuzzlePiece[], seed: number): Map<string, number> {
+  const random = seededRandom((seed ^ 0x9e3779b9) >>> 0);
+  const orientations = new Map<string, number>();
+  for (const { id } of pieces) orientations.set(id, Math.floor(random() * 4));
+  return orientations;
 }

@@ -43,6 +43,10 @@ export class PuzzlePlay {
     return this.groupOf(pieceId)?.quarterTurns ?? this.puzzle.orientationOf(pieceId);
   }
 
+  private restrictsSeedParking(allowLoosePiecesOnBoard: boolean): boolean {
+    return allowLoosePiecesOnBoard && this.puzzle.challengeMode === 'seed';
+  }
+
   dropOnBoard(grabbedPieceId: string, center: Point, allowLoosePiecesOnBoard = true): BoardDrop {
     if (this.puzzle.isPlaced(grabbedPieceId)) return boardDrop('unchanged', 'already-placed');
     const lifted = this.groupOf(grabbedPieceId);
@@ -54,13 +58,21 @@ export class PuzzlePlay {
       memberIds, anchorPieceId: grabbedPieceId, position: center, quarterTurns: this.orientationOf(grabbedPieceId),
     };
     const members = memberIds.map((id) => ({ id, position: this.workspace.positionOf(group, id) }));
+    const restrictedParking = this.restrictsSeedParking(allowLoosePiecesOnBoard);
     const guideResult = this.homes.placeGroup(members, group.quarterTurns);
     if (guideResult === 'placed') {
       if (lifted) this.workspace.remove(lifted);
+      if (restrictedParking) this.clearLoosePieces();
       return boardDrop('placed', guideResult, memberIds);
     }
 
-    const settled = this.workspace.settleDrop(group, { lifted, parkOnMiss: allowLoosePiecesOnBoard });
+    if (restrictedParking && this.puzzle.placedCount > 0) {
+      this.returnToTray(grabbedPieceId);
+      return boardDrop('returned', guideResult);
+    }
+
+    const parkOnMiss = allowLoosePiecesOnBoard && (!restrictedParking || !!lifted || !this.parkedGroups.length);
+    const settled = this.workspace.settleDrop(group, { lifted, parkOnMiss });
     if (!settled) return boardDrop(lifted ? 'unchanged' : 'returned', guideResult);
     if (!lifted) this.homes.takeFromTray(grabbedPieceId);
     return boardDrop(settled, guideResult);
@@ -74,6 +86,11 @@ export class PuzzlePlay {
     return true;
   }
 
+  private clearLoosePieces() {
+    for (const group of this.parkedGroups) this.homes.returnToTray(group.memberIds, group.quarterTurns);
+    this.workspace.replaceGroups([]);
+  }
+
   turnPiece(pieceId: string): boolean {
     if (!this.puzzle.pieceRotation || !this.puzzle.canDrag(pieceId)) return false;
     const group = this.groupOf(pieceId);
@@ -82,9 +99,12 @@ export class PuzzlePlay {
     return true;
   }
 
-  breakOff(pieceId: string): boolean {
+  breakOff(pieceId: string, allowLoosePiecesOnBoard = true): boolean {
     const group = this.groupOf(pieceId);
-    return !!group && this.workspace.breakOff(group, pieceId);
+    const keepDetached = !this.restrictsSeedParking(allowLoosePiecesOnBoard);
+    if (!group || !this.workspace.breakOff(group, pieceId, { keepDetached })) return false;
+    if (!keepDetached) this.homes.returnToTray([pieceId], group.quarterTurns);
+    return true;
   }
 
   snapshot(): PuzzlePlaySnapshot {

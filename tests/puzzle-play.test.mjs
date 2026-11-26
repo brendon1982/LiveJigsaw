@@ -1897,6 +1897,53 @@ scenario('Sequential locks tray pieces while keeping touch scrolling and saves t
   assert.deepEqual(errors, []);
 });
 
+scenario('Seed returns loose pieces when cut off or when the seed is placed', async (t) => {
+  const { page, waitForText, errors, playSelection } = await openCompactPuzzle(t, {
+    viewport: { width: 1320, height: 780 }, hasTouch: true, isMobile: true,
+  });
+  const { moveFinger } = await touchController(page);
+  await page.touchscreen.tap(340, 180);
+  await playSelection({ connectorStyle: 'None', challengeMode: 'seed' });
+  await waitForText('0 of 8 placed');
+  await dragDivider(page, moveFinger, { x: 552 });
+
+  const [left, right, seed] = ['piece-0-0', 'piece-0-1', 'piece-0-2'];
+  const dropFromTray = async (id, x, y) => {
+    const state = await playLayout(page);
+    const entry = state.tray.find((entry) => entry.id === id);
+    const target = state.boardPoint(x, y);
+    await moveFinger(entry.x, entry.y, target.x, target.y);
+  };
+
+  await dropFromTray(left, 38, 144);
+  await dropFromTray(right, 38, 144);
+  assert.deepEqual((await playLayout(page)).parked.map(({ id }) => id), [left]);
+  await dropFromTray(right, 166, 144);
+  const joined = await playLayout(page);
+  assert.deepEqual(joined.parked.map(({ id }) => id), [left, right]);
+  const scissors = joined.breakButton;
+  await page.touchscreen.tap(scissors.x + scissors.width / 2, scissors.y + scissors.height / 2);
+  const cut = joined.boardPoint(166, 144);
+  await page.touchscreen.tap(cut.x, cut.y);
+  const split = await playLayout(page);
+  assert.deepEqual(split.parked, joined.parked.slice(0, 1));
+  assert.ok(split.tray.some(({ id }) => id === right));
+  assert.equal(split.breakButton.visible, false);
+  assert.deepEqual((await readSave(page)).progress.Windmill.parkedGroups.map(({ memberIds }) => memberIds), [[left]]);
+
+  await dropFromTray(seed, 320, 72);
+  await waitForText('1 of 8 placed');
+  await dropFromTray(right, 166, 144);
+  const afterPlacement = await playLayout(page);
+  assert.deepEqual(afterPlacement.parked, []);
+  assert.ok(afterPlacement.tray.some(({ id }) => id === left));
+  assert.ok(afterPlacement.tray.some(({ id }) => id === right));
+  const saved = (await readSave(page)).progress.Windmill;
+  assert.deepEqual(saved.placedPieceIds, [seed]);
+  assert.deepEqual(saved.parkedGroups, []);
+  assert.deepEqual(errors, []);
+});
+
 scenario('Seed previews an on-target disconnected drop without saving it', async (t) => {
   const { page, canvas, waitForText, errors, playSelection, setAllowLoosePiecesOnBoard } = await openCompactPuzzle(t, {
     viewport: { width: 1320, height: 780 }, hasTouch: true, isMobile: true,

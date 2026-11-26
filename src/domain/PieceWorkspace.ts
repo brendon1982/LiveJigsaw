@@ -57,15 +57,17 @@ export class PieceWorkspace {
     this.replaceGroups([...remaining, freezeGroup(turned)]);
   }
 
-  breakOff(group: ParkedGroup, pieceId: string): boolean {
+  breakOff(group: ParkedGroup, pieceId: string, { keepDetached }: { keepDetached: boolean }): boolean {
     if (group.memberIds.length < 2) return false;
     const remainder = group.memberIds.filter((id) => id !== pieceId);
     const parts = this.connectedComponents(remainder).map((ids) => this.reanchor(group, ids, ids[0]));
-    const detached = {
-      memberIds: [pieceId], anchorPieceId: pieceId, quarterTurns: group.quarterTurns,
-      position: this.separatedPosition(group, pieceId),
-    };
-    this.replaceGroup(group, [...parts, detached]);
+    if (keepDetached) {
+      parts.push({
+        memberIds: [pieceId], anchorPieceId: pieceId, quarterTurns: group.quarterTurns,
+        position: this.separatedPosition(group, pieceId),
+      });
+    }
+    this.replaceGroup(group, parts);
     return true;
   }
 

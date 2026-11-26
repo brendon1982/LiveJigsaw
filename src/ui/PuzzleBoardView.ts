@@ -606,13 +606,13 @@ export class PuzzleBoardView {
   }
 
   private breakOff(entry: PuzzlePieceView) {
+    const { id } = entry.piece;
     const start = { x: entry.position.x, y: entry.position.y };
-    if (!this.play.breakOff(entry.piece.id)) return;
+    if (!this.play.breakOff(id, this.allowLoosePiecesOnBoard)) return;
     this.setBreakArmed(false);
-    this.syncParkedPieces();
-    this.slideDetachedPiece(entry, start, this.play.positionOf(entry.piece.id)!);
-    this.updateBreakButton();
-    this.updateZoomButtons();
+    this.reconcileWorkspace();
+    const end = this.play.positionOf(id);
+    if (end) this.slideDetachedPiece(entry, start, end);
     this.actions.onWorkspaceChange();
   }
 
@@ -677,8 +677,12 @@ export class PuzzleBoardView {
     } else if (result.kind === 'parked' || result.kind === 'joined') {
       this.reconcileWorkspace();
       this.actions.onWorkspaceChange();
-    } else if (result.kind === 'returned' && result.guideResult === 'disconnected-from-seed') {
-      this.previewSeedRejection(entry, true);
+    } else if (result.kind === 'returned') {
+      if (gesture.source === 'board') {
+        this.reconcileWorkspace();
+        this.actions.onWorkspaceChange();
+      } else if (result.guideResult !== 'disconnected-from-seed') this.restoreLift(gesture);
+      if (result.guideResult === 'disconnected-from-seed') this.previewSeedRejection(entry, true);
       return;
     } else this.restoreLift(gesture);
 

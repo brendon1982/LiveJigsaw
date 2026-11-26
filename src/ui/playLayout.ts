@@ -1,14 +1,10 @@
 import { Bounds, type Size } from '../domain/geometry.ts';
 import type { TrayPosition } from '../persistence/GameSave';
-import { headerInset, puzzleHeader } from './puzzleHeader';
+import { puzzleSpacing } from './puzzleHeader';
 
-export function playHeader(width: number) {
-  return puzzleHeader(width, 620);
-}
-
-export function playWorkspace({ width, height }: Size): Bounds {
-  const top = playHeader(width).height;
-  return new Bounds(headerInset, top, Math.max(1, width - 2 * headerInset), Math.max(1, height - top - headerInset));
+export function playWorkspace({ width, height }: Size, headerBottom: number): Bounds {
+  const top = headerBottom + puzzleSpacing;
+  return new Bounds(0, top, Math.max(1, width), Math.max(1, height - top));
 }
 
 export type TraySide = Exclude<TrayPosition, 'Auto'>;

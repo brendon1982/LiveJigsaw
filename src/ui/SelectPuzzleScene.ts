@@ -9,15 +9,12 @@ import { makeButton } from './button';
 import type { PuzzleSelection } from './PlayPuzzleScene';
 import { showPuzzleFilters } from './puzzleFilterDialog';
 import { activeFilterCount, matchesPuzzleFilters, noPuzzleFilters, samePuzzleFilters, type PuzzleFilters } from './puzzleFilters';
-import { headerControlGap, headerGap, headerInset, makeSettingsButton, puzzleHeader } from './puzzleHeader';
+import { headerControlGap, headerInset, makeSettingsButton, puzzleSpacing } from './puzzleHeader';
 import { makePreviewCornerCutout, makePuzzlePickerCard, maxPickerCardWidth } from './PuzzlePickerCard';
 import { showPuzzleOptions, showResumePuzzle } from './puzzleOptions';
 import { openSettings } from './SettingsScene';
 import { styleWithTheme } from './theme';
 
-const columnGap = 32;
-const rowGap = 16;
-const listPadding = headerGap;
 const scrollbarWidth = 10;
 const scrollbarGap = 14;
 const scrollbarSpace = scrollbarWidth + scrollbarGap;
@@ -98,7 +95,7 @@ export class SelectPuzzleScene extends Phaser.Scene {
     const grid = this.rexUI.add.gridSizer({
       column: 1, row: 1,
     });
-    const list = this.rexUI.add.sizer({ orientation: 'y', space: { top: listPadding, bottom: listPadding } })
+    const list = this.rexUI.add.sizer({ orientation: 'y', space: { bottom: puzzleSpacing } })
       .add(grid, { align: 'center' });
     const track = this.rexUI.add.roundRectangle(0, 0, 8, 10, 4);
     const thumb = this.rexUI.add.roundRectangle(0, 0, scrollbarWidth, 36, 5);
@@ -173,18 +170,27 @@ export class SelectPuzzleScene extends Phaser.Scene {
     };
     const layoutPicker = (offset: number) => {
       const { width, height } = this.scale.gameSize;
-      const header = puzzleHeader(width);
       const stacked = width < 560;
-      const panelTop = stacked ? 110 : header.height;
+      settings.layout(width);
+      filtersButton.setPosition(settings.button.x - filtersButton.width - headerControlGap, settings.button.y);
+      title.setFontSize(stacked ? 20 : 34);
+      const buttonHeight = Math.max(settings.button.height, filtersButton.height);
+      const rowHeight = Math.max(buttonHeight, title.height);
+      const titleY = stacked ? puzzleSpacing + buttonHeight + headerControlGap + title.height / 2
+        : puzzleSpacing + rowHeight / 2;
+      title.setPosition(headerInset, titleY);
+      const headerBottom = stacked ? titleY + title.height / 2 : puzzleSpacing + rowHeight;
+      const panelTop = headerBottom + puzzleSpacing;
       const panelHeight = Math.max(1, height - panelTop);
       const listWidth = width - scrollbarSpace;
-      const cardWidth = Phaser.Math.Clamp(listWidth - 2 * listPadding, 1, maxPickerCardWidth);
-      const fittingColumns = Math.floor((listWidth - 2 * listPadding + columnGap) / (maxPickerCardWidth + columnGap));
+      const availableWidth = listWidth - 2 * puzzleSpacing;
+      const cardWidth = Phaser.Math.Clamp(availableWidth, 1, maxPickerCardWidth);
+      const fittingColumns = Math.floor((availableWidth + puzzleSpacing) / (maxPickerCardWidth + puzzleSpacing));
       const columns = Math.min(Math.max(1, fittingColumns), Math.max(1, visibleCards.length));
       const stackStatus = visibleCards.some(({ card }) => card.needsStatusRow(cardWidth));
       if (cardLayout?.columns !== columns || cardLayout.width !== cardWidth || cardLayout.stackStatus !== stackStatus) {
         const rows = Math.max(1, Math.ceil(visibleCards.length / columns));
-        grid.resetGrid(columns, rows, 0, 0, { column: columnGap, row: rowGap });
+        grid.resetGrid(columns, rows, 0, 0, { column: puzzleSpacing, row: puzzleSpacing });
         for (const { card } of cards) card.container.setVisible(false);
         visibleCards.forEach(({ card }, index) => {
           card.layout(cardWidth, stackStatus);
@@ -196,10 +202,6 @@ export class SelectPuzzleScene extends Phaser.Scene {
 
       this.cameras.main.setViewport(0, 0, width, height).setOrigin(0);
       headerBackground.setDisplaySize(width, panelTop);
-      title.setFontSize(stacked ? 20 : 34)
-        .setPosition(headerInset, stacked ? 87 : header.buttonY + settings.button.height / 2);
-      settings.layout(width);
-      filtersButton.setPosition(settings.button.x - filtersButton.width - headerControlGap, settings.button.y);
       listBounds.setTo(0, panelTop, listWidth, panelHeight);
       panel.setPosition(0, panelTop).setMinSize(width, panelHeight).layout().setChildOY(offset, true);
       const empty = visibleCards.length === 0;
@@ -215,7 +217,7 @@ export class SelectPuzzleScene extends Phaser.Scene {
       let queuedImages = false;
       for (const { card } of visibleCards) {
         const { y, height } = card.container;
-        const buffer = height + rowGap;
+        const buffer = height + puzzleSpacing;
         if (y + height <= listBounds.top - buffer || y >= listBounds.bottom + buffer) continue;
         if (card.preparePreview()) queuedImages = true;
       }

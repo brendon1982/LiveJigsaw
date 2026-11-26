@@ -8,8 +8,8 @@ import type { PuzzleSetup } from '../persistence/GameSave';
 import { LivePuzzleCapture } from '../rendering/LivePuzzleCapture';
 import type { PuzzleSource } from '../puzzles/PuzzleSource';
 import { makeButton } from './button';
-import { playHeader } from './playLayout';
-import { headerControlGap, headerGap, headerInset, makeSettingsButton } from './puzzleHeader';
+import { playWorkspace } from './playLayout';
+import { headerControlGap, headerInset, makeSettingsButton, puzzleSpacing } from './puzzleHeader';
 import { PuzzleBoardView } from './PuzzleBoardView';
 import { SelectPuzzleScene } from './SelectPuzzleScene';
 import { openSettings } from './SettingsScene';
@@ -42,7 +42,7 @@ export class PlayPuzzleScene extends Phaser.Scene {
       ...puzzle.board.size, seed: puzzle.seed, animationSpeed,
     });
 
-    const backButton = makeButton(this, headerInset, 0, 'All puzzles', (pointer) => {
+    const backButton = makeButton(this, headerInset, puzzleSpacing, 'All puzzles', (pointer) => {
       if (!pointer.wasCanceled) this.scene.start(SelectPuzzleScene.key);
     }, 150);
     const settings = makeSettingsButton(this, () => {
@@ -51,7 +51,7 @@ export class PlayPuzzleScene extends Phaser.Scene {
         onTrayPositionChange: (position) => board.setTrayPosition(position),
         onAllowLoosePiecesOnBoardChange: (allow) => board.setAllowLoosePiecesOnBoard(allow),
       });
-    }, playHeader);
+    });
     const title = this.add.text(0, 0, source.title, {
       fontFamily: 'system-ui', fontSize: '34px', fontStyle: 'bold',
     }).setOrigin(0, 0.5);
@@ -66,34 +66,43 @@ export class PlayPuzzleScene extends Phaser.Scene {
       progress.setColor(colors.mutedText);
       challenge?.setColor(colors.mutedText);
     });
+    const pieceCount = puzzle.pieces.length;
+    let headerBottom = 0;
     const layoutHeader = () => {
       const { width } = this.scale.gameSize;
-      const { narrow, buttonY } = playHeader(width);
-      backButton.setY(buttonY);
+      const narrow = width < 620;
       settings.layout(width);
 
-      const titleX = narrow ? headerInset : backButton.x + backButton.width + headerGap;
-      const centerY = narrow ? 87 : buttonY + backButton.height / 2;
+      const titleX = narrow ? headerInset : backButton.x + backButton.width + puzzleSpacing;
       title.setFontSize(narrow ? 20 : 34);
       progress.setFontSize(narrow ? 14 : 17);
       challenge?.setFontSize(narrow ? 14 : 17);
+      const progressWidth = Math.ceil(progress.context.measureText(`${pieceCount} of ${pieceCount} placed`).width);
       const challengeWidth = challenge ? headerControlGap + challenge.width : 0;
-      const inlineRight = titleX + title.width + headerControlGap + progress.width + challengeWidth;
-      const stacked = narrow || width < 700 || inlineRight + headerGap > settings.button.x;
+      const inlineRight = titleX + title.width + headerControlGap + progressWidth + challengeWidth;
+      const stacked = narrow || width < 700 || inlineRight + puzzleSpacing > settings.button.x;
       if (stacked && !narrow) {
         title.setFontSize(20);
         progress.setFontSize(15);
         challenge?.setFontSize(15);
       }
 
-      title.setPosition(titleX, centerY - (stacked ? 10 : 0));
-      const progressY = centerY + (stacked ? 11 : 0);
+      const progressHeight = Math.max(progress.height, challenge?.height ?? 0);
+      const textHeight = stacked ? title.height + progressHeight : Math.max(title.height, progressHeight);
+      const buttonHeight = Math.max(backButton.height, settings.button.height);
+      const rowHeight = Math.max(buttonHeight, textHeight);
+      const textTop = narrow ? puzzleSpacing + buttonHeight + headerControlGap
+        : puzzleSpacing + (rowHeight - textHeight) / 2;
+      const titleY = textTop + (stacked ? title.height : textHeight) / 2;
+      const progressY = stacked ? textTop + title.height + progressHeight / 2 : titleY;
+      title.setPosition(titleX, titleY);
       progress.setPosition(stacked ? titleX : titleX + title.width + headerControlGap, progressY);
       challenge?.setPosition(progress.x + progress.width + headerControlGap, progressY);
+      headerBottom = narrow ? textTop + textHeight : puzzleSpacing + rowHeight;
     };
     this.scale.on(Phaser.Scale.Events.RESIZE, layoutHeader);
     const updateProgress = () => {
-      progress.setText(`${puzzle.placedCount} of ${puzzle.pieces.length} placed`);
+      progress.setText(`${puzzle.placedCount} of ${pieceCount} placed`);
       layoutHeader();
     };
     let completionAction: Phaser.Time.TimerEvent | undefined;
@@ -111,12 +120,13 @@ export class PlayPuzzleScene extends Phaser.Scene {
       }
     };
     const { trayPosition = 'Auto', trayFractions, allowLoosePiecesOnBoard } = gameSave.settings;
+    updateProgress();
     const board = new PuzzleBoardView(this, play, capture, trayPieceArea, {
       position: trayPosition,
       fractions: trayFractions,
       onResize: (fractions) => gameSave.updateSettings({ trayFractions: fractions }),
-    }, { onPlacement, onWorkspaceChange: saveProgress }, allowLoosePiecesOnBoard);
-    updateProgress();
+    }, { onPlacement, onWorkspaceChange: saveProgress }, allowLoosePiecesOnBoard,
+    () => playWorkspace(this.scale.gameSize, headerBottom));
     capture.start();
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {

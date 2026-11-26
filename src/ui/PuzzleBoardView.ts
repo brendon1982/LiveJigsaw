@@ -8,7 +8,7 @@ import { drawEffectImage, effectImageResolution, traceEffectPath } from './effec
 import { PannableBoard } from './PannableBoard';
 import { PieceTray } from './PieceTray';
 import { PlacementEffects } from './PlacementEffects';
-import { playWorkspace, resolveTraySide, trayScrollAxis, type TraySide } from './playLayout';
+import { resolveTraySide, trayScrollAxis, type TraySide } from './playLayout';
 import { headerControlGap } from './puzzleHeader';
 import { PuzzlePanels } from './PuzzlePanels';
 import { PuzzlePieceView } from './PuzzlePieceView';
@@ -131,6 +131,7 @@ export class PuzzleBoardView {
     traySettings: TraySettings,
     private readonly actions: PuzzleActions,
     private allowLoosePiecesOnBoard: boolean,
+    private readonly workspaceBounds: () => Bounds,
   ) {
     const { puzzle } = play;
     const placedPieces = puzzle.pieces.filter(({ id }) => puzzle.isPlaced(id));
@@ -191,7 +192,7 @@ export class PuzzleBoardView {
     this.resize = () => {
       this.cancelInteraction();
       const { gameSize } = scene.scale;
-      const workspace = playWorkspace(gameSize);
+      const workspace = this.workspaceBounds();
       dragCamera.setViewport(0, 0, gameSize.width, gameSize.height);
       this.seedDropFeedback?.layout(gameSize);
       if (this.completionStage !== 'playing') {
@@ -275,7 +276,7 @@ export class PuzzleBoardView {
     this.tray.hide();
     this.trayBounds.setTo(0, 0, 0, 0);
 
-    const workspace = playWorkspace(this.scene.scale.gameSize);
+    const workspace = this.workspaceBounds();
     const panels = this.panels!;
     const startingBounds = panels.beginTraySlide();
     const fitFrame = this.board.beginFitTransition(workspace);

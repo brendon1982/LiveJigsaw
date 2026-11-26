@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { availablePuzzleSizes } from '../domain/puzzleSizes';
 import type { PuzzleSource } from '../puzzles/PuzzleSource';
 import { addPressFeedback, type UIScene } from './button';
-import { headerControlGap, headerGap } from './puzzleHeader';
+import { headerControlGap, puzzleSpacing } from './puzzleHeader';
 import { palette, styleWithTheme } from './theme';
 
 export const maxPickerCardWidth = 560;
@@ -11,7 +11,7 @@ const previewHeight = maxPickerCardWidth * previewSize.height / previewSize.widt
 const cornerRadius = 16;
 const footerHeight = 72;
 const statusRowHeight = 22;
-const footerInset = headerGap;
+const footerInset = puzzleSpacing;
 
 export function makePreviewCornerCutout(scene: UIScene): Phaser.Textures.CanvasTexture {
   const cutout = scene.textures.createCanvas('picker-preview-corners', maxPickerCardWidth, cornerRadius);

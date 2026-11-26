@@ -276,6 +276,37 @@ async function dragDivider(page, drag, destination) {
   await drag(divider.x, divider.y, destination.x ?? divider.x, destination.y ?? divider.y);
 }
 
+scenario('the play workspace fills the viewport beneath the padded header', async (t) => {
+  const { page, waitForText, errors, playSelection } = await openCompactPuzzle(t, {
+    viewport: { width: 1320, height: 780 }, hasTouch: true,
+  });
+  await page.touchscreen.tap(340, 180);
+  await playSelection();
+  await waitForText('0 of 8 placed');
+  const measure = () => page.evaluate(() => {
+    const scene = window.puzzleArtworkScene.sys.game.scene.getScene('PlayPuzzle');
+    const objects = scene.children.list;
+    const heading = objects.find(({ text }) => text === 'Windmill');
+    const settings = objects.find((object) => object.type === 'rexLabel' && object.getElement('text')?.text === 'Settings');
+    const progress = objects.find(({ text }) => text === '0 of 8 placed');
+    const headerBounds = [heading, settings, progress].map((object) => object.getBounds());
+    const top = Math.min(...headerBounds.map(({ top }) => top));
+    const bottom = Math.max(...headerBounds.map(({ bottom }) => bottom));
+    const [tray, board] = objects.filter(({ type, depth }) => type === 'Rectangle' && depth === -1)
+      .map((panel) => panel.getBounds());
+    return {
+      top, below: Math.min(board.y, tray.y) - bottom,
+      left: Math.min(board.x, tray.x), right: Math.max(board.x + board.width, tray.x + tray.width),
+      bottom: Math.max(board.y + board.height, tray.y + tray.height),
+    };
+  });
+  assert.deepEqual(await measure(), { top: 16, below: 16, left: 0, right: 1320, bottom: 780 });
+  await page.setViewportSize({ width: 460, height: 820 });
+  await page.waitForFunction(() => document.querySelector('canvas').width === 460);
+  assert.deepEqual(await measure(), { top: 16, below: 16, left: 0, right: 460, bottom: 820 });
+  assert.deepEqual(errors, []);
+});
+
 scenario('the picker renders before requesting offscreen previews', async (t) => {
   const { page, canvas, waitForText, errors, origin } = await openGamePage(t, {
     viewport: { width: 768, height: 1024 },
@@ -401,8 +432,8 @@ scenario('the board starts fitted to the space left by the saved tray width', as
   assert.deepEqual(await pixelAt(page, screenshot, 900, 180), panelBackground, 'The artwork should fit vertically after restoring the tray');
   assert.notDeepEqual(await pixelAt(page, screenshot, 900, 250), panelBackground, 'The fitted artwork should be visible');
   assert.deepEqual(await pixelAt(page, screenshot, 900, 700), panelBackground, 'The artwork should be centered vertically');
-  assert.notDeepEqual(await pixelAt(page, screenshot, 1267, 113), panelBackground, 'The 1× button should occupy the top-right slot');
-  assert.deepEqual(await pixelAt(page, screenshot, 1217, 113), panelBackground, 'Only one zoom button should be visible');
+  assert.notDeepEqual(await pixelAt(page, screenshot, 1291, 103), panelBackground, 'The 1× button should occupy the top-right slot');
+  assert.deepEqual(await pixelAt(page, screenshot, 1241, 103), panelBackground, 'Only one zoom button should be visible');
   assert.deepEqual(errors, []);
 });
 
@@ -420,38 +451,40 @@ scenario('the 1× board button restores native size and Fit board returns to the
   await waitForText('0 of 40 placed');
 
   const panelBackground = [32, 46, 42, 255];
+  const [leftSlot, rightSlot, buttonY] = [1223, 1285, 121];
   const fitted = await canvas.screenshot();
   assert.deepEqual(await pixelAt(page, fitted, 900, 112), panelBackground);
-  assert.deepEqual(await pixelAt(page, fitted, 1199, 119), panelBackground, 'A lone button should not occupy the left slot');
-  await page.touchscreen.tap(1261, 119);
+  assert.deepEqual(await pixelAt(page, fitted, leftSlot, buttonY), panelBackground, 'A lone button should not occupy the left slot');
+  await page.touchscreen.tap(rightSlot, buttonY);
 
   const native = await canvas.screenshot();
-  // The 624 px artwork is centered between y=84 and y=756, so it spans y=108 to y=732 at 1×.
-  for (const y of [104, 736]) assert.deepEqual(await pixelAt(page, native, 900, y), panelBackground);
-  for (const y of [112, 728]) assert.notDeepEqual(await pixelAt(page, native, 900, y), panelBackground);
+  // The 624 px artwork is centered between y=86 and y=780, so it spans y=121 to y=745 at 1×.
+  for (const y of [117, 749]) assert.deepEqual(await pixelAt(page, native, 900, y), panelBackground);
+  for (const y of [125, 741]) assert.notDeepEqual(await pixelAt(page, native, 900, y), panelBackground);
 
   const { moveFinger } = await touchController(page);
   await moveFinger(900, 420, 900, 460);
   const panned = await canvas.screenshot();
   assert.deepEqual(await pixelAt(page, panned, 900, 112), panelBackground, 'The artwork should move down');
-  assert.deepEqual(await pixelAt(page, panned, 1199, 119), panelBackground, 'Panning at 1× should not show the native size button');
-  assert.notDeepEqual(await pixelAt(page, panned, 1261, 119), panelBackground, 'Fit should remain available after panning');
+  assert.deepEqual(await pixelAt(page, panned, leftSlot, buttonY), panelBackground, 'Panning at 1× should not show the native size button');
+  assert.notDeepEqual(await pixelAt(page, panned, rightSlot, buttonY), panelBackground, 'Fit should remain available after panning');
 
-  await page.mouse.move(900, 420);
+  await page.mouse.move(900, 433);
   await page.mouse.wheel(0, 200);
   const zoomedOut = await canvas.screenshot();
-  assert.notDeepEqual(await pixelAt(page, zoomedOut, 1199, 119), panelBackground, '1× should move to the left slot');
-  assert.notDeepEqual(await pixelAt(page, zoomedOut, 1261, 119), panelBackground, 'Fit should stay in the right slot');
-  await page.touchscreen.tap(1199, 119);
+  assert.notDeepEqual(await pixelAt(page, zoomedOut, leftSlot, buttonY), panelBackground, '1× should move to the left slot');
+  assert.notDeepEqual(await pixelAt(page, zoomedOut, rightSlot, buttonY), panelBackground, 'Fit should stay in the right slot');
+  await page.touchscreen.tap(leftSlot, buttonY);
   const nativeAgain = await canvas.screenshot();
-  // Zooming out around y=420 and back to 1× should restore the panned top edge at y=148.
-  assert.deepEqual(await pixelAt(page, nativeAgain, 900, 144), panelBackground, '1× should preserve the pan');
-  assert.notDeepEqual(await pixelAt(page, nativeAgain, 900, 152), panelBackground, '1× should restore the panned artwork edge');
+  for (const y of [130, 155, 180]) {
+    assert.deepEqual(await pixelAt(page, nativeAgain, 900, y), await pixelAt(page, panned, 900, y),
+      'Zooming out and back to 1× should restore the panned artwork edge');
+  }
 
-  await page.touchscreen.tap(1261, 119);
+  await page.touchscreen.tap(rightSlot, buttonY);
   const refitted = await canvas.screenshot();
   assert.deepEqual(await pixelAt(page, refitted, 900, 112), panelBackground);
-  assert.deepEqual(await pixelAt(page, refitted, 1199, 119), panelBackground);
+  assert.deepEqual(await pixelAt(page, refitted, leftSlot, buttonY), panelBackground);
   assert.deepEqual(errors, []);
 });
 
@@ -699,37 +732,39 @@ scenario('live pieces scroll, reflow, and snap to the pannable board', async (t)
   assert.deepEqual(await pixelAt(page, widened, 552, 420), gripColor, 'The grip should move with the divider');
   assert.ok(first.x > wideLayout.tray[0].x, 'Widening the tray should reveal another column');
   assert.deepEqual(await pixelAt(page, widened, first.x, first.y), sky);
-  const boardSeam = await pixelAt(page, widened, 798, 302);
+  const { x: dropX, y: dropY } = cellCenter(wideLayout, 0, 0);
+  const { x: secondX, y: secondY } = cellCenter(wideLayout, 1, 0);
+  const boardSeam = await pixelAt(page, widened, secondX - 65, secondY - 46);
   assert.deepEqual(boardSeam, guide, 'The faint guide should be continuous across piece boundaries');
   await drag(first.x, first.y, 600, 70);
   assert.deepEqual(await pixelAt(page, await canvas.screenshot(), first.x, first.y), sky, 'An invalid drop should return to the tray');
   await move(first.x, first.y);
   await page.mouse.down();
-  await move(735, 348, 8);
+  await move(dropX, dropY, 8);
   const beforeZoom = await canvas.screenshot();
   await page.mouse.wheel(0, -200);
   const zoomed = await canvas.screenshot();
-  assert.deepEqual(await pixelAt(page, beforeZoom, 650, 472), panelBackground);
-  assert.notDeepEqual(await pixelAt(page, zoomed, 650, 472), panelBackground, 'The wheel should enlarge the board');
-  assert.notDeepEqual(await pixelAt(page, beforeZoom, 823, 338), sky);
-  assert.deepEqual(await pixelAt(page, zoomed, 823, 338), sky, 'A piece in hand should scale with the board');
+  assert.deepEqual(await pixelAt(page, beforeZoom, dropX - 85, dropY + 124), panelBackground);
+  assert.notDeepEqual(await pixelAt(page, zoomed, dropX - 85, dropY + 124), panelBackground, 'The wheel should enlarge the board');
+  assert.notDeepEqual(await pixelAt(page, beforeZoom, dropX + 88, dropY - 10), sky);
+  assert.deepEqual(await pixelAt(page, zoomed, dropX + 88, dropY - 10), sky, 'A piece in hand should scale with the board');
   await page.mouse.up();
   await waitForText('1 of 8 placed');
   const placed = await canvas.screenshot();
-  assert.deepEqual(await pixelAt(page, placed, 735, 348), sky, 'Zooming at the drop target should keep it under the pointer');
+  assert.deepEqual(await pixelAt(page, placed, dropX, dropY), sky, 'Zooming at the drop target should keep it under the pointer');
   await clickSettings();
   await waitForText('Color theme');
   await clickDialog(21, settingsY.theme);
   await clickDialog(101, settingsY.done);
   const slate = await canvas.screenshot();
-  assert.deepEqual(await pixelAt(page, slate, 1290, 100), [33, 44, 59, 255], 'Settings should restyle the active board');
-  assert.deepEqual(await pixelAt(page, slate, 735, 348), sky, 'The placed piece should stay at its zoomed position');
+  assert.deepEqual(await pixelAt(page, slate, 1317, 100), [33, 44, 59, 255], 'Settings should restyle the active board');
+  assert.deepEqual(await pixelAt(page, slate, dropX, dropY), sky, 'The placed piece should stay at its zoomed position');
   await page.evaluate(() => { window.paintedText = []; });
   await clickSettings();
   await waitForText('Color theme');
   await clickDialog(102, settingsY.theme);
   await clickDialog(101, settingsY.done);
-  assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 1290, 100), [27, 28, 30, 255], 'Dark should use its own board colour');
+  assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 1317, 100), [27, 28, 30, 255], 'Dark should use its own board colour');
   await page.evaluate(() => { window.paintedText = []; });
   await clickSettings();
   await waitForText('Color theme');
@@ -738,10 +773,10 @@ scenario('live pieces scroll, reflow, and snap to the pannable board', async (t)
   await page.keyboard.press('Escape');
   await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   const unfiltered = await canvas.screenshot();
-  assert.deepEqual(await pixelAt(page, unfiltered, 1290, 100), panelBackground);
+  assert.deepEqual(await pixelAt(page, unfiltered, 1317, 100), panelBackground);
   const trayPieceColor = await pixelAt(page, unfiltered, 85, 140);
   assert.notDeepEqual(trayPieceColor, [52, 66, 62, 255], 'The sample should be on a tray piece');
-  const guidePixel = (screenshot) => pixelAt(page, screenshot, 990, 348);
+  const guidePixel = (screenshot) => pixelAt(page, screenshot, dropX + 255, dropY);
   const originalGuide = await guidePixel(unfiltered);
   const assertGuideColor = (actual, expected, message) => {
     assert.ok(actual.every((channel, i) => Math.abs(channel - expected[i]) <= 1),
@@ -761,8 +796,8 @@ scenario('live pieces scroll, reflow, and snap to the pannable board', async (t)
     assert.notDeepEqual(await guidePixel(await canvas.screenshot()), before, 'The guide should change while Settings is still open');
     await clickDialog(101, settingsY.done);
     const screenshot = await canvas.screenshot();
-    assert.deepEqual(await pixelAt(page, screenshot, 1290, 100), panelBackground, 'The area outside the guide should keep the theme color');
-    assert.deepEqual(await pixelAt(page, screenshot, 735, 348), sky, 'The placed piece should keep its original color');
+    assert.deepEqual(await pixelAt(page, screenshot, 1317, 100), panelBackground, 'The area outside the guide should keep the theme color');
+    assert.deepEqual(await pixelAt(page, screenshot, dropX, dropY), sky, 'The placed piece should keep its original color');
     assert.deepEqual(await pixelAt(page, screenshot, 85, 140), trayPieceColor, 'The tray piece should keep its original color');
     return guidePixel(screenshot);
   };
@@ -770,20 +805,23 @@ scenario('live pieces scroll, reflow, and snap to the pannable board', async (t)
   assertGuideColor(await selectFilter(88, settingsY.firstFilter, 'sepia'), [88, 92, 76, 255], 'Sepia should blend with the board at 22% opacity');
   assertGuideColor(await selectFilter(-65, settingsY.secondFilter, 'faded'), [94, 108, 105, 255], 'Faded should blend with the board at 42% opacity');
 
-  await move(735, 348);
+  await move(dropX, dropY);
   await page.mouse.wheel(0, 200);
   const second = (await playLayout(page)).tray.find(({ id }) => id === 'piece-0-1');
   await move(second.x, second.y);
   await page.mouse.down();
-  await move(863, 348, 8);
-  assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 863, 348), sky, 'The dragged piece should keep its original color');
+  await move(secondX, secondY, 8);
+  assert.deepEqual(await pixelAt(page, await canvas.screenshot(), secondX, secondY), sky, 'The dragged piece should keep its original color');
   await page.mouse.up();
   const highlighted = await canvas.screenshot();
   await waitForText('2 of 8 placed');
-  const seamPoints = [[798, 337], [802, 339], [811, 342], [815, 348], [809, 357]];
+  const seamPoints = [[63, -11], [67, -9], [76, -6], [80, 0], [74, 9]];
   const seamColors = (screenshot) => {
     const { width, data } = PNG.sync.read(screenshot);
-    return seamPoints.map(([x, y]) => [...data.subarray((y * width + x) * 4, (y * width + x) * 4 + 4)]);
+    return seamPoints.map(([dx, dy]) => {
+      const offset = (Math.round(dropY + dy) * width + Math.round(dropX + dx)) * 4;
+      return [...data.subarray(offset, offset + 4)];
+    });
   };
   assert.ok(seamColors(highlighted).some(([red]) => red > sky[0]), 'The newly joined seam should briefly light up');
   let joined = highlighted;
@@ -792,7 +830,7 @@ scenario('live pieces scroll, reflow, and snap to the pannable board', async (t)
   while (!seamColors(joined).every(isSky) && Date.now() < fadeDeadline) {
     joined = await canvas.screenshot();
   }
-  assert.deepEqual(await pixelAt(page, joined, 863, 348), sky, 'A newly placed piece should keep its original color');
+  assert.deepEqual(await pixelAt(page, joined, secondX, secondY), sky, 'A newly placed piece should keep its original color');
   for (const color of seamColors(joined)) {
     assert.deepEqual(color, sky, 'The live guide should not show through joined pieces');
   }
@@ -800,8 +838,10 @@ scenario('live pieces scroll, reflow, and snap to the pannable board', async (t)
 
   const assertCornerAtCenter = async (horizontal, vertical) => {
     const screenshot = await canvas.screenshot();
-    assert.notDeepEqual(await pixelAt(page, screenshot, 927 + 14 * horizontal, 420 + 14 * vertical), panelBackground);
-    assert.deepEqual(await pixelAt(page, screenshot, 927 - 14 * horizontal, 420 - 14 * vertical), panelBackground);
+    const centerX = wideLayout.board.x + wideLayout.board.width / 2;
+    const centerY = wideLayout.board.y + wideLayout.board.height / 2;
+    assert.notDeepEqual(await pixelAt(page, screenshot, centerX + 14 * horizontal, centerY + 14 * vertical), panelBackground);
+    assert.deepEqual(await pixelAt(page, screenshot, centerX - 14 * horizontal, centerY - 14 * vertical), panelBackground);
   };
   await drag(610, 180, 1240, 700);
   await assertCornerAtCenter(1, 1);
@@ -838,10 +878,13 @@ scenario('live pieces scroll, reflow, and snap to the pannable board', async (t)
   await drag(piece.x, piece.y, drop.x, drop.y);
   await waitForText('1 of 32 placed');
   assert.deepEqual((await readSave(page)).progress.Lighthouse.placedPieceIds, [piece.id]);
-  assert.notDeepEqual(await pixelAt(page, await canvas.screenshot(), 1267, 113), panelBackground, 'Panning should show Fit board');
-  await click(1267, 113);
+  const fit = (await playLayout(page)).fitButton;
+  assert.equal(fit.visible, true, 'Panning should show Fit board');
+  await click(fit.x + fit.width / 2, fit.y + fit.height / 2);
   const fitted = await canvas.screenshot();
-  assert.deepEqual(await pixelAt(page, fitted, 1199, 119), panelBackground, 'Only the 1× button should remain after fitting');
+  const fittedLayout = await playLayout(page);
+  assert.equal(fittedLayout.fitButton.visible, false);
+  assert.equal(fittedLayout.nativeSizeButton.visible, true, 'Only the 1× button should remain after fitting');
   assert.deepEqual(await pixelAt(page, fitted, 900, 205), panelBackground, 'The large board should fit vertically when scaled to the narrowed panel');
   assert.notDeepEqual(await pixelAt(page, fitted, 900, 240), panelBackground, 'The fitted board should be centered');
 
@@ -1038,7 +1081,8 @@ scenario('parallax seeds place both foreground and background artwork', async (t
       for (let frame = 0; frame < 12; frame += 1) await new Promise(requestAnimationFrame);
     });
 
-    const row = await page.screenshot({ clip: { x: 478, y: rowY, width: 512, height: 1 } });
+    const { x, y } = (await playLayout(page)).boardPoint(0, rowY);
+    const row = await page.screenshot({ clip: { x: Math.round(x), y: Math.round(y), width: 512, height: 1 } });
     const { width, data } = PNG.sync.read(row);
     const artworkPixels = [];
     for (let x = 0; x < width; x += 1) {
@@ -1056,11 +1100,11 @@ scenario('parallax seeds place both foreground and background artwork', async (t
 
   const seededArtwork = [
     {
-      name: 'cactus', cardX: 340, scroll: 1700, rowY: 552,
+      name: 'cactus', cardX: 340, scroll: 1700, rowY: 276,
       matches: (red, green, blue) => green > red + 10 && green > blue + 5,
     },
     {
-      name: 'sun', cardX: 935, scroll: 2300, rowY: 352,
+      name: 'sun', cardX: 935, scroll: 2300, rowY: 76,
       matches: (red, green) => red >= 75 && green >= 75,
     },
   ];
@@ -1327,10 +1371,10 @@ scenario('version 1 through 9 saves migrate with settings, options, progress, an
     }
     return false;
   };
-  assert.ok(hasStatusInk(await canvas.screenshot(), 470, 457, 625, 474), 'Status should align to the right on a wide card');
+  assert.ok(hasStatusInk(await canvas.screenshot(), 478, 431, 633, 448), 'Status should align to the right on a wide card');
   await page.setViewportSize({ width: 320, height: 780 });
   await page.waitForFunction(() => document.querySelector('canvas').width === 320);
-  assert.ok(hasStatusInk(await canvas.screenshot(), 30, 336, 185, 358), 'Status should have its own line on a narrow card');
+  assert.ok(hasStatusInk(await canvas.screenshot(), 30, 316, 185, 338), 'Status should have its own line on a narrow card');
   await page.setViewportSize({ width: 1320, height: 780 });
   await page.waitForFunction(() => document.querySelector('canvas').width === 1320);
   await canvas.screenshot();
@@ -1439,7 +1483,7 @@ scenario('piece rotation distinguishes clicks and taps from drag, scroll, and ca
   const { x: targetX, y: targetY } = layout.boardPoint(target.x, target.y);
   const rotatedEdge = x + (width + height) / 4;
   const sample = async (x, y) => pixelAt(page, await canvas.screenshot(), x, y);
-  const trayColor = await sample(29, 88);
+  const trayColor = await sample(1, y);
   const firstPieceColor = await sample(x, y);
   assert.notDeepEqual(firstPieceColor, trayColor);
   await dispatch('touchStart', [x, y]);
@@ -2413,7 +2457,7 @@ scenario('the picker scrolls past two cards and clips previews', async (t) => {
       }
       assert.equal(edges.length, 4);
       const [firstLeft, firstRight, secondLeft, secondRight] = edges;
-      assert.equal(secondLeft - firstRight, 32, 'The inter-column gap should stay fixed');
+      assert.equal(secondLeft - firstRight, 16, 'The inter-column gap should match the row gap');
       assert.ok(Math.abs(firstLeft - (listWidth - secondRight)) <= 2,
         'Extra space should go to the outside margins');
     };
@@ -2432,10 +2476,10 @@ scenario('the picker scrolls past two cards and clips previews', async (t) => {
     await page.mouse.wheel(0, 1000);
     const scrolled = await canvas.screenshot();
     assert.deepEqual(await pixelAt(page, scrolled, 120, 175), previewColor);
-    for (const [x, y] of [[70, 175], [633, 175], [120, 136], [120, 453], [73, 138]]) {
+    for (const [x, y] of [[79, 175], [642, 175], [120, 136], [120, 453], [81, 138]]) {
       assert.notDeepEqual(await pixelAt(page, scrolled, x, y), previewColor, `Artwork should stay inside all four preview edges (${x}, ${y})`);
     }
-    for (const x of [73, 630]) {
+    for (const x of [81, 638]) {
       assert.deepEqual(await pixelAt(page, scrolled, x, 175), previewColor, 'The preview should fill the card width');
     }
     const { width, data } = PNG.sync.read(scrolled);
@@ -2600,12 +2644,13 @@ scenario('tablet touch scrolls, resizes, zooms, cancels, and places pieces', asy
   assert.ok(wide.tray[1].x > wide.tray[0].x && wide.tray[1].y === wide.tray[0].y, 'The touch divider should reflow the tray');
 
   const panelBackground = [32, 46, 42, 255];
-  assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 900, 216), panelBackground);
+  const { x: sampleX, y: sampleY } = wide.boardPoint(438, -8);
+  assert.deepEqual(await pixelAt(page, await canvas.screenshot(), sampleX, sampleY), panelBackground);
   await dispatch('touchStart', [530, 372]);
   await dispatch('touchStart', [530, 372], [650, 372]);
   await dispatch('touchMove', [500, 372], [680, 372]);
   await dispatch('touchEnd');
-  assert.notDeepEqual(await pixelAt(page, await canvas.screenshot(), 900, 227), panelBackground, 'A pinch should enlarge the board artwork');
+  assert.notDeepEqual(await pixelAt(page, await canvas.screenshot(), sampleX, sampleY), panelBackground, 'A pinch should enlarge the board artwork');
 
   const { x, y } = wide.tray.find(({ id }) => id === 'piece-0-0');
   const target = cellCenter(await playLayout(page), 0, 0);
@@ -2634,7 +2679,7 @@ scenario('tablet touch scrolls, resizes, zooms, cancels, and places pieces', asy
   const fitted = await canvas.screenshot();
   const fittedTarget = cellCenter(wide, 0, 0);
   assert.deepEqual(await pixelAt(page, fitted, fittedTarget.x, fittedTarget.y), sky, 'A tap near the edge of Fit board should recenter the placed piece');
-  assert.deepEqual(await pixelAt(page, fitted, 900, 216), panelBackground, 'Fit board should restore the full artwork after a pinch');
+  assert.deepEqual(await pixelAt(page, fitted, sampleX, sampleY), panelBackground, 'Fit board should restore the full artwork after a pinch');
 
   await page.setViewportSize({ width: 768, height: 1024 });
   await page.waitForFunction(() => document.querySelector('canvas').height === 1024);
@@ -2654,15 +2699,16 @@ scenario('tablet touch scrolls, resizes, zooms, cancels, and places pieces', asy
   await clickDialog(-6, resumeActionY);
   await playSelection({ size: 128, connectorStyle: 'Rounded' });
   await waitForText('0 of 128 placed');
+  const thumbnail = (await playLayout(page)).tray[0];
   const tray128 = await canvas.screenshot();
-  assert.notDeepEqual(await pixelAt(page, tray128, 85, 929), [52, 66, 62, 255], 'The smallest pieces should scale up to the bottom tray target');
+  assert.notDeepEqual(await pixelAt(page, tray128, thumbnail.x, thumbnail.y), [52, 66, 62, 255], 'The smallest pieces should render in the bottom tray');
   assert.deepEqual(errors, []);
 });
 
 scenario('tray settings move the live tray and rotate touch gestures with it', async (t) => {
-  const portrait = { width: 680, height: 860 };
+  const portrait = { width: 640, height: 860 };
   const landscape = { width: 1024, height: 768 };
-  const { page, canvas, waitForText, errors, clickDialog, playSelection } = await openCompactPuzzle(t, {
+  const { page, canvas, waitForText, errors, clickDialog, clickSetting, playSelection } = await openCompactPuzzle(t, {
     viewport: portrait, hasTouch: true, isMobile: true,
   });
   const { dispatch, moveFinger } = await touchController(page);
@@ -2670,8 +2716,8 @@ scenario('tray settings move the live tray and rotate touch gestures with it', a
   const boardColor = [32, 46, 42, 255];
   const selectedColor = [75, 108, 94, 255];
   const layout = {
-    Left: { choice: [-102, settingsY.firstTray], scroll: [0, -52], lift: [85, 0] },
-    Right: { choice: [0, settingsY.firstTray], scroll: [0, -52], lift: [-85, 0] },
+    Left: { choice: [-102, settingsY.firstTray], scroll: [0, -100], lift: [85, 0] },
+    Right: { choice: [0, settingsY.firstTray], scroll: [0, -100], lift: [-85, 0] },
     Bottom: { choice: [102, settingsY.firstTray], scroll: [-46, 0], lift: [0, -90] },
     Top: { choice: [-102, settingsY.secondTray], scroll: [-46, 0], lift: [0, 95] },
     Auto: { choice: [0, settingsY.secondTray] },
@@ -2679,11 +2725,13 @@ scenario('tray settings move the live tray and rotate touch gestures with it', a
   const sample = async (...point) => pixelAt(page, await canvas.screenshot(), ...point);
   const assertSide = async (side) => {
     const { width, height } = page.viewportSize();
+    const { board, tray } = await playLayout(page);
+    const top = side === 'Top' ? tray[0].y : board.y + 4;
     const points = {
-      Left: [[26, 100], [width - 26, 100]],
-      Right: [[width - 26, 100], [26, 100]],
-      Bottom: [[26, height - 26], [26, 86]],
-      Top: [[26, 86], [26, height - 26]],
+      Left: [[1, top], [width - 2, top]],
+      Right: [[width - 2, top], [1, top]],
+      Bottom: [[1, height - 2], [1, top]],
+      Top: [[1, top], [1, height - 2]],
     };
     const [trayPoint, boardPoint] = points[side];
     const frame = await canvas.screenshot();
@@ -2696,10 +2744,10 @@ scenario('tray settings move the live tray and rotate touch gestures with it', a
     await tapSettings();
     await waitForText('Puzzle tray');
   };
-  const closeSettings = () => clickDialog(101, settingsY.done);
+  const closeSettings = () => clickSetting(101, settingsY.done);
   const selectSide = async (side) => {
     await openTraySettings();
-    await clickDialog(...layout[side].choice);
+    await clickSetting(...layout[side].choice);
     assert.equal((await readSave(page)).settings.trayPosition, side);
     await closeSettings();
   };
@@ -2716,23 +2764,25 @@ scenario('tray settings move the live tray and rotate touch gestures with it', a
   await waitForText('0 of 8 placed');
   await assertSide('Bottom');
   await openTraySettings();
-  assert.deepEqual(await sample(365, 543), selectedColor, 'Auto should be selected without a saved setting');
+  assert.deepEqual(await sample(portrait.width / 2 + 25, 543), selectedColor, 'Auto should be selected without a saved setting');
   await closeSettings();
 
   for (const side of ['Left', 'Right', 'Top', 'Bottom']) {
-    await selectSide(side);
     // Shorten the side trays so the compact set overflows along the scroll axis.
-    if (side === 'Left') await resize({ ...portrait, height: 680 });
+    if (side === 'Left') await resize({ ...portrait, height: 600 });
+    await selectSide(side);
     if (side === 'Top') await resize(portrait);
     await assertSide(side);
     const { scroll: [scrollX, scrollY], lift: [liftX, liftY] } = layout[side];
     const first = async () => (await playLayout(page)).tray[0];
     const { x, y } = await first();
+    const swipeStart = (await playLayout(page)).tray[2];
     assert.notDeepEqual(await sample(x, y), trayColor, `Expected a piece at the start of the ${side} tray`);
-    await moveFinger(x, y, x + scrollX, y + scrollY);
+    await moveFinger(swipeStart.x, swipeStart.y, swipeStart.x + scrollX, swipeStart.y + scrollY);
     const scrolled = await first();
-    assert.ok(scrollX ? scrolled.x < x : scrolled.y < y, `A swipe along the ${side} tray should scroll from a piece`);
-    await moveFinger(x, y, x - scrollX, y - scrollY);
+    assert.ok(scrollX ? scrolled.x < x : scrolled.y < y,
+      `A swipe along the ${side} tray should scroll from a piece (${x}, ${y}) to (${scrolled.x}, ${scrolled.y})`);
+    await moveFinger(swipeStart.x + scrollX, swipeStart.y + scrollY, swipeStart.x, swipeStart.y);
     assert.deepEqual(await first(), { ...scrolled, x, y });
     await dispatch('touchStart', [x, y]);
     await dispatch('touchMove', [x + liftX, y + liftY]);

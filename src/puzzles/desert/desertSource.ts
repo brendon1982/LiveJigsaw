@@ -4,7 +4,7 @@ import { DesertScene, drawDesert } from './DesertScene';
 export const desertSource: PuzzleSource = {
   title: 'Desert',
   tags: { theme: 'Desert', type: 'Flat Illustration' },
-  maxViewport: { width: 1024, height: 576 },
+  maxViewport: { width: 1920, height: 1080 },
   scene: DesertScene,
   drawPreview: (scene, viewport) => drawDesert(scene, viewport).objects,
 };

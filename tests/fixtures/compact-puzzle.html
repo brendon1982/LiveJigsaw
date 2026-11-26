@@ -10,6 +10,13 @@
     <script type="module">
       import { pieceShapeIds, puzzleSizePresets } from '../../src/domain/puzzleSizes';
       import { puzzleSources } from '../../src/puzzles/catalog';
+      import { SelectPuzzleScene } from '../../src/ui/SelectPuzzleScene';
+
+      const createPicker = SelectPuzzleScene.prototype.create;
+      SelectPuzzleScene.prototype.create = function () {
+        createPicker.call(this);
+        window.puzzlePickerScene = this;
+      };
 
       // Keep the compact board for fixed-coordinate interaction scenarios only.
       const fixedSizes = [

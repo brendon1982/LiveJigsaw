@@ -726,6 +726,39 @@ scenario('a touch scrollbar survives a resize that leaves no thumb travel', asyn
   assert.deepEqual(errors, []);
 });
 
+scenario('picker scrollbar sync does not feed changes back into the panel', async (t) => {
+  const { page, errors } = await openCompactPuzzle(t, {
+    viewport: { width: 680, height: 780 }, hasTouch: true, isMobile: true,
+  });
+  await page.setViewportSize({ width: 559, height: 780 });
+  await page.waitForFunction(() => document.querySelector('canvas').width === 559);
+
+  const result = await page.evaluate(() => {
+    const panel = window.puzzlePickerScene.children.list.find(({ type }) => type === 'rexScrollablePanel');
+    const { slider, scroller } = panel.childrenMap;
+    let scrollEvents = 0;
+    panel.on('scroll', () => scrollEvents++);
+
+    panel.setChildOY(panel.bottomChildOY / 2);
+    const eventsAfterSync = scrollEvents;
+    slider.setValue(NaN);
+    scroller.setValue(NaN);
+    const valueAfterInvalidInput = {
+      panel: panel.t, slider: slider.value, scroller: scroller.value / panel.bottomChildOY,
+    };
+
+    slider.setValue(0.75);
+    const valueAfterSliderInput = panel.t;
+    scroller.setValue(panel.bottomChildOY / 4);
+    return { eventsAfterSync, valueAfterInvalidInput, valueAfterSliderInput, finalValue: panel.t, scrollEvents };
+  });
+  assert.deepEqual(result, {
+    eventsAfterSync: 0, valueAfterInvalidInput: { panel: 0.5, slider: 0.5, scroller: 0.5 },
+    valueAfterSliderInput: 0.75, finalValue: 0.25, scrollEvents: 2,
+  });
+  assert.deepEqual(errors, []);
+});
+
 scenario('the picker renders before requesting offscreen previews', async (t) => {
   const { page, canvas, waitForText, errors, origin } = await openGamePage(t, {
     viewport: { width: 768, height: 1024 },

@@ -172,7 +172,7 @@ settings:
   excludeLinksFromLockfile: false
 
 patchedDependencies:
-  phaser4-rex-plugins@4.2.0: 3434d7216cbfd207a35b25cb22d37b53b27850ba937852c632d18098e7d908e9
+  phaser4-rex-plugins@4.2.0: 491240c179490f0769adc4b7106132f2c4ca78d5ae79edf5d9074ef9f3306b3b
 
 importers:
 
@@ -183,7 +183,7 @@ importers:
         version: 4.2.1
       phaser4-rex-plugins:
         specifier: ^4.2.0
-        version: 4.2.0(patch_hash=3434d7216cbfd207a35b25cb22d37b53b27850ba937852c632d18098e7d908e9)(graphology-types@0.24.8)
+        version: 4.2.0(patch_hash=491240c179490f0769adc4b7106132f2c4ca78d5ae79edf5d9074ef9f3306b3b)(graphology-types@0.24.8)
     devDependencies:
       '@xmldom/xmldom':
         specifier: ^0.9.12
@@ -957,7 +957,7 @@ snapshots:
 
   papaparse@5.7.1: {}
 
-  phaser4-rex-plugins@4.2.0(patch_hash=3434d7216cbfd207a35b25cb22d37b53b27850ba937852c632d18098e7d908e9)(graphology-types@0.24.8):
+  phaser4-rex-plugins@4.2.0(patch_hash=491240c179490f0769adc4b7106132f2c4ca78d5ae79edf5d9074ef9f3306b3b)(graphology-types@0.24.8):
     dependencies:
       dagre: 0.8.5
       eventemitter3: 3.1.2

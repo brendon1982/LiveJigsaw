@@ -1,7 +1,7 @@
 diff --git a/templates/ui/slider/methods/input/GetValueByPosition.js b/templates/ui/slider/methods/input/GetValueByPosition.js
 --- a/templates/ui/slider/methods/input/GetValueByPosition.js
 +++ b/templates/ui/slider/methods/input/GetValueByPosition.js
-@@ -11,8 +11,12 @@ var GetValueByPosition = function (x, y) {
+@@ -11,7 +11,11 @@ var GetValueByPosition = function (x, y) {
          startPoint = this.getEndPoint();
          endPoint = this.getStartPoint();
      }
@@ -14,4 +14,71 @@ diff --git a/templates/ui/slider/methods/input/GetValueByPosition.js b/templates
 +    return Number.isFinite(value) ? value : this.value;
  }
  var tmpPoint = {};
+diff --git a/plugins/input/scroller/Scroller.js b/plugins/input/scroller/Scroller.js
+--- a/plugins/input/scroller/Scroller.js
++++ b/plugins/input/scroller/Scroller.js
+@@ -179,4 +179,4 @@ class Scroller extends ComponentBase {
+     set value(value) {
+-        if (value === this._value) {
++        if (!Number.isFinite(value) || value === this._value) {
+             return;
+         }
+diff --git a/templates/ui/slider/Slider.js b/templates/ui/slider/Slider.js
+--- a/templates/ui/slider/Slider.js
++++ b/templates/ui/slider/Slider.js
+@@ -134,5 +134,8 @@ class Slider extends ProgressBase(Sizer) {
+         if (this.gap !== undefined) {
+             value = SnapTo(value, this.gap);
+         }
++        if (!Number.isFinite(value)) {
++            return;
++        }
+         var oldValue = this._value;
+         this._value = Clamp(value, 0, 1);
+diff --git a/templates/ui/utils/scrollable/methods/AddSlider.js b/templates/ui/utils/scrollable/methods/AddSlider.js
+--- a/templates/ui/utils/scrollable/methods/AddSlider.js
++++ b/templates/ui/utils/scrollable/methods/AddSlider.js
+@@ -241,7 +241,10 @@ var AddSlider = function (topPatent, sliderParent, axis, config) {
+             eventName = 'scroll';
+         }
+         slider
+             .on('valuechange', function (newValue) {
++                if (topPatent._syncingScrollControllers) {
++                    return;
++                }
+                 topPatent[keyST] = newValue;
+                 topPatent.emit(eventName, topPatent);
+             })
+@@ -272,6 +275,9 @@ var AddSlider = function (topPatent, sliderParent, axis, config) {
+         }
+         scroller
+             .on('valuechange', function (newValue) {
++                if (topPatent._syncingScrollControllers) {
++                    return;
++                }
+                 topPatent[keyChildOXY] = newValue;
+                 topPatent.emit(eventName, topPatent);
+             })
+diff --git a/templates/ui/utils/scrollable/methods/UpdateController.js b/templates/ui/utils/scrollable/methods/UpdateController.js
+--- a/templates/ui/utils/scrollable/methods/UpdateController.js
++++ b/templates/ui/utils/scrollable/methods/UpdateController.js
+@@ -1,4 +1,18 @@
+ var UpdateController = function () {
++    if (this._syncingScrollControllers) {
++        return;
++    }
++
++    // Controller setters emit synchronously; don't treat these updates as input.
++    this._syncingScrollControllers = true;
++    try {
++        SyncControllers.call(this);
++    } finally {
++        this._syncingScrollControllers = false;
++    }
++}
++
++var SyncControllers = function () {
+     switch (this.scrollMode) {
+         case 0:
+         case 1:
  

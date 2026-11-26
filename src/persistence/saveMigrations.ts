@@ -23,6 +23,12 @@ const migrations: readonly Migration[] = [
     progress: mapSaveEntries(document.progress, renameStandardSetup),
     history: mapSaveEntries(document.history, (value) => Array.isArray(value) ? value.map(renameStandardSetup) : value),
   }),
+  (document) => ({
+    ...document,
+    ...(isRecord(document.recentOptions) && { recentOptions: replaceSizeLabel(document.recentOptions) }),
+    progress: mapSaveEntries(document.progress, removeSetupSizeLabel),
+    history: mapSaveEntries(document.history, (value) => Array.isArray(value) ? value.map(removeSetupSizeLabel) : value),
+  }),
 ];
 
 function withStandardMode(value: unknown): unknown {
@@ -39,6 +45,19 @@ function renameStandardMode(value: unknown): unknown {
 
 function renameStandardSetup(value: unknown): unknown {
   return isRecord(value) ? { ...value, setup: renameStandardMode(value.setup) } : value;
+}
+
+const version4PieceCounts = new Map([['Classic', 8], ['Large', 32], ['Dense', 64], ['Expert', 128]]);
+
+function replaceSizeLabel({ sizeLabel, ...options }: DocumentFields): DocumentFields {
+  const pieceCount = typeof sizeLabel === 'string' ? version4PieceCounts.get(sizeLabel) : undefined;
+  return pieceCount === undefined ? options : { ...options, pieceCount };
+}
+
+function removeSetupSizeLabel(value: unknown): unknown {
+  if (!isRecord(value) || !isRecord(value.setup) || !isRecord(value.setup.size)) return value;
+  const { label: _label, ...size } = value.setup.size;
+  return { ...value, setup: { ...value.setup, size } };
 }
 
 function mapSaveEntries(value: unknown, transform: (entry: unknown) => unknown): unknown {

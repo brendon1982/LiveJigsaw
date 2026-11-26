@@ -1,6 +1,6 @@
 import { challengeModes, type ChallengeMode } from '../domain/challengeModes';
 import { connectorStyles, type ConnectorStyleId } from '../domain/connectorStyles';
-import { createPuzzle, puzzleSizes, type PuzzleSize } from '../domain/puzzleSizes';
+import { createPuzzle, getPieceCount, puzzleSizes, type PuzzleSize } from '../domain/puzzleSizes';
 import { puzzleAnimationSpeeds, type PuzzleAnimationSpeed } from '../puzzles/PuzzleSource';
 import {
   defaultTrayFractions, trayPositions,
@@ -124,14 +124,13 @@ function isChallengeMode(value: unknown): value is ChallengeMode {
 
 function readOptions(value: unknown): PuzzleOptions | undefined {
   if (!isRecord(value)) return;
-  const { sizeLabel, connectorStyle, animationSpeed, challengeMode } = value;
-  if (typeof sizeLabel === 'string' && isConnectorStyle(connectorStyle)
-    && isAnimationSpeed(animationSpeed) && isChallengeMode(challengeMode)) {
-    return { sizeLabel, connectorStyle, animationSpeed, challengeMode };
+  const { pieceCount, connectorStyle, animationSpeed, challengeMode } = value;
+  if (isConnectorStyle(connectorStyle) && isAnimationSpeed(animationSpeed) && isChallengeMode(challengeMode)) {
+    return { pieceCount: isPositiveInteger(pieceCount) ? pieceCount : undefined, connectorStyle, animationSpeed, challengeMode };
   }
 }
 
-const maximumPieceCount = Math.max(...puzzleSizes.map(({ columns, rows }) => columns * rows));
+const maximumPieceCount = Math.max(...puzzleSizes.map(getPieceCount));
 
 function isPositiveInteger(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value > 0;
@@ -139,12 +138,12 @@ function isPositiveInteger(value: unknown): value is number {
 
 function readSize(value: unknown): PuzzleSize | undefined {
   if (!isRecord(value)) return;
-  const { label, width, height, columns, rows, snapTolerance } = value;
-  if (typeof label !== 'string' || !isPositiveInteger(width) || !isPositiveInteger(height)
-    || !isPositiveInteger(columns) || !isPositiveInteger(rows) || columns * rows > maximumPieceCount
+  const { width, height, columns, rows, snapTolerance } = value;
+  if (!isPositiveInteger(width) || !isPositiveInteger(height)
+    || !isPositiveInteger(columns) || !isPositiveInteger(rows) || getPieceCount({ columns, rows }) > maximumPieceCount
     || width < columns || height < rows
     || typeof snapTolerance !== 'number' || !Number.isFinite(snapTolerance) || snapTolerance < 0) return;
-  return { label, width, height, columns, rows, snapTolerance };
+  return { width, height, columns, rows, snapTolerance };
 }
 
 function readSetup(value: unknown): PuzzleSetup | undefined {
@@ -161,7 +160,7 @@ function readProgress(value: unknown): PuzzleProgress | undefined {
   const setup = readSetup(value.setup);
   const { placedPieceIds } = value;
   if (!setup || !Array.isArray(placedPieceIds) || placedPieceIds.length === 0
-    || placedPieceIds.length >= setup.size.columns * setup.size.rows
+    || placedPieceIds.length >= getPieceCount(setup.size)
     || !placedPieceIds.every((id): id is string => typeof id === 'string')) return;
   const puzzle = createPuzzle(setup.size, setup.connectorStyle, setup.seed, setup.challengeMode);
   if (puzzle.restorePlacements(placedPieceIds)) return { setup, placedPieceIds };

@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { challengeModes, type ChallengeMode } from '../domain/challengeModes';
 import { connectorStyles, type ConnectorStyleId } from '../domain/connectorStyles';
-import { availablePuzzleSizes, type PuzzleSize } from '../domain/puzzleSizes';
+import { availablePuzzleSizes, getPieceCount, type PuzzleSize } from '../domain/puzzleSizes';
 import type { PuzzleOptions, PuzzleProgress } from '../persistence/GameSave';
 import { puzzleAnimationSpeeds, type PuzzleSource } from '../puzzles/PuzzleSource';
 import { makeButtonLabel, makeOptionTile, type UIScene } from './button';
@@ -24,16 +24,17 @@ export function showPuzzleOptions(
   scene: UIScene,
   source: PuzzleSource,
   defaults: PuzzleOptions | undefined,
-  play: (size: PuzzleSize, options: Omit<PuzzleOptions, 'sizeLabel'>) => void,
+  play: (size: PuzzleSize, options: Omit<PuzzleOptions, 'pieceCount'>) => void,
   onClose: () => void,
 ) {
   const sizes = availablePuzzleSizes(source.maxViewport);
   const styles = Object.keys(connectorStyles) as ConnectorStyleId[];
-  const initialSize = sizes.find(({ label }) => label === defaults?.sizeLabel) ?? sizes[0];
-  const sizeButtons = makeRadioButtons(scene, sizes.map((size) => ({
-    name: size.label,
-    label: `${size.label} · ${size.columns * size.rows}`,
-  })), initialSize.label);
+  const sizeChoices = sizes.map((size) => ({ size, count: getPieceCount(size) }));
+  const initialSize = sizeChoices.find(({ count }) => count === defaults?.pieceCount) ?? sizeChoices[0];
+  const sizeButtons = makeRadioButtons(scene, sizeChoices.map(({ count }) => ({
+    name: String(count),
+    label: String(count),
+  })), String(initialSize.count));
   const styleButtons = makeRadioButtons(scene, styles.map((style) => ({
     name: style,
     drawIcon: () => drawConnectorIcon(scene, style),
@@ -72,12 +73,13 @@ export function showPuzzleOptions(
     onClose();
     if (action !== 1) return;
 
-    const size = sizes.find(({ label }) => label === sizeButtons.getSelectedButtonName());
+    const selectedCount = Number(sizeButtons.getSelectedButtonName());
+    const sizeChoice = sizeChoices.find(({ count }) => count === selectedCount);
     const style = styles.find((id) => id === styleButtons.getSelectedButtonName());
     const speed = puzzleAnimationSpeeds.find((name) => name === speedButtons.getSelectedButtonName());
     const challengeMode = modes.find((id) => id === modeButtons.getSelectedButtonName());
-    if (size && style && speed && challengeMode) {
-      play(size, { connectorStyle: style, animationSpeed: speed, challengeMode });
+    if (sizeChoice && style && speed && challengeMode) {
+      play(sizeChoice.size, { connectorStyle: style, animationSpeed: speed, challengeMode });
     }
   });
 }
@@ -89,10 +91,10 @@ export function showResumePuzzle(
   onClose: (choice: 'resume' | 'reset' | 'cancel') => void,
 ) {
   const { size, connectorStyle, animationSpeed, challengeMode } = progress.setup;
-  const pieceCount = size.columns * size.rows;
+  const pieceCount = getPieceCount(size);
   const lines = [
     `${progress.placedPieceIds.length} of ${pieceCount} placed`,
-    `Puzzle size: ${size.label}`,
+    `Puzzle size: ${pieceCount}`,
     `Connector style: ${connectorStyles[connectorStyle].label}`,
     `Animation speed: ${animationSpeed}`,
     `Challenge mode: ${challengeModes[challengeMode].label}`,

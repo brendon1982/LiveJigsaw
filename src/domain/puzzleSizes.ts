@@ -5,18 +5,21 @@ import type { Size } from './geometry.ts';
 import { Puzzle } from './Puzzle.ts';
 
 export type PuzzleSize = Size & Readonly<{
-  label: string;
   columns: number;
   rows: number;
   snapTolerance: number;
 }>;
 
 export const puzzleSizes = [
-  { label: 'Classic', width: 512, height: 288, columns: 4, rows: 2, snapTolerance: 28 },
-  { label: 'Large', width: 1024, height: 576, columns: 8, rows: 4, snapTolerance: 28 },
-  { label: 'Dense', width: 1024, height: 576, columns: 8, rows: 8, snapTolerance: 18 },
-  { label: 'Expert', width: 1024, height: 576, columns: 16, rows: 8, snapTolerance: 16 },
+  { width: 512, height: 288, columns: 4, rows: 2, snapTolerance: 28 },
+  { width: 1024, height: 576, columns: 8, rows: 4, snapTolerance: 28 },
+  { width: 1024, height: 576, columns: 8, rows: 8, snapTolerance: 18 },
+  { width: 1024, height: 576, columns: 16, rows: 8, snapTolerance: 16 },
 ] as const satisfies readonly PuzzleSize[];
+
+export function getPieceCount({ columns, rows }: Pick<PuzzleSize, 'columns' | 'rows'>): number {
+  return columns * rows;
+}
 
 function fitsViewport(size: Size, maximum: Size): boolean {
   return size.width <= maximum.width && size.height <= maximum.height;

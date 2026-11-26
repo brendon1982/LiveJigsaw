@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import type RexUIPlugin from 'phaser4-rex-plugins/templates/ui/ui-plugin.js';
+import { getPieceCount } from '../domain/puzzleSizes';
 import { gameSave } from '../persistence';
 import type { PuzzleProgress } from '../persistence/GameSave';
 import { puzzleSources } from '../puzzles/catalog';
@@ -30,8 +31,7 @@ function resumableProgress(source: PuzzleSource): PuzzleProgress | undefined {
 
 function cardStatus(progress: PuzzleProgress | undefined, completions: number): string {
   if (!progress) return completions > 0 ? 'Completed' : '';
-  const { columns, rows } = progress.setup.size;
-  return `${progress.placedPieceIds.length} of ${columns * rows} placed`;
+  return `${progress.placedPieceIds.length} of ${getPieceCount(progress.setup.size)} placed`;
 }
 
 export class SelectPuzzleScene extends Phaser.Scene {
@@ -66,7 +66,7 @@ export class SelectPuzzleScene extends Phaser.Scene {
       openDialog();
       showPuzzleOptions(this, source, gameSave.recentOptions, (size, options) => {
         const [seed] = crypto.getRandomValues(new Uint32Array(1));
-        gameSave.startAttempt(source.scene.key, { ...options, sizeLabel: size.label });
+        gameSave.startAttempt(source.scene.key, { ...options, pieceCount: getPieceCount(size) });
         play({ source, setup: { ...options, size, seed } });
       }, closeDialog);
     };

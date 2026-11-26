@@ -17,13 +17,13 @@ export type SavedSettings = Readonly<{
 }>;
 
 export type PuzzleOptions = Readonly<{
-  sizeLabel: string;
+  pieceCount?: number;
   connectorStyle: ConnectorStyleId;
   animationSpeed: PuzzleAnimationSpeed;
   challengeMode: ChallengeMode;
 }>;
 
-export type PuzzleSetup = Omit<PuzzleOptions, 'sizeLabel'> & Readonly<{ size: PuzzleSize; seed: number }>;
+export type PuzzleSetup = Omit<PuzzleOptions, 'pieceCount'> & Readonly<{ size: PuzzleSize; seed: number }>;
 export type PuzzleProgress = Readonly<{ setup: PuzzleSetup; placedPieceIds: readonly string[] }>;
 export type PuzzleCompletion = Readonly<{ setup: PuzzleSetup; completedAt: string }>;
 

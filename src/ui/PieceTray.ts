@@ -33,7 +33,7 @@ export class PieceTray {
   ) {
     this.entries = entries;
     const cellArea = cellSize.width * cellSize.height;
-    this.pieceScale = Math.sqrt(targetPieceArea / cellArea);
+    this.pieceScale = Math.min(1, Math.sqrt(targetPieceArea / cellArea));
     const slotSizes = entries.map(({ frame, piece }) => {
       const { x, y } = frame.toLocal(piece.target);
       // The base-cell center can be off-center in the image when only one side has a tab.

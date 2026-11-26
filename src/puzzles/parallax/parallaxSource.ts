@@ -76,10 +76,22 @@ export function parallaxSource({
         const restX = width * restXFractions[index];
         const image = this.add.image(restX, height * anchorY, textureKey(name))
           .setOrigin(seededX?.origin ?? 0.5, anchorY);
-        const requestedTravel = width * travel;
-        const cropRoom = Math.max(0, (image.width - width) / 2);
-        return { image, restX, travel: seededX ? requestedTravel : Math.min(requestedTravel, cropRoom) };
+        return { image, restX, travel: width * travel, driftsFreely: seededX !== undefined };
       });
+
+      // Fit the whole sweep, not just the view at rest, without scaling past native size.
+      let requiredScale = Math.max(width / artworkSize.width, height / artworkSize.height);
+      for (const { image, travel, driftsFreely } of movingLayers) {
+        if (!driftsFreely) requiredScale = Math.max(requiredScale, (width + 2 * travel) / image.width);
+      }
+      const artworkScale = Math.min(1, requiredScale);
+      for (const layer of movingLayers) {
+        layer.image.setScale(artworkScale);
+        if (!layer.driftsFreely) {
+          const cropRoom = Math.max(0, (layer.image.displayWidth - width) / 2);
+          layer.travel = Math.min(layer.travel, cropRoom);
+        }
+      }
 
       const drift = { angle: 0 };
       const rate = puzzleAnimationRates[animationSpeed];

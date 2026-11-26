@@ -676,7 +676,7 @@ scenario('the landscape scenes animate on the board', async (t) => {
     ['Birch Glade', 'Fallen Timber'],
     ['Fernwood Grove', 'Amber Woods'],
   ];
-  const board = { x: 435, y: 275, width: 590, height: 320 };
+  const board = { x: 207, y: 135, width: 1060, height: 570 };
   const emptyGuide = [32, 46, 42, 255];
 
   for (const [index, title] of selections.flat().entries()) {
@@ -693,7 +693,7 @@ scenario('the landscape scenes animate on the board', async (t) => {
     for (const deadline = Date.now() + 4000; Date.now() < deadline;) {
       const frame = await page.screenshot({ clip: board });
       if (!firstArtwork) {
-        const sample = await pixelAt(page, frame, 302, 165);
+        const sample = await pixelAt(page, frame, board.width / 2, board.height / 2);
         if (sample.some((channel, index) => channel !== emptyGuide[index])) firstArtwork = frame;
       } else if (!firstArtwork.equals(frame)) {
         animated = true;
@@ -714,7 +714,7 @@ scenario('source artwork fills the capture without stretching or enlarging raste
   const setups = {
     Windmill: { width: 1456, height: 416, columns: 8, rows: 4 },
     Lighthouse: { width: 832, height: 728, columns: 8, rows: 4 },
-    CanyonDrift: { width: 1848, height: 990, columns: 8, rows: 4 },
+    CanyonDrift: { width: 1080, height: 624, columns: 12, rows: 6 },
   };
   await page.evaluate((setups) => {
     const progress = Object.fromEntries(Object.entries(setups).map(([key, size]) => [key, {
@@ -754,23 +754,60 @@ scenario('source artwork fills the capture without stretching or enlarging raste
     await backToPicker();
   }
 
-  await scrollPickerTo(page, 1700);
-  await resume('CanyonDrift', 340, 600);
-  const { native, groundEdges } = await page.evaluate(() => {
-    const scene = window.puzzleArtworkScene;
-    const native = scene.children.list.every((image) => image.scaleX === 1 && image.scaleY === 1);
-    const ground = scene.children.list.find((image) => image.texture.key.endsWith('-ground'));
-    const [pan] = scene.tweens.getTweens();
-    const groundEdges = [0, 3499].map((time) => {
-      pan.seek(time, 16.6, true);
-      return [ground.x - ground.displayOriginX, ground.x - ground.displayOriginX + ground.displayWidth];
+  const groundTravel = 0.036;
+  const scaleForGroundSweep = (width) => width * (1 + 2 * groundTravel) / 1920;
+  const canyonSizes = [
+    { ...setups.CanyonDrift, scale: scaleForGroundSweep(1080) },
+    { width: 1248, height: 540, scale: scaleForGroundSweep(1248) },
+    { width: 1920, height: 1080, scale: 1 },
+  ];
+  for (const [index, { width, height, scale }] of canyonSizes.entries()) {
+    if (index > 0) {
+      const save = await readSave(page);
+      Object.assign(save.progress.CanyonDrift.setup.size, { width, height });
+      await page.evaluate((save) => localStorage.setItem('live-jigsaw.save', JSON.stringify(save)), save);
+      await page.reload();
+      await waitForText('Windmill');
+    }
+    await scrollPickerTo(page, 1700);
+    await resume('CanyonDrift', 340, 600);
+    const { scales, skySize, groundEdges, travel } = await page.evaluate(() => {
+      const scene = window.puzzleArtworkScene;
+      const layers = scene.children.list;
+      const layer = (name) => layers.find((image) => image.texture.key.endsWith(`-${name}`));
+      const sky = layer('sky');
+      const ground = layer('ground');
+      const mesas = layer('distant-mesas');
+      const cactus = layer('cactus');
+      const [pan] = scene.tweens.getTweens();
+      pan.seek(100, 16.6, true);
+      const startPan = Math.sin(pan.targets[0].angle);
+      const movingLayers = [ground, mesas, cactus];
+      const startX = movingLayers.map((image) => image.x);
+      pan.seek(3499, 16.6, true);
+      const panChange = Math.sin(pan.targets[0].angle) - startPan;
+      return {
+        scales: layers.map(({ scaleX, scaleY }) => [scaleX, scaleY]),
+        skySize: [sky.displayWidth, sky.displayHeight],
+        groundEdges: [ground.x - ground.displayWidth / 2, ground.x + ground.displayWidth / 2],
+        travel: movingLayers.map((image, index) => (startX[index] - image.x) / panChange),
+      };
     });
-    return { native, groundEdges };
-  });
-  assert.ok(native, 'Every parallax layer should use the PNG dimensions');
-  const [[start], [left, right]] = groundEdges;
-  assert.ok(left < start, 'Ground should still drift when there is room to move');
-  assert.ok(left <= 0 && right >= setups.CanyonDrift.width, 'Ground should not expose a hard edge at full drift');
+    const epsilon = 1e-6;
+    for (const [x, y] of scales) {
+      assert.equal(x, y, 'Parallax layers should not stretch');
+      assert.ok(Math.abs(x - scale) < epsilon, 'Scale should retain room for the full sweep without upscaling');
+    }
+    assert.ok(skySize[0] >= width - epsilon && skySize[1] >= height - epsilon, 'Sky should fill the board');
+    const [left, right] = groundEdges;
+    assert.ok(left <= epsilon && right >= width - epsilon, 'Ground should not expose a hard edge at full drift');
+    const expectedTravel = width === 1920 ? [0, 0, 0.05] : [groundTravel, 0.012, 0.05];
+    for (const [index, fraction] of expectedTravel.entries()) {
+      assert.ok(Math.abs(travel[index] - width * fraction) < epsilon,
+        `Layer ${index} should travel ${fraction} of the board width, traveled ${travel[index] / width}`);
+    }
+    await backToPicker();
+  }
   assert.deepEqual(errors, []);
 });
 
@@ -818,7 +855,7 @@ scenario('parallax seeds place both foreground and background artwork', async (t
       matches: (red, green, blue) => green > red + 10 && green > blue + 5,
     },
     {
-      name: 'sun', cardX: 935, scroll: 2300, rowY: 300,
+      name: 'sun', cardX: 935, scroll: 2300, rowY: 352,
       matches: (red, green) => red >= 75 && green >= 75,
     },
   ];

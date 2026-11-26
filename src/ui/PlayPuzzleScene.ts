@@ -58,13 +58,13 @@ export class PlayPuzzleScene extends Phaser.Scene {
     const progress = this.add.text(0, 0, '', {
       fontFamily: 'system-ui', fontSize: '17px',
     }).setOrigin(0, 0.5);
-    const challenge = this.add.text(0, 0, `· ${challengeModes[puzzle.challengeMode].label}`, {
+    const challenge = challengeMode === 'none' ? undefined : this.add.text(0, 0, `· ${challengeModes[challengeMode].label}`, {
       fontFamily: 'system-ui', fontSize: '17px',
     }).setOrigin(0, 0.5);
     styleWithTheme(title, (colors) => {
       title.setColor(colors.text);
       progress.setColor(colors.mutedText);
-      challenge.setColor(colors.mutedText);
+      challenge?.setColor(colors.mutedText);
     });
     const layoutHeader = () => {
       const { width } = this.scale.gameSize;
@@ -76,19 +76,20 @@ export class PlayPuzzleScene extends Phaser.Scene {
       const centerY = narrow ? 87 : buttonY + backButton.height / 2;
       title.setFontSize(narrow ? 20 : 34);
       progress.setFontSize(narrow ? 14 : 17);
-      challenge.setFontSize(narrow ? 14 : 17);
-      const inlineRight = titleX + title.width + progress.width + challenge.width + 2 * headerControlGap;
+      challenge?.setFontSize(narrow ? 14 : 17);
+      const challengeWidth = challenge ? headerControlGap + challenge.width : 0;
+      const inlineRight = titleX + title.width + headerControlGap + progress.width + challengeWidth;
       const stacked = narrow || width < 700 || inlineRight + headerGap > settings.button.x;
       if (stacked && !narrow) {
         title.setFontSize(20);
         progress.setFontSize(15);
-        challenge.setFontSize(15);
+        challenge?.setFontSize(15);
       }
 
       title.setPosition(titleX, centerY - (stacked ? 10 : 0));
       const progressY = centerY + (stacked ? 11 : 0);
       progress.setPosition(stacked ? titleX : titleX + title.width + headerControlGap, progressY);
-      challenge.setPosition(progress.x + progress.width + headerControlGap, progressY);
+      challenge?.setPosition(progress.x + progress.width + headerControlGap, progressY);
     };
     this.scale.on(Phaser.Scale.Events.RESIZE, layoutHeader);
     const updateProgress = () => {

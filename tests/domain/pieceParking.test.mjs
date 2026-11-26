@@ -93,19 +93,23 @@ test('rotating a parked group pivots around the clicked member, and returning it
   const { play, pieceAt } = givenPuzzle({ seed: 54, pieceRotation: true });
   const top = pieceAt(0, 0);
   const bottom = pieceAt(0, 1);
+  const loose = pieceAt(1, 0);
   const originalOrder = play.trayPieces;
   turnTo(play, top, 0);
   turnTo(play, bottom, 0);
   play.dropOnBoard(top.id, offGuide);
   play.dropOnBoard(bottom.id, offset(offGuide, 0, 144));
+  play.dropOnBoard(loose.id, offGuide);
 
   assert.equal(play.turnPiece(bottom.id), true);
+  assert.equal(play.parkedGroups.at(-1), play.groupOf(bottom.id));
   assert.deepEqual(play.positionOf(bottom.id), offset(offGuide, 0, 144));
   assert.deepEqual(play.positionOf(top.id), offset(offGuide, 144, 144));
   assert.equal(play.groupOf(top.id).quarterTurns, 1);
   assert.equal(top.id in play.snapshot().trayOrientations, false);
   assert.equal(bottom.id in play.snapshot().trayOrientations, false);
 
+  assert.equal(play.returnToTray(loose.id), true);
   assert.equal(play.returnToTray(bottom.id), true);
   assert.equal(play.returnToTray(bottom.id), false);
   assert.deepEqual(play.parkedGroups, []);
@@ -114,8 +118,8 @@ test('rotating a parked group pivots around the clicked member, and returning it
   assert.equal(play.orientationOf(bottom.id), 1);
 });
 
-test('detaching a bridge preserves every rotated pose and keeps the remainder in separate components', () => {
-  const { play, pieceAt } = givenPuzzle({ columns: 5, rows: 1, pieceRotation: true });
+test('detaching a rotated bridge moves it sideways and leaves the remaining components in place', () => {
+  const { play, puzzle, pieceAt } = givenPuzzle({ columns: 5, rows: 1, pieceRotation: true });
   const pieces = [0, 1, 2, 3, 4].map((column) => pieceAt(column, 0));
   pieces.forEach((piece, i) => {
     turnTo(play, piece, 1);
@@ -127,12 +131,36 @@ test('detaching a bridge preserves every rotated pose and keeps the remainder in
   assert.equal(play.breakOff(bridge), true);
   assert.deepEqual(play.parkedGroups.map(({ memberIds }) => memberIds), [[a, b], [d, e], [bridge]]);
   pieces.forEach(({ id }, i) => {
+    if (id === bridge) return;
     assert.deepEqual(play.positionOf(id), offset(offGuide, 0, i * 128));
     assert.equal(play.orientationOf(id), 1);
   });
+  const previous = offset(offGuide, 0, 256);
+  const detached = play.positionOf(bridge);
+  assert.equal(detached.y, previous.y);
+  assert.ok(Math.abs(detached.x - previous.x) > puzzle.snapTolerance);
+  assert.ok(Math.abs(detached.x - previous.x) < 32);
+  assert.equal(play.orientationOf(bridge), 1);
   assert.equal(play.breakOff(bridge), false);
-  assert.equal(play.dropOnBoard(bridge, play.positionOf(bridge)).kind, 'joined');
+  assert.equal(play.dropOnBoard(bridge, detached).kind, 'parked');
+  assert.equal(play.dropOnBoard(bridge, previous).kind, 'joined');
   assert.equal(play.parkedGroups.length, 2);
+});
+
+test('a surrounded piece still separates without moving its neighbors', () => {
+  const { play, puzzle, pieceAt } = givenPuzzle({ columns: 3, rows: 3 });
+  const center = pieceAt(1, 1);
+  const neighbors = [pieceAt(1, 0), pieceAt(2, 1), pieceAt(1, 2), pieceAt(0, 1)];
+  play.dropOnBoard(center.id, offGuide);
+  for (const { id, target } of neighbors) {
+    assert.equal(play.dropOnBoard(id, offset(offGuide, target.x - center.target.x, target.y - center.target.y)).kind, 'joined');
+  }
+  const positions = neighbors.map(({ id }) => play.positionOf(id));
+
+  assert.equal(play.breakOff(center.id), true);
+  const detached = play.positionOf(center.id);
+  assert.ok(Math.hypot(detached.x - offGuide.x, detached.y - offGuide.y) > puzzle.snapTolerance);
+  assert.deepEqual(neighbors.map(({ id }) => play.positionOf(id)), positions);
 });
 
 test('upright guide placement takes priority over an eligible loose join', () => {

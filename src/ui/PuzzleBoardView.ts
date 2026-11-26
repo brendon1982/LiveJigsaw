@@ -102,6 +102,7 @@ export class PuzzleBoardView {
   private rejectedPiece?: PuzzlePieceView;
   private readonly pieces = new Map<string, PuzzlePieceView>();
   private parkedPieces: PuzzlePieceView[] = [];
+  private breakSlide?: { entry: PuzzlePieceView; tween: Phaser.Tweens.Tween };
   private trayBounds = new Phaser.Geom.Rectangle();
   private trayPosition: TrayPosition;
   private side: TraySide;
@@ -237,6 +238,7 @@ export class PuzzleBoardView {
     this.scene.game.events.off(Phaser.Core.Events.BLUR, this.cancelInteraction, this);
     this.scene.input.setDefaultCursor('default');
     this.traySlide?.remove();
+    this.stopBreakSlide();
     this.tray.destroy();
     this.clearLiftShadows();
     this.seedDropFeedback?.destroy();
@@ -415,6 +417,7 @@ export class PuzzleBoardView {
   private startPieceDrag(pointer: Phaser.Input.Pointer, contact: PieceContact, grab: Point, dropOn: DropTrigger = 'release') {
     this.returnRejectedPiece();
     const { entry, source } = contact;
+    if (this.breakSlide?.entry === entry) this.stopBreakSlide();
     const center = entry.position;
     const hand = source === 'board' ? this.board.toLocal(grab) : grab;
     const scale = source === 'board' ? 1 : this.tray.pieceScale;
@@ -582,11 +585,35 @@ export class PuzzleBoardView {
   }
 
   private breakOff(entry: PuzzlePieceView) {
+    const start = { x: entry.position.x, y: entry.position.y };
     if (!this.play.breakOff(entry.piece.id)) return;
     this.setBreakArmed(false);
     this.syncParkedPieces();
+    this.slideDetachedPiece(entry, start, this.play.positionOf(entry.piece.id)!);
     this.updateBreakButton();
+    this.updateZoomButtons();
     this.actions.onWorkspaceChange();
+  }
+
+  private slideDetachedPiece(entry: PuzzlePieceView, start: Point, end: Point) {
+    entry.moveTo(start.x, start.y);
+    const tween = this.scene.tweens.addCounter({
+      from: 0, to: 1, duration: 120, ease: 'Cubic.Out',
+      onUpdate: (tween) => {
+        const progress = tween.getValue() ?? 0;
+        entry.moveTo(Phaser.Math.Linear(start.x, end.x, progress), Phaser.Math.Linear(start.y, end.y, progress));
+      },
+      onComplete: () => {
+        entry.moveTo(end.x, end.y);
+        this.breakSlide = undefined;
+      },
+    });
+    this.breakSlide = { entry, tween };
+  }
+
+  private stopBreakSlide() {
+    this.breakSlide?.tween.remove();
+    this.breakSlide = undefined;
   }
 
   private turnPiece({ entry, source }: PieceContact) {
@@ -676,6 +703,7 @@ export class PuzzleBoardView {
   }
 
   private syncParkedPieces() {
+    this.stopBreakSlide();
     const corners: Point[] = [];
     this.parkedPieces = this.play.parkedGroups.flatMap((group) => group.memberIds.map((id) => {
       const entry = this.pieces.get(id)!;

@@ -661,9 +661,9 @@ scenario('live pieces scroll, reflow, and snap to the pannable board', async (t)
   await click(340, 180);
   await playSelection();
   await waitForText('0 of 8 placed');
-  await waitForText('· None');
   const header = await page.evaluate(() => window.paintedText);
   assert.ok(header.includes('All puzzles') && header.includes('Windmill'));
+  assert.ok(!header.includes('· None'), 'No challenge label is shown for None');
   assert.ok(!header.includes('Pieces') && !header.includes('Drag to pan · Scroll to zoom'));
   const initial = await canvas.screenshot();
   const sky = [192, 221, 219, 255];
@@ -1663,6 +1663,17 @@ scenario('break piece off targets the topmost member and splits a bridge on touc
     const { x, y } = state.parked.find((entry) => entry.id === id);
     return state.boardPoint(x, y);
   };
+  const waitForDetachedPiece = async (id) => {
+    const { position } = (await readSave(page)).progress.Windmill.parkedGroups.find(({ anchorPieceId }) => anchorPieceId === id);
+    await page.waitForFunction(({ id, x, y }) => {
+      const scene = window.puzzleArtworkScene.sys.game.scene.getScene('PlayPuzzle');
+      const camera = scene.cameras.getCamera('Puzzle board');
+      const layer = scene.children.list.find((object) => object.type === 'Layer' && !(object.cameraFilter & camera.id));
+      const piece = layer.list.find(({ frame }) => frame?.name === id);
+      return piece?.x === x && piece.y === y;
+    }, { id, ...position });
+    return layout();
+  };
   for (const [column, id] of chain.entries()) {
     const entry = await trayEntry(id);
     for (let turns = puzzle.orientationOf(id); turns % 4; turns++) await tapAt(entry);
@@ -1691,8 +1702,15 @@ scenario('break piece off targets the topmost member and splits a bridge on touc
   assert.equal(masked.breakButton.armed, true);
   await clickAt(button);
   assert.equal((await layout()).breakButton.armed, false);
+
+  const pivot = screenPiece(joined, left);
+  await clickAt(pivot);
+  const rotated = await layout();
+  assert.deepEqual(rotated.parked.map(({ id }) => id), [cover, ...chain], 'Rotating raises the full group above the cover');
+  assert.equal(rotated.parked.at(-1).angle, 90);
   await clickAt(bridgePoint, 'right');
   await clickAt(joined.tray[0]);
+  for (let turns = 1; turns < 4; turns++) await clickAt(pivot);
   assert.deepEqual((await layout()).parked, joined.parked);
 
   await tapAt(button);
@@ -1720,13 +1738,16 @@ scenario('break piece off targets the topmost member and splits a bridge on touc
 
   const pinchedBridge = screenPiece(pinched, bridge);
   await tapAt(pinchedBridge);
-  const split = await layout();
+  const split = await waitForDetachedPiece(bridge);
   assert.equal(split.breakButton.armed, false);
-  assert.deepEqual(split.parked, [0, 2, 3, 1].map((index) => joined.parked[index]),
-    'Detaching a bridge changes layer order, but not any center or orientation');
+  assert.deepEqual(split.parked.slice(0, -1), [0, 2, 3].map((index) => joined.parked[index]));
+  const detached = split.parked.at(-1);
+  assert.deepEqual(detached, { ...joined.parked[1], y: detached.y }, 'Only the bridge moves, without rotating');
+  assert.ok(detached.y < joined.parked[1].y - puzzle.snapTolerance, 'The bridge moves away from both neighbors');
+  assert.ok(split.parkedBorders.some(({ x, y }) => x === detached.x && y === detached.y));
   assert.deepEqual((await readSave(page)).progress.Windmill.parkedGroups.map(({ memberIds }) => memberIds),
     [[left], [inner, end], [bridge]], 'The saved workspace records each remaining component separately');
-  await clickAt(pinchedBridge, 'right');
+  await clickAt(screenPiece(split, bridge), 'right');
   await clickAt(split.tray[0]);
   assert.deepEqual((await layout()).parked.map(({ id }) => id), [left, inner, end], 'Only the detached bridge returns');
 
@@ -1756,14 +1777,17 @@ scenario('break piece off targets the topmost member and splits a bridge on touc
   assert.equal(native.breakButton.armed, true, '1× keeps break mode armed');
   const endPoint = screenPiece(native, end);
   await clickAt(endPoint);
-  const singles = await layout();
+  const singles = await waitForDetachedPiece(end);
   assert.equal(singles.breakButton.visible, false);
-  assert.deepEqual(singles.parked, split.parked.slice(0, 3), 'A mouse click detaches without rotating');
+  assert.deepEqual(singles.parked.slice(0, -1), split.parked.slice(0, 2));
+  const detachedEnd = singles.parked.at(-1);
+  assert.deepEqual(detachedEnd, { ...joined.parked[3], x: detachedEnd.x }, 'A mouse click detaches without rotating');
+  assert.ok(detachedEnd.x > joined.parked[3].x + puzzle.snapTolerance, 'The end moves directly away from its neighbor');
 
-  await clickAt(endPoint, 'right');
-  await clickAt(endPoint);
+  await clickAt(screenPiece(singles, end), 'right');
+  await clickAt(singles.boardPoint(joined.parked[3].x, joined.parked[3].y));
   assert.equal((await layout()).breakButton.visible, true, 'A later drop can rejoin the pieces');
-  await clickAt(endPoint, 'right');
+  await clickAt(screenPiece(await layout(), end), 'right');
   await page.evaluate(() => {
     const scene = window.puzzleArtworkScene.sys.game.scene.getScene('PlayPuzzle');
     const camera = scene.cameras.getCamera('Puzzle board');
@@ -1800,6 +1824,7 @@ scenario('Sequential locks tray pieces while keeping touch scrolling and saves t
   await page.touchscreen.tap(340, 180);
   await playSelection({ connectorStyle: 'None', challengeMode: 'sequential' });
   await waitForText('0 of 8 placed');
+  await waitForText('· Sequential');
   const save = () => readSave(page);
   assert.equal((await save()).recentOptions.challengeMode, 'sequential');
   assert.equal((await save()).progress.Windmill, undefined);

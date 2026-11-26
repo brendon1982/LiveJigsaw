@@ -53,14 +53,19 @@ export class PieceWorkspace {
       ...this.reanchor(group, group.memberIds, pieceId),
       quarterTurns: (group.quarterTurns + 1) % 4,
     };
-    this.replaceGroup(group, [turned]);
+    const remaining = this.groups.filter((entry) => entry !== group);
+    this.replaceGroups([...remaining, freezeGroup(turned)]);
   }
 
   breakOff(group: ParkedGroup, pieceId: string): boolean {
     if (group.memberIds.length < 2) return false;
     const remainder = group.memberIds.filter((id) => id !== pieceId);
     const parts = this.connectedComponents(remainder).map((ids) => this.reanchor(group, ids, ids[0]));
-    this.replaceGroup(group, [...parts, this.reanchor(group, [pieceId], pieceId)]);
+    const detached = {
+      memberIds: [pieceId], anchorPieceId: pieceId, quarterTurns: group.quarterTurns,
+      position: this.separatedPosition(group, pieceId),
+    };
+    this.replaceGroup(group, [...parts, detached]);
     return true;
   }
 
@@ -104,6 +109,28 @@ export class PieceWorkspace {
 
   private reanchor(group: ParkedGroup, memberIds: readonly string[], anchorPieceId: string): ParkedGroup {
     return { ...group, memberIds, anchorPieceId, position: this.positionOf(group, anchorPieceId) };
+  }
+
+  private separatedPosition(group: ParkedGroup, pieceId: string): Point {
+    const neighbors = this.puzzle.neighborIds(pieceId)
+      .filter((id) => this.groupOf(id) === group)
+      .map((id) => this.rotatedOffset(pieceId, id, group.quarterTurns))
+      .map(({ x, y }) => ({ x: Math.sign(x), y: Math.sign(y) }));
+    const directions = [{ x: 0, y: -1 }, { x: 1, y: 0 }, { x: 0, y: 1 }, { x: -1, y: 0 }];
+    let away = directions[0];
+    let bestClearance = -1;
+    for (const direction of directions) {
+      const clearance = Math.min(...neighbors.map(({ x, y }) => Math.hypot(x - direction.x, y - direction.y)));
+      if (clearance > bestClearance) {
+        away = direction;
+        bestClearance = clearance;
+      }
+    }
+
+    const { x, y } = this.positionOf(group, pieceId);
+    // Leave the piece outside the join radius so it can be moved without immediately rejoining.
+    const distance = this.puzzle.snapTolerance + 6;
+    return { x: x + away.x * distance, y: y + away.y * distance };
   }
 
   private closestJoin(group: ParkedGroup, lifted?: ParkedGroup) {

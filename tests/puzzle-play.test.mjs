@@ -680,6 +680,52 @@ scenario('the board keeps fixed pan bounds through zoom with a parked piece', as
   assert.deepEqual(errors, []);
 });
 
+scenario('the touch picker stays usable while the viewport width changes', async (t) => {
+  const { page, waitForText, errors, clickDialog } = await openPuzzle(t, {
+    viewport: { width: 1320, height: 780 }, hasTouch: true, isMobile: true,
+  });
+  const { moveFinger } = await touchController(page);
+  await moveFinger(350, 550, 350, 240);
+
+  const resize = async (width) => {
+    await page.setViewportSize({ width, height: 780 });
+    await page.waitForFunction((width) => document.querySelector('canvas').width === width, width);
+    assert.deepEqual(errors, [], `Resizing the touch viewport to ${width}px should not throw`);
+  };
+  const widths = [1319, 1299, 1255, 1240, 1201, 1024, 801, 680, 559, 480, 390, 320, 280, 560, 760, 1241, 1320];
+  for (const width of widths) await resize(width);
+
+  await clickDialog(460, -347);
+  await waitForText('Type');
+  for (const width of widths) await resize(width);
+  await page.keyboard.press('Escape');
+
+  await clickDialog(586, -347);
+  await waitForText('Allow loose pieces on board');
+  assert.deepEqual(errors, []);
+});
+
+scenario('a touch scrollbar survives a resize that leaves no thumb travel', async (t) => {
+  const { page, waitForText, errors, clickDialog } = await openPuzzle(t, {
+    viewport: { width: 680, height: 200 }, hasTouch: true, isMobile: true,
+  });
+  const { dispatch } = await touchController(page);
+  await dispatch('touchStart', [675, 104]);
+  await dispatch('touchMove', [675, 126]);
+  for (const height of [160, 142, 130, 122, 120, 116, 114, 112, 110, 106, 100]) {
+    await page.setViewportSize({ width: 680, height });
+    await page.waitForFunction((height) => document.querySelector('canvas').height === height, height);
+    await dispatch('touchMove', [675, 101]);
+    await dispatch('touchMove', [675, 106]);
+    assert.deepEqual(errors, [], `Resizing during a scrollbar drag to ${height}px should not throw`);
+  }
+  await dispatch('touchEnd');
+  await page.setViewportSize({ width: 680, height: 780 });
+  await clickDialog(266, -347);
+  await waitForText('Allow loose pieces on board');
+  assert.deepEqual(errors, []);
+});
+
 scenario('the picker renders before requesting offscreen previews', async (t) => {
   const { page, canvas, waitForText, errors, origin } = await openGamePage(t, {
     viewport: { width: 768, height: 1024 },

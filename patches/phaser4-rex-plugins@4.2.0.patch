@@ -1,0 +1,17 @@
+diff --git a/templates/ui/slider/methods/input/GetValueByPosition.js b/templates/ui/slider/methods/input/GetValueByPosition.js
+--- a/templates/ui/slider/methods/input/GetValueByPosition.js
++++ b/templates/ui/slider/methods/input/GetValueByPosition.js
+@@ -11,8 +11,12 @@ var GetValueByPosition = function (x, y) {
+         startPoint = this.getEndPoint();
+         endPoint = this.getStartPoint();
+     }
++    // A resize can leave no thumb travel during an active drag.
++    if (startPoint.x === endPoint.x && startPoint.y === endPoint.y) {
++        return this.value;
++    }
+     var value = PositionToPercent(startPoint, endPoint, tmpPoint);
+-    return value;
++    return Number.isFinite(value) ? value : this.value;
+ }
+ var tmpPoint = {};
+ 

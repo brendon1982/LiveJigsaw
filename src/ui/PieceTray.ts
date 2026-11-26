@@ -28,6 +28,7 @@ export class PieceTray {
     cellSize: Size,
     targetPieceSize: number,
     private axis: TrayScrollAxis,
+    pieceRotation: boolean,
   ) {
     this.entries = entries;
     this.pieceScale = targetPieceSize / Math.min(cellSize.width, cellSize.height);
@@ -39,8 +40,12 @@ export class PieceTray {
         height: Math.max(frame.height * this.pieceScale + 16, 2 * Math.max(y, frame.height - y) * this.pieceScale + 2),
       };
     });
-    this.cellWidth = Math.ceil(Math.max(...slotSizes.map(({ width }) => width)));
-    this.cellHeight = Math.ceil(Math.max(...slotSizes.map(({ height }) => height)));
+    const uprightWidth = Math.ceil(Math.max(...slotSizes.map(({ width }) => width)));
+    const uprightHeight = Math.ceil(Math.max(...slotSizes.map(({ height }) => height)));
+    // A square slot fits the same pivot-centered bounds at every quarter turn.
+    const rotatedSize = Math.max(uprightWidth, uprightHeight);
+    this.cellWidth = pieceRotation ? rotatedSize : uprightWidth;
+    this.cellHeight = pieceRotation ? rotatedSize : uprightHeight;
     this.layer = scene.add.layer();
     this.camera = scene.cameras.add().setName('Piece tray');
     this.camera.inputEnabled = false;
@@ -123,6 +128,10 @@ export class PieceTray {
     return this.clip.contains(point.x, point.y);
   }
 
+  refreshVisibility(entry: PuzzlePieceView) {
+    entry.setVisible(entry.intersects(this.clip));
+  }
+
   scrollBy(pixels: number) {
     this.panel.setChildOY(this.panel.childOY + pixels, true);
   }
@@ -170,7 +179,7 @@ export class PieceTray {
       const column = vertical ? crossIndex : scrollIndex;
       const row = vertical ? scrollIndex : crossIndex;
       entry.moveTo(left + (column + 0.5) * this.cellWidth, top + (row + 0.5) * this.cellHeight);
-      entry.setVisible(entry.intersects(this.clip));
+      this.refreshVisibility(entry);
     }
   }
 }

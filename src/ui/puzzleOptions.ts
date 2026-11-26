@@ -43,6 +43,8 @@ export function showPuzzleOptions(
     name: speed,
     label: speed,
   })), defaults?.animationSpeed ?? 'Normal');
+  const rotationButtons = makeRadioButtons(scene, ['Off', 'On'].map((label) => ({ name: label, label })),
+    defaults?.pieceRotation ? 'On' : 'Off');
   const modes = Object.keys(challengeModes) as ChallengeMode[];
   const modeButtons = makeRadioButtons(scene, modes.map((mode) => ({
     name: mode,
@@ -54,6 +56,7 @@ export function showPuzzleOptions(
     ['Puzzle size', sizeButtons],
     ['Connector style', styleButtons],
     ['Animation speed', speedButtons],
+    ['Piece rotation', rotationButtons],
     ['Challenge mode', modeButtons],
   ] as const;
   for (const [heading, buttons] of sections) {
@@ -78,8 +81,9 @@ export function showPuzzleOptions(
     const style = styles.find((id) => id === styleButtons.getSelectedButtonName());
     const speed = puzzleAnimationSpeeds.find((name) => name === speedButtons.getSelectedButtonName());
     const challengeMode = modes.find((id) => id === modeButtons.getSelectedButtonName());
+    const pieceRotation = rotationButtons.getSelectedButtonName() === 'On';
     if (sizeChoice && style && speed && challengeMode) {
-      play(sizeChoice.size, { connectorStyle: style, animationSpeed: speed, challengeMode });
+      play(sizeChoice.size, { connectorStyle: style, animationSpeed: speed, challengeMode, pieceRotation });
     }
   });
 }
@@ -90,13 +94,14 @@ export function showResumePuzzle(
   progress: PuzzleProgress,
   onClose: (choice: 'resume' | 'reset' | 'cancel') => void,
 ) {
-  const { size, connectorStyle, animationSpeed, challengeMode } = progress.setup;
+  const { size, connectorStyle, animationSpeed, challengeMode, pieceRotation } = progress.setup;
   const pieceCount = getPieceCount(size);
   const lines = [
     `${progress.placedPieceIds.length} of ${pieceCount} placed`,
     `Puzzle size: ${pieceCount}`,
     `Connector style: ${connectorStyles[connectorStyle].label}`,
     `Animation speed: ${animationSpeed}`,
+    `Piece rotation: ${pieceRotation ? 'On' : 'Off'}`,
     `Challenge mode: ${challengeModes[challengeMode].label}`,
   ];
   const content = scene.rexUI.add.sizer({ orientation: 'y', space: { item: 4 } });

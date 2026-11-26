@@ -5,13 +5,14 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { chromium } from 'playwright-core';
 import { PNG } from 'pngjs';
 import { build, preview } from 'vite';
+import { createPuzzle, puzzleSizes } from '../src/domain/puzzleSizes.ts';
 
 const scenarios = [];
 const scenario = (name, run) => scenarios.push({ name, run });
 
 const settingsY = { theme: -159, firstFilter: -60, secondFilter: 2, firstTray: 98, secondTray: 160, done: 232 };
-const setupY = { size: -155, connector: -44, speed: 67, challenge: 163, action: 233 };
-const resumeActionY = 100;
+const setupY = { size: -203, connector: -92, speed: 19, rotation: 115, challenge: 211, action: 281 };
+const resumeActionY = 114;
 
 async function seedNextAttempt(page, seed) {
   await page.evaluate((seed) => {
@@ -128,10 +129,10 @@ async function openPuzzle(t, options, path = '/', initPage) {
   };
   const clickSetup = async (dx, dy) => {
     const { width, height } = await canvas.boundingBox();
-    const scale = Math.min(1, (width - 24) / 448, (height - 24) / 558);
+    const scale = Math.min(1, (width - 24) / 448, (height - 24) / 654);
     await clickDialog(dx * scale, dy * scale);
   };
-  const playSelection = async ({ size, connectorStyle, animationSpeed, challengeMode } = {}) => {
+  const playSelection = async ({ size, connectorStyle, animationSpeed, challengeMode, pieceRotation } = {}) => {
     await waitForText('Challenge mode');
     if (size) {
       const index = [8, 32, 64, 128].indexOf(size);
@@ -149,6 +150,7 @@ async function openPuzzle(t, options, path = '/', initPage) {
       assert.ok(index >= 0);
       await clickSetup(-156 + 104 * index, setupY.speed);
     }
+    if (pieceRotation !== undefined) await clickSetup(pieceRotation ? -52 : -156, setupY.rotation);
     if (challengeMode) {
       const index = ['none', 'sequential', 'sequential-window', 'no-guide', 'seed'].indexOf(challengeMode);
       assert.ok(index >= 0);
@@ -800,7 +802,7 @@ scenario('picker Settings remembers the theme and filter on a narrow touch scree
   assert.deepEqual(errors, []);
 });
 
-scenario('version 1 through 4 saves migrate with settings, options, progress, and history intact', async (t) => {
+scenario('version 1 through 5 saves migrate with settings, options, progress, and history intact', async (t) => {
   const { page, canvas, waitForText, errors, clickDialog } = await openPuzzle(t, { viewport: { width: 1320, height: 780 } });
   const size = { width: 512, height: 288, columns: 4, rows: 2, snapTolerance: 28 };
   const setup = {
@@ -841,22 +843,35 @@ scenario('version 1 through 4 saves migrate with settings, options, progress, an
       sequentialCompletion,
     ] },
   };
-  const noneSetup = { ...setup, size, challengeMode: 'none' };
-  for (const previous of [original, { ...original, version: 2, settings }, version3, version4]) {
+  const noneSetupV5 = { ...setup, size, challengeMode: 'none' };
+  const sequentialSetupV5 = { ...sequentialCompletion.setup, size };
+  const version5 = {
+    ...version4,
+    version: 5,
+    recentOptions: { pieceCount: 32, connectorStyle: 'classic', animationSpeed: 'Normal', challengeMode: 'none' },
+    progress: { Windmill: { ...original.progress.Windmill, setup: noneSetupV5 } },
+    history: { Lighthouse: [
+      { ...original.history.Lighthouse[0], setup: noneSetupV5 },
+      { ...sequentialCompletion, setup: sequentialSetupV5 },
+    ] },
+  };
+  const noneSetup = { ...noneSetupV5, pieceRotation: false };
+  for (const previous of [original, { ...original, version: 2, settings }, version3, version4, version5]) {
     await storeSave(previous);
     await page.reload();
     await waitForText('Completed');
     await waitForText('1 of 8 placed');
     assert.deepEqual(await readSave(page), {
-      version: 5,
+      version: 6,
       settings,
       recentOptions: {
-        pieceCount: previous === version4 ? 32 : 8, connectorStyle: 'classic', animationSpeed: 'Normal', challengeMode: 'none',
+        pieceCount: previous.version >= 4 ? 32 : 8, connectorStyle: 'classic', animationSpeed: 'Normal',
+        challengeMode: 'none', pieceRotation: false,
       },
-      progress: { Windmill: { ...original.progress.Windmill, setup: noneSetup } },
+      progress: { Windmill: { ...original.progress.Windmill, setup: noneSetup, trayOrientations: {} } },
       history: { Lighthouse: [
         { ...original.history.Lighthouse[0], setup: noneSetup },
-        ...(previous.version >= 3 ? [{ ...sequentialCompletion, setup: { ...sequentialCompletion.setup, size } }] : []),
+        ...(previous.version >= 3 ? [{ ...sequentialCompletion, setup: { ...sequentialSetupV5, pieceRotation: false } }] : []),
       ] },
     });
   }
@@ -891,6 +906,89 @@ scenario('version 1 through 4 saves migrate with settings, options, progress, an
   await clickDialog(101, settingsY.done);
   assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 5, 105), [33, 33, 33, 255], 'The new setting should apply in memory');
   assert.deepEqual(await readSave(page), future, 'A settings change should leave a newer save intact');
+  assert.deepEqual(errors, []);
+});
+
+scenario('piece rotation distinguishes clicks and taps from drag, scroll, and cancellation', async (t) => {
+  const { page, canvas, waitForText, errors, clickDialog, playSelection } = await openPuzzle(t, {
+    viewport: { width: 1320, height: 780 }, hasTouch: true, isMobile: true,
+  });
+  const { dispatch, moveFinger } = await touchController(page);
+  const getAttempt = async () => (await readSave(page)).progress.Windmill;
+  const pickWindmill = () => clickDialog(-320, -210);
+  await pickWindmill();
+  await playSelection({ connectorStyle: 'None', pieceRotation: true });
+  await waitForText('0 of 8 placed');
+  assert.equal((await readSave(page)).recentOptions.pieceRotation, true);
+
+  const puzzle = createPuzzle(puzzleSizes[0], 'none', 233, 'none', true);
+  const { id, target } = puzzle.trayPieces[0];
+  const x = 79.5;
+  const y = 135.5;
+  const targetX = 728.5 - 256 + target.x;
+  const targetY = 420 - 144 + target.y;
+  const sample = async (x, y) => pixelAt(page, await canvas.screenshot(), x, y);
+  const trayColor = await sample(29, 88);
+  const firstPieceColor = await sample(x, y);
+  assert.notDeepEqual(firstPieceColor, trayColor);
+  await dispatch('touchStart', [x, y]);
+  await dispatch('touchMove', [x, y + 14]);
+  await dispatch('touchMove', [x, y]);
+  await dispatch('touchEnd');
+  await dispatch('touchStart', [x, y]);
+  await dispatch('touchCancel');
+  assert.equal(await getAttempt(), undefined, 'Neither a cancelled press nor movement below the scroll threshold is a tap');
+  await moveFinger(x, y + 103, x, y);
+  assert.notDeepEqual(await sample(x, y), firstPieceColor, 'A swipe starting on a piece should move the tray');
+  await moveFinger(x, y, x, y + 103);
+  assert.equal(await getAttempt(), undefined, 'Scrolling from a piece should not turn it');
+
+  let turns = (puzzle.orientationOf(id) + 1) % 4;
+  await page.mouse.click(x, y);
+  const firstSave = await getAttempt();
+  assert.deepEqual(firstSave.placedPieceIds, []);
+  assert.equal(firstSave.trayOrientations[id], turns);
+  while (turns % 2 === 0) {
+    await page.touchscreen.tap(x, y);
+    turns = (turns + 1) % 4;
+    assert.equal((await getAttempt()).trayOrientations[id], turns);
+  }
+  assert.notDeepEqual(await sample(x + 41, y), trayColor, 'A sideways rectangular piece should render past its upright edge');
+  const sideways = await getAttempt();
+  await moveFinger(x, y, targetX, targetY, 'touchCancel');
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(targetX, targetY, { steps: 8 });
+  assert.deepEqual(await sample(x, y), trayColor, 'Moving the mouse after pressing should lift the piece');
+  await page.mouse.up();
+  assert.deepEqual(await getAttempt(), sideways, 'Cancellation and a sideways drop leave the saved turn intact');
+  assert.notDeepEqual(await sample(x, y), trayColor, 'The rejected piece is back in its slot');
+
+  await page.reload();
+  await waitForText('Windmill');
+  await pickWindmill();
+  await waitForText('Piece rotation: On');
+  await clickDialog(100, resumeActionY);
+  await waitForText('All puzzles');
+  assert.notDeepEqual(await sample(x + 41, y), trayColor, 'Reload restores the sideways piece');
+  await page.touchscreen.tap(x + 41, y);
+  turns = (turns + 1) % 4;
+  assert.equal((await getAttempt()).trayOrientations[id], turns, 'A tap on the rotated edge should hit');
+  while (turns !== 0) {
+    await page.touchscreen.tap(x, y);
+    turns = (turns + 1) % 4;
+    assert.equal((await getAttempt()).trayOrientations[id], turns);
+  }
+  await moveFinger(x, y, targetX, targetY);
+  await waitForText('1 of 8 placed');
+  assert.deepEqual((await getAttempt()).placedPieceIds, [id]);
+  assert.equal(Object.hasOwn((await getAttempt()).trayOrientations, id), false);
+
+  await clickDialog(-561, -347);
+  await waitForText('Select a Puzzle');
+  await clickDialog(343, -210);
+  await playSelection();
+  assert.equal((await readSave(page)).recentOptions.pieceRotation, true, 'The next puzzle should default to the persisted choice');
   assert.deepEqual(errors, []);
 });
 
@@ -1096,7 +1194,7 @@ scenario('No Guide progress resumes, resets, and records each completion', async
   await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   assert.deepEqual(await getAttempt(), firstSave);
   assert.deepEqual((await readSave(page)).recentOptions, {
-    pieceCount: 8, connectorStyle: 'none', animationSpeed: 'Fast', challengeMode: 'no-guide',
+    pieceCount: 8, connectorStyle: 'none', animationSpeed: 'Fast', challengeMode: 'no-guide', pieceRotation: false,
   });
   await page.evaluate(() => { window.paintedText = []; });
   await pickWindmill();
@@ -1185,16 +1283,17 @@ scenario('picker tag and completion filters combine and refresh after play', asy
   });
   const setup = {
     size: { width: 512, height: 288, columns: 4, rows: 2, snapTolerance: 28 },
-    seed: 42, connectorStyle: 'none', animationSpeed: 'Normal', challengeMode: 'none',
+    seed: 42, connectorStyle: 'none', animationSpeed: 'Normal', challengeMode: 'none', pieceRotation: false,
   };
   const original = {
-    version: 5,
+    version: 6,
     settings: { trayFractions: { vertical: 0, horizontal: 0 } },
     progress: {
-      Lighthouse: { setup, placedPieceIds: ['piece-0-0'] },
+      Lighthouse: { setup, placedPieceIds: ['piece-0-0'], trayOrientations: {} },
       Windmill: {
         setup,
         placedPieceIds: ['piece-0-1', 'piece-0-2', 'piece-0-3', 'piece-1-0', 'piece-1-1', 'piece-1-2', 'piece-1-3'],
+        trayOrientations: {},
       },
     },
     history: { Lighthouse: [{ setup, completedAt: '2025-01-01T12:00:00.000Z' }] },
@@ -1448,14 +1547,14 @@ scenario('the picker scrolls past two cards and clips previews', async (t) => {
     }
     const selectedFill = [75, 108, 94, 255];
     const beforeSelection = await canvas.screenshot();
-    assert.deepEqual(await pixelAt(page, beforeSelection, 491, 245), selectedFill);
+    assert.deepEqual(await pixelAt(page, beforeSelection, 516, 212), selectedFill);
     const iconFill = [101, 135, 122, 255];
-    assert.deepEqual(await pixelAt(page, beforeSelection, 502, 116), selectedFill, 'The size tile should have no illustration');
-    assert.deepEqual(await pixelAt(page, beforeSelection, 797, 235), iconFill, 'The connector illustration should draw above the dialog and tile');
+    assert.deepEqual(await pixelAt(page, beforeSelection, 525, 101), selectedFill, 'The size tile should have no illustration');
+    assert.deepEqual(await pixelAt(page, beforeSelection, 777, 202), iconFill, 'The connector illustration should draw above the dialog and tile');
     await clickSetup(-52, setupY.connector);
     const afterSelection = await canvas.screenshot();
-    assert.notDeepEqual(await pixelAt(page, afterSelection, 491, 245), selectedFill);
-    assert.deepEqual(await pixelAt(page, afterSelection, 582, 245), selectedFill);
+    assert.notDeepEqual(await pixelAt(page, afterSelection, 516, 212), selectedFill);
+    assert.deepEqual(await pixelAt(page, afterSelection, 593, 212), selectedFill);
     await page.setViewportSize({ width: 375, height: 540 });
     await page.waitForFunction(() => document.querySelector('canvas').width === 375);
     const [cornerRed] = await pixelAt(page, await canvas.screenshot(), 373, 538);
@@ -1491,7 +1590,7 @@ scenario('the picker scrolls past two cards and clips previews', async (t) => {
     await playSelection();
     await waitForText('0 of 32 placed');
     assert.deepEqual((await readSave(page)).recentOptions, {
-      pieceCount: 32, connectorStyle: 'none', animationSpeed: 'Fast', challengeMode: 'none',
+      pieceCount: 32, connectorStyle: 'none', animationSpeed: 'Fast', challengeMode: 'none', pieceRotation: false,
     });
 
     await page.evaluate(() => { window.paintedText = []; });
@@ -1505,7 +1604,7 @@ scenario('the picker scrolls past two cards and clips previews', async (t) => {
     await waitForText('0 of 8 placed');
     await page.waitForFunction(() => window.sourceAnimationSpeed === 'Fast');
     assert.deepEqual((await readSave(page)).recentOptions, {
-      pieceCount: 8, connectorStyle: 'none', animationSpeed: 'Fast', challengeMode: 'none',
+      pieceCount: 8, connectorStyle: 'none', animationSpeed: 'Fast', challengeMode: 'none', pieceRotation: false,
     });
     assert.deepEqual(errors, []);
   });

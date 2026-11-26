@@ -30,17 +30,24 @@ export class PuzzlePiece {
   }
 }
 
-export type DropResult = 'placed' | 'missed' | 'already-placed' | 'blocked' | 'disconnected-from-seed';
+export type DropResult = 'placed' | 'missed' | 'already-placed' | 'blocked' | 'wrong-orientation' | 'disconnected-from-seed';
+
+export type PuzzleSnapshot = Readonly<{
+  placedPieceIds: readonly string[];
+  trayOrientations: Readonly<Record<string, number>>;
+}>;
 
 export class Puzzle {
   readonly board: Board;
   readonly pieces: readonly PuzzlePiece[];
   readonly seed: number;
   readonly challengeMode: ChallengeMode;
+  readonly pieceRotation: boolean;
   private readonly snapTolerance: number;
   private readonly piecesById: ReadonlyMap<string, PuzzlePiece>;
   private readonly trayOrder: readonly PuzzlePiece[];
-  private readonly placedPieceIds = new Set<string>();
+  private placedPieceIds = new Set<string>();
+  private trayOrientations = new Map<string, number>();
 
   constructor(
     board: Board,
@@ -48,6 +55,7 @@ export class Puzzle {
     connectorStyle: ConnectorStyleId = 'classic',
     seed = 0,
     challengeMode: ChallengeMode = 'none',
+    pieceRotation = false,
   ) {
     if (!Number.isFinite(snapTolerance) || snapTolerance < 0) {
       throw new RangeError('Snap tolerance must be finite and non-negative');
@@ -55,11 +63,16 @@ export class Puzzle {
     this.board = board;
     this.seed = seed;
     this.challengeMode = challengeMode;
+    this.pieceRotation = pieceRotation;
     this.snapTolerance = snapTolerance;
     const outlines = PieceOutline.forBoard(board, connectorStyle, seed);
     this.pieces = board.cells.map((cell, cellIndex) => new PuzzlePiece(cell, outlines[cellIndex]));
     this.piecesById = new Map(this.pieces.map((piece) => [piece.id, piece]));
     this.trayOrder = shufflePieces(this.pieces, seed);
+    if (pieceRotation) {
+      const random = seededRandom((seed ^ 0x9e3779b9) >>> 0);
+      for (const { id } of this.pieces) this.trayOrientations.set(id, Math.floor(random() * 4));
+    }
   }
 
   get placedCount(): number {
@@ -105,17 +118,40 @@ export class Puzzle {
       .map(({ edge }) => edge);
   }
 
-  snapshotPlacements(): readonly string[] {
-    return [...this.placedPieceIds];
+  orientationOf(pieceId: string): number {
+    return this.trayOrientations.get(pieceId) ?? 0;
   }
 
-  /** Restores a snapshot of known, unique pieces without replaying live challenge rules. */
-  restorePlacements(pieceIds: readonly string[]): boolean {
-    const restored = new Set(pieceIds);
-    if (restored.size !== pieceIds.length || pieceIds.some((id) => !this.piecesById.has(id))) return false;
+  turnPiece(pieceId: string): boolean {
+    if (!this.pieceRotation || !this.canDrag(pieceId)) return false;
+    this.trayOrientations.set(pieceId, (this.orientationOf(pieceId) + 1) % 4);
+    return true;
+  }
 
-    this.placedPieceIds.clear();
-    for (const id of restored) this.placedPieceIds.add(id);
+  snapshot(): PuzzleSnapshot {
+    return { placedPieceIds: [...this.placedPieceIds], trayOrientations: Object.fromEntries(this.trayOrientations) };
+  }
+
+  /** Validates the whole snapshot before restoring, without replaying live challenge rules. */
+  restore({ placedPieceIds, trayOrientations }: {
+    placedPieceIds: readonly string[];
+    trayOrientations: Readonly<Record<string, unknown>>;
+  }): boolean {
+    const placements = new Set(placedPieceIds);
+    if (placements.size !== placedPieceIds.length || placedPieceIds.some((id) => !this.piecesById.has(id))) return false;
+
+    const orientations = new Map<string, number>();
+    const expectedTurns = this.pieceRotation ? this.pieces.length - placements.size : 0;
+    const entries = Object.entries(trayOrientations);
+    if (entries.length !== expectedTurns) return false;
+    for (const [id, turns] of entries) {
+      if (!this.piecesById.has(id) || placements.has(id)
+        || typeof turns !== 'number' || !Number.isInteger(turns) || turns < 0 || turns > 3) return false;
+      orientations.set(id, turns);
+    }
+
+    this.placedPieceIds = placements;
+    this.trayOrientations = orientations;
     return true;
   }
 
@@ -124,12 +160,14 @@ export class Puzzle {
     if (!piece) throw new RangeError(`Unknown piece: ${pieceId}`);
     if (this.placedPieceIds.has(piece.id)) return 'already-placed';
     if (!this.canDrag(piece.id)) return 'blocked';
+    if (this.orientationOf(piece.id) !== 0) return 'wrong-orientation';
     if (!piece.acceptsDrop(position, this.snapTolerance)) return 'missed';
     if (challengeModes[this.challengeMode].requiresSeedConnection && !this.canJoinSeedGroup(piece)) {
       return 'disconnected-from-seed';
     }
 
     this.placedPieceIds.add(piece.id);
+    this.trayOrientations.delete(piece.id);
     return 'placed';
   }
 

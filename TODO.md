@@ -1,7 +1,7 @@
 # Live Jigsaw TODO
 
 - [x] Save puzzle progress so players can leave a partially completed puzzle and resume it later.
-- [ ] Add piece rotation option, when on pieces in the puzzle tray are randomly rotated. Tapping the piece rotates it in the tray.
+- [x] Add an optional Piece rotation setting with randomized tray orientations and tap-to-turn controls.
 - [ ] Add bigger puzzle size.
 - [ ] Add badges to puzzle selection cards for completing at different sizes and in different challenge modes.
 - [ ] Add unlockable effects that play when a piece is placed. Decide how players unlock them.

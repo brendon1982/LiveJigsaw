@@ -29,7 +29,23 @@ const migrations: readonly Migration[] = [
     progress: mapSaveEntries(document.progress, removeSetupSizeLabel),
     history: mapSaveEntries(document.history, (value) => Array.isArray(value) ? value.map(removeSetupSizeLabel) : value),
   }),
+  (document) => ({
+    ...document,
+    recentOptions: withRotationOff(document.recentOptions),
+    progress: mapSaveEntries(document.progress, (value) => isRecord(value)
+      ? { ...withRotationSetup(value), trayOrientations: {} } : value),
+    history: mapSaveEntries(document.history, (value) => Array.isArray(value)
+      ? value.map((entry) => isRecord(entry) ? withRotationSetup(entry) : entry) : value),
+  }),
 ];
+
+function withRotationOff(value: unknown): unknown {
+  return isRecord(value) ? { ...value, pieceRotation: false } : value;
+}
+
+function withRotationSetup(entry: DocumentFields): DocumentFields {
+  return { ...entry, setup: withRotationOff(entry.setup) };
+}
 
 function withStandardMode(value: unknown): unknown {
   return isRecord(value) ? { ...value, challengeMode: 'standard' } : value;

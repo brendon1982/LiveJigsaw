@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import type RexUIPlugin from 'phaser4-rex-plugins/templates/ui/ui-plugin.js';
 import { challengeModes } from '../domain/challengeModes';
+import type { PuzzleSnapshot } from '../domain/Puzzle';
 import { createPuzzle } from '../domain/puzzleSizes';
 import { gameSave } from '../persistence';
 import type { PuzzleSetup } from '../persistence/GameSave';
@@ -17,7 +18,7 @@ import { styleWithTheme } from './theme';
 export type PuzzleSelection = {
   source: PuzzleSource;
   setup: PuzzleSetup;
-  placedPieceIds?: readonly string[];
+  snapshot?: PuzzleSnapshot;
 };
 
 // Target length in screen pixels for the shorter side of a tray piece's base cell.
@@ -32,10 +33,10 @@ export class PlayPuzzleScene extends Phaser.Scene {
     super(PlayPuzzleScene.key);
   }
 
-  create({ source, setup, placedPieceIds = [] }: PuzzleSelection) {
-    const { size, connectorStyle, animationSpeed, seed, challengeMode } = setup;
-    const puzzle = createPuzzle(size, connectorStyle, seed, challengeMode);
-    if (!puzzle.restorePlacements(placedPieceIds)) throw new Error('Invalid puzzle placements');
+  create({ source, setup, snapshot }: PuzzleSelection) {
+    const { size, connectorStyle, animationSpeed, seed, challengeMode, pieceRotation } = setup;
+    const puzzle = createPuzzle(size, connectorStyle, seed, challengeMode, pieceRotation);
+    if (snapshot && !puzzle.restore(snapshot)) throw new Error('Invalid puzzle snapshot');
     const capture = new LivePuzzleCapture(this, source, {
       ...puzzle.board.size, seed: puzzle.seed, animationSpeed,
     });
@@ -91,6 +92,7 @@ export class PlayPuzzleScene extends Phaser.Scene {
       layoutHeader();
     };
     let completionAction: Phaser.Time.TimerEvent | undefined;
+    const saveProgress = () => gameSave.saveProgress(source.scene.key, { setup, ...puzzle.snapshot() });
     const onPlacement = () => {
       updateProgress();
       if (puzzle.isComplete) {
@@ -100,7 +102,7 @@ export class PlayPuzzleScene extends Phaser.Scene {
           backButton.setText('Choose puzzle').setData('primary', true).layout();
         });
       } else {
-        gameSave.saveProgress(source.scene.key, { setup, placedPieceIds: puzzle.snapshotPlacements() });
+        saveProgress();
       }
     };
     const { trayPosition = 'Auto', trayFractions } = gameSave.settings;
@@ -108,7 +110,7 @@ export class PlayPuzzleScene extends Phaser.Scene {
       position: trayPosition,
       fractions: trayFractions,
       onResize: (fractions) => gameSave.updateSettings({ trayFractions: fractions }),
-    }, onPlacement);
+    }, { onPlacement, onTurn: saveProgress });
     updateProgress();
     capture.start();
 

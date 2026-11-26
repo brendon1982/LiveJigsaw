@@ -124,9 +124,10 @@ function isChallengeMode(value: unknown): value is ChallengeMode {
 
 function readOptions(value: unknown): PuzzleOptions | undefined {
   if (!isRecord(value)) return;
-  const { pieceCount, connectorStyle, animationSpeed, challengeMode } = value;
-  if (isConnectorStyle(connectorStyle) && isAnimationSpeed(animationSpeed) && isChallengeMode(challengeMode)) {
-    return { pieceCount: isPositiveInteger(pieceCount) ? pieceCount : undefined, connectorStyle, animationSpeed, challengeMode };
+  const { pieceCount, connectorStyle, animationSpeed, challengeMode, pieceRotation } = value;
+  if (isConnectorStyle(connectorStyle) && isAnimationSpeed(animationSpeed) && isChallengeMode(challengeMode)
+    && typeof pieceRotation === 'boolean') {
+    return { pieceCount: isPositiveInteger(pieceCount) ? pieceCount : undefined, connectorStyle, animationSpeed, challengeMode, pieceRotation };
   }
 }
 
@@ -149,21 +150,23 @@ function readSize(value: unknown): PuzzleSize | undefined {
 function readSetup(value: unknown): PuzzleSetup | undefined {
   if (!isRecord(value)) return;
   const size = readSize(value.size);
-  const { seed, connectorStyle, animationSpeed, challengeMode } = value;
+  const { seed, connectorStyle, animationSpeed, challengeMode, pieceRotation } = value;
   if (!size || typeof seed !== 'number' || !Number.isInteger(seed) || seed < 0 || seed > 0xffffffff
-    || !isConnectorStyle(connectorStyle) || !isAnimationSpeed(animationSpeed) || !isChallengeMode(challengeMode)) return;
-  return { size, seed, connectorStyle, animationSpeed, challengeMode };
+    || !isConnectorStyle(connectorStyle) || !isAnimationSpeed(animationSpeed) || !isChallengeMode(challengeMode)
+    || typeof pieceRotation !== 'boolean') return;
+  return { size, seed, connectorStyle, animationSpeed, challengeMode, pieceRotation };
 }
 
 function readProgress(value: unknown): PuzzleProgress | undefined {
   if (!isRecord(value)) return;
   const setup = readSetup(value.setup);
-  const { placedPieceIds } = value;
-  if (!setup || !Array.isArray(placedPieceIds) || placedPieceIds.length === 0
+  const { placedPieceIds, trayOrientations } = value;
+  if (!setup || !isRecord(trayOrientations) || !Array.isArray(placedPieceIds)
+    || (!setup.pieceRotation && placedPieceIds.length === 0)
     || placedPieceIds.length >= getPieceCount(setup.size)
     || !placedPieceIds.every((id): id is string => typeof id === 'string')) return;
-  const puzzle = createPuzzle(setup.size, setup.connectorStyle, setup.seed, setup.challengeMode);
-  if (puzzle.restorePlacements(placedPieceIds)) return { setup, placedPieceIds };
+  const puzzle = createPuzzle(setup.size, setup.connectorStyle, setup.seed, setup.challengeMode, setup.pieceRotation);
+  if (puzzle.restore({ placedPieceIds, trayOrientations })) return { setup, ...puzzle.snapshot() };
 }
 
 function readCompletion(value: unknown): PuzzleCompletion | undefined {

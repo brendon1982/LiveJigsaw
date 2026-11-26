@@ -10,9 +10,10 @@ export function givenPuzzle({
   connectorStyle,
   seed,
   challengeMode,
+  pieceRotation,
 } = {}) {
   const board = new Board({ width: columns * cell.width, height: rows * cell.height }, columns, rows);
-  const puzzle = new Puzzle(board, snapTolerance, connectorStyle, seed, challengeMode);
+  const puzzle = new Puzzle(board, snapTolerance, connectorStyle, seed, challengeMode, pieceRotation);
 
   function pieceAt(column, row) {
     return puzzle.pieces[row * columns + column];

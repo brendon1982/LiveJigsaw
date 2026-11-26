@@ -34,9 +34,10 @@ export function createPuzzle(
   connectorStyle: ConnectorStyleId = 'classic',
   seed = 0,
   challengeMode: ChallengeMode = 'none',
+  pieceRotation = false,
 ): Puzzle {
   const board = new Board(size, size.columns, size.rows);
-  return new Puzzle(board, size.snapTolerance, connectorStyle, seed, challengeMode);
+  return new Puzzle(board, size.snapTolerance, connectorStyle, seed, challengeMode, pieceRotation);
 }
 
 export function captureScale(size: Size, maximum: Size, textureLimit: number): number {

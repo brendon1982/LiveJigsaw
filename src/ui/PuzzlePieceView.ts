@@ -8,6 +8,7 @@ export class PuzzlePieceView {
   readonly frame: Bounds;
   private readonly image: Phaser.GameObjects.Image;
   private readonly hitArea: Phaser.Geom.Polygon;
+  private readonly visibleBounds = new Phaser.Geom.Rectangle();
   private grayscale?: Phaser.Filters.ColorMatrix;
   private scale = 1;
 
@@ -55,15 +56,23 @@ export class PuzzlePieceView {
 
   contains(point: Point): boolean {
     const { x, y } = this.position;
-    return Phaser.Geom.Polygon.Contains(this.hitArea, (point.x - x) / this.scale, (point.y - y) / this.scale);
+    const dx = (point.x - x) / this.scale;
+    const dy = (point.y - y) / this.scale;
+    const cos = Math.cos(this.rotation);
+    const sin = Math.sin(this.rotation);
+    return Phaser.Geom.Polygon.Contains(this.hitArea, dx * cos + dy * sin, dy * cos - dx * sin);
   }
 
   intersects(bounds: Phaser.Geom.Rectangle): boolean {
-    const { x, y, displayWidth, displayHeight, originX, originY } = this.image;
-    const left = x - originX * displayWidth;
-    const top = y - originY * displayHeight;
-    return left < bounds.right && left + displayWidth > bounds.left
-      && top < bounds.bottom && top + displayHeight > bounds.top;
+    return Phaser.Geom.Intersects.RectangleToRectangle(this.image.getBounds(this.visibleBounds), bounds);
+  }
+
+  get rotation(): number {
+    return this.image.rotation;
+  }
+
+  setOrientation(quarterTurns: number) {
+    this.image.setAngle(quarterTurns * 90);
   }
 
   moveTo(x: number, y: number) {

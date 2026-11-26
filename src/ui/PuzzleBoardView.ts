@@ -17,7 +17,7 @@ import { SeedDropFeedback } from './SeedDropFeedback';
 type DropTrigger = 'release' | 'click';
 
 type Gesture = { pointerId: number } & (
-  | { kind: 'tray-touch'; entry: PuzzlePieceView; start: Point }
+  | { kind: 'tray-press'; entry: PuzzlePieceView; start: Point; canTap: boolean }
   | { kind: 'piece'; entry: PuzzlePieceView; offset: Point; dropOn: DropTrigger }
   | { kind: 'pan'; pointer: Phaser.Input.Pointer; previous: Point }
   | { kind: 'scroll'; previous: Point }
@@ -35,6 +35,12 @@ type TraySettings = {
   onResize: (fractions: TrayFractions) => void;
 };
 
+type PuzzleActions = {
+  onPlacement: () => void;
+  onTurn: () => void;
+};
+
+const tapSlop = 6;
 const pieceDragThreshold = 8;
 const pieceDragSlope = Math.tan(70 * Math.PI / 180);
 const trayScrollThreshold = 20;
@@ -85,15 +91,19 @@ export class PuzzleBoardView {
     capture: LivePuzzleCapture,
     trayPieceSize: number,
     traySettings: TraySettings,
-    private readonly onPlacement: () => void,
+    private readonly actions: PuzzleActions,
   ) {
     const placedPieces = puzzle.pieces.filter(({ id }) => puzzle.isPlaced(id));
-    this.pieces = puzzle.trayPieces.map((piece) => new PuzzlePieceView(scene, capture, piece));
+    this.pieces = puzzle.trayPieces.map((piece) => {
+      const entry = new PuzzlePieceView(scene, capture, piece);
+      entry.setOrientation(puzzle.orientationOf(piece.id));
+      return entry;
+    });
     this.updateTrayAvailability();
 
     this.trayPosition = traySettings.position;
     this.side = resolveTraySide(this.trayPosition, scene.scale.gameSize);
-    this.tray = new PieceTray(scene, this.pieces, puzzle.board.cellSize, trayPieceSize, trayScrollAxis(this.side));
+    this.tray = new PieceTray(scene, this.pieces, puzzle.board.cellSize, trayPieceSize, trayScrollAxis(this.side), puzzle.pieceRotation);
     this.board = new PannableBoard(scene, puzzle.board.size, capture, puzzle.hidesGuide);
     this.board.addPieces(placedPieces);
     this.fitButton = makeIconButton(scene, 'Fit board', drawFitBoardIcon, (pointer) => {
@@ -262,6 +272,7 @@ export class PuzzleBoardView {
     }
     const current = this.gesture;
     if (current) {
+      if (current.kind === 'tray-press' && current.pointerId !== pointer.id) current.canTap = false;
       if (current.kind === 'pan' && current.pointer.wasTouch && pointer.wasTouch
         && pointer.id !== current.pointerId && this.board.contains(pointer)) {
         this.pinch = { fingers: [current.pointer, pointer], ...measurePinch(current.pointer, pointer) };
@@ -271,8 +282,10 @@ export class PuzzleBoardView {
     const entry = this.tray.pieceAt(pointer);
     const pointerId = pointer.id;
     if (entry && this.puzzle.canDrag(entry.piece.id)) {
-      if (pointer.wasTouch) {
-        this.gesture = { kind: 'tray-touch', pointerId, entry, start: { x: pointer.x, y: pointer.y } };
+      if (pointer.wasTouch || this.puzzle.pieceRotation) {
+        this.gesture = {
+          kind: 'tray-press', pointerId, entry, start: { x: pointer.x, y: pointer.y }, canTap: this.puzzle.pieceRotation,
+        };
       } else {
         this.startPieceDrag(pointer, entry, pointer);
       }
@@ -308,7 +321,7 @@ export class PuzzleBoardView {
       context.shadowColor = '#10171a';
       context.shadowBlur = 5 * effectImageResolution;
       context.fill();
-    }).setAlpha(0.3);
+    }).setAlpha(0.3).setRotation(entry.rotation);
     this.floatingPieces.add(this.liftShadow);
     entry.addTo(this.floatingPieces);
     this.moveDraggedPiece(entry, pointer, offset);
@@ -329,6 +342,7 @@ export class PuzzleBoardView {
   private readonly handleWheel = (pointer: Phaser.Input.Pointer, _over: Phaser.GameObjects.GameObject[], dx: number, dy: number) => {
     if (this.completionStage === 'revealing') return;
     if (this.trayBounds.contains(pointer.x, pointer.y)) {
+      if (this.gesture?.kind === 'tray-press') this.gesture.canTap = false;
       const delta = trayScrollAxis(this.side) === 'x' ? dx || dy : dy;
       this.tray.scrollBy(-0.75 * delta);
       return;
@@ -363,19 +377,8 @@ export class PuzzleBoardView {
     }
     const gesture = this.gesture;
     if (!gesture || gesture.pointerId !== pointer.id) return;
-    if (gesture.kind === 'tray-touch') {
-      const dx = pointer.x - gesture.start.x;
-      const dy = pointer.y - gesture.start.y;
-      const verticalTray = trayScrollAxis(this.side) === 'y';
-      const alongTray = verticalTray ? dy : dx;
-      const towardBoard = (verticalTray ? dx : dy) * boardDirection[this.side];
-      const distance = Math.hypot(dx, dy);
-      if (towardBoard > 0 && Math.abs(alongTray) <= towardBoard * pieceDragSlope) {
-        if (distance >= pieceDragThreshold) this.startPieceDrag(pointer, gesture.entry, gesture.start);
-      } else if (Math.abs(alongTray) >= trayScrollThreshold) {
-        this.gesture = { kind: 'scroll', pointerId: pointer.id, previous: { x: pointer.x, y: pointer.y } };
-        this.tray.scrollBy(alongTray);
-      }
+    if (gesture.kind === 'tray-press') {
+      this.moveTrayPress(pointer, gesture);
     } else if (gesture.kind === 'piece') {
       this.moveDraggedPiece(gesture.entry, pointer, gesture.offset);
     } else {
@@ -391,6 +394,28 @@ export class PuzzleBoardView {
     }
   };
 
+  private moveTrayPress(pointer: Phaser.Input.Pointer, press: Extract<Gesture, { kind: 'tray-press' }>) {
+    const dx = pointer.x - press.start.x;
+    const dy = pointer.y - press.start.y;
+    const distance = Math.hypot(dx, dy);
+    if (distance >= tapSlop) press.canTap = false;
+
+    if (!pointer.wasTouch) {
+      if (distance >= pieceDragThreshold) this.startPieceDrag(pointer, press.entry, press.start);
+      return;
+    }
+
+    const verticalTray = trayScrollAxis(this.side) === 'y';
+    const alongTray = verticalTray ? dy : dx;
+    const towardBoard = (verticalTray ? dx : dy) * boardDirection[this.side];
+    if (towardBoard > 0 && Math.abs(alongTray) <= towardBoard * pieceDragSlope) {
+      if (distance >= pieceDragThreshold) this.startPieceDrag(pointer, press.entry, press.start);
+    } else if (Math.abs(alongTray) >= trayScrollThreshold) {
+      this.gesture = { kind: 'scroll', pointerId: pointer.id, previous: { x: pointer.x, y: pointer.y } };
+      this.tray.scrollBy(alongTray);
+    }
+  }
+
   private readonly endGesture = (pointer: Phaser.Input.Pointer) => {
     if (this.ignoresRelease(pointer)) return;
     if (pointer.wasCanceled) {
@@ -404,13 +429,26 @@ export class PuzzleBoardView {
   };
 
   private finishGesture(pointer: Phaser.Input.Pointer, gesture: Gesture) {
-    if (gesture.kind !== 'tray-touch') this.moveGesture(pointer);
+    if (gesture.kind !== 'tray-press') this.moveGesture(pointer);
     this.gesture = undefined;
     this.scene.input.setDefaultCursor('default');
+    if (gesture.kind === 'tray-press') {
+      if (gesture.canTap && Math.hypot(pointer.x - gesture.start.x, pointer.y - gesture.start.y) < tapSlop
+        && this.tray.pieceAt(pointer) === gesture.entry) this.turnTrayPiece(gesture.entry);
+      return;
+    }
     if (gesture.kind !== 'piece') return;
 
     this.clearLiftShadow();
     this.dropPiece(gesture.entry, pointer);
+  }
+
+  private turnTrayPiece(entry: PuzzlePieceView) {
+    const { id } = entry.piece;
+    if (!this.puzzle.turnPiece(id)) return;
+    entry.setOrientation(this.puzzle.orientationOf(id));
+    this.tray.refreshVisibility(entry);
+    this.actions.onTurn();
   }
 
   private dropPiece(entry: PuzzlePieceView, pointer: Point) {
@@ -430,7 +468,7 @@ export class PuzzleBoardView {
     entry.setVisible(false);
     this.tray.remove(entry, this.trayBounds);
     this.updateTrayAvailability();
-    this.onPlacement();
+    this.actions.onPlacement();
     this.placementEffects.play(piece, this.puzzle.joinedSeams(piece));
   }
 

@@ -80,7 +80,10 @@ export class SelectPuzzleScene extends Phaser.Scene {
       openDialog();
       showResumePuzzle(this, source, progress, (choice) => {
         closeDialog();
-        if (choice === 'resume') play({ source, ...progress });
+        if (choice === 'resume') {
+          const { setup, ...snapshot } = progress;
+          play({ source, setup, snapshot });
+        }
         if (choice === 'reset') openSetup(source);
       });
     };

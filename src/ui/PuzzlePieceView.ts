@@ -80,7 +80,11 @@ export class PuzzlePieceView {
   }
 
   intersects(bounds: Phaser.Geom.Rectangle): boolean {
-    return Phaser.Geom.Intersects.RectangleToRectangle(this.image.getBounds(this.visibleBounds), bounds);
+    return Phaser.Geom.Intersects.RectangleToRectangle(this.bounds, bounds);
+  }
+
+  get bounds(): Phaser.Geom.Rectangle {
+    return this.image.getBounds(this.visibleBounds);
   }
 
   get rotation(): number {
@@ -100,8 +104,11 @@ export class PuzzlePieceView {
     this.image.setScale(scale);
   }
 
-  addTo(layer: Phaser.GameObjects.Layer) {
-    layer.add(this.image);
+  addTo(layer: Phaser.GameObjects.Layer, index?: number) {
+    if (index === undefined) {
+      layer.add(this.image);
+      layer.bringToTop(this.image);
+    } else layer.addAt(this.image, index);
   }
 
   setVisible(visible: boolean) {

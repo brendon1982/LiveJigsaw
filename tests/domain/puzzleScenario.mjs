@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { Board } from '../../src/domain/Board.ts';
 import { Puzzle } from '../../src/domain/Puzzle.ts';
+import { PuzzlePlay } from '../../src/domain/PuzzlePlay.ts';
 
 export function givenPuzzle({
   columns = 2,
@@ -14,6 +15,7 @@ export function givenPuzzle({
 } = {}) {
   const board = new Board({ width: columns * cell.width, height: rows * cell.height }, columns, rows);
   const puzzle = new Puzzle(board, snapTolerance, connectorStyle, seed, challengeMode, pieceRotation);
+  let play;
 
   function pieceAt(column, row) {
     return puzzle.pieces[row * columns + column];
@@ -22,6 +24,9 @@ export function givenPuzzle({
   return {
     board,
     puzzle,
+    get play() {
+      return play ??= new PuzzlePlay(puzzle);
+    },
     pieceAt,
     whenTrayPiece(index) {
       const piece = puzzle.trayPieces[index];

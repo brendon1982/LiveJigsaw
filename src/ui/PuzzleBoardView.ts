@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
-import type { Point } from '../domain/geometry';
-import type { Puzzle } from '../domain/Puzzle';
+import { Bounds, type Point } from '../domain/geometry';
+import type { MissedDropMode, PuzzlePlay } from '../domain/PuzzlePlay';
 import type { TrayFractions, TrayPosition } from '../persistence/GameSave';
 import type { LivePuzzleCapture } from '../rendering/LivePuzzleCapture';
 import { makeIconButton, type UIScene } from './button';
@@ -16,10 +16,15 @@ import { SeedDropFeedback } from './SeedDropFeedback';
 
 type DropTrigger = 'release' | 'click';
 
-type Gesture = { pointerId: number } & (
-  | { kind: 'tray-press'; entry: PuzzlePieceView; start: Point; canTap: boolean }
-  | { kind: 'piece'; entry: PuzzlePieceView; offset: Point; dropOn: DropTrigger }
-  | { kind: 'pan'; pointer: Phaser.Input.Pointer; previous: Point }
+type PieceSource = 'tray' | 'board';
+type PieceContact = { entry: PuzzlePieceView; source: PieceSource };
+type LiftedMember = { entry: PuzzlePieceView; offset: Point };
+
+type Gesture = { pointer: Phaser.Input.Pointer } & (
+  | ({ kind: 'piece-press'; start: Point; canTap: boolean } & PieceContact)
+  | { kind: 'break-press'; entry: PuzzlePieceView; start: Point; canTap: boolean }
+  | ({ kind: 'piece'; offset: Point; members: LiftedMember[]; dropOn: DropTrigger } & PieceContact)
+  | { kind: 'pan'; previous: Point }
   | { kind: 'scroll'; previous: Point }
 );
 
@@ -37,7 +42,7 @@ type TraySettings = {
 
 type PuzzleActions = {
   onPlacement: () => void;
-  onTurn: () => void;
+  onWorkspaceChange: () => void;
 };
 
 const tapSlop = 6;
@@ -74,17 +79,30 @@ function drawNativeSizeIcon(art: Phaser.GameObjects.Graphics, color: number) {
   art.strokePath();
 }
 
+function drawBreakPieceIcon(art: Phaser.GameObjects.Graphics, color: number) {
+  art.clear().lineStyle(2, color).beginPath();
+  art.moveTo(-11, 7).lineTo(-11, -7).lineTo(-2, -7).lineTo(0, -3)
+    .lineTo(-4, 2).lineTo(-2, 7).closePath();
+  art.moveTo(3, -7).lineTo(11, -7).lineTo(11, 7).lineTo(3, 7)
+    .lineTo(1, 2).lineTo(5, -3).closePath();
+  art.strokePath();
+}
+
 export class PuzzleBoardView {
   private readonly tray: PieceTray;
   private readonly board: PannableBoard;
   private readonly fitButton: ReturnType<typeof makeIconButton>;
   private readonly nativeSizeButton: ReturnType<typeof makeIconButton>;
+  private readonly breakButton: ReturnType<typeof makeIconButton>;
+  private breakArmed = false;
   private readonly placementEffects: PlacementEffects;
   private seedDropFeedback?: SeedDropFeedback;
   private readonly floatingPieces: Phaser.GameObjects.Layer;
   private liftShadow?: Phaser.GameObjects.Image;
   private rejectedPiece?: PuzzlePieceView;
-  private readonly pieces: PuzzlePieceView[];
+  private readonly pieces = new Map<string, PuzzlePieceView>();
+  private parkedPieces: PuzzlePieceView[] = [];
+  private missedDropMode: MissedDropMode = 'return-to-tray';
   private trayBounds = new Phaser.Geom.Rectangle();
   private trayPosition: TrayPosition;
   private side: TraySide;
@@ -97,40 +115,50 @@ export class PuzzleBoardView {
 
   constructor(
     private readonly scene: UIScene,
-    private readonly puzzle: Puzzle,
+    private readonly play: PuzzlePlay,
     capture: LivePuzzleCapture,
     trayPieceArea: number,
     traySettings: TraySettings,
     private readonly actions: PuzzleActions,
   ) {
+    const { puzzle } = play;
     const placedPieces = puzzle.pieces.filter(({ id }) => puzzle.isPlaced(id));
-    this.pieces = puzzle.trayPieces.map((piece) => {
+    for (const piece of puzzle.pieces) {
+      if (puzzle.isPlaced(piece.id)) continue;
       const entry = new PuzzlePieceView(scene, capture, piece);
-      entry.setOrientation(puzzle.orientationOf(piece.id));
-      return entry;
-    });
-    this.updateTrayAvailability();
+      entry.setOrientation(play.orientationOf(piece.id));
+      this.pieces.set(piece.id, entry);
+    }
+    const trayEntries = this.trayEntries();
 
     this.trayPosition = traySettings.position;
     this.side = resolveTraySide(this.trayPosition, scene.scale.gameSize);
-    this.tray = new PieceTray(scene, this.pieces, puzzle.board.cellSize, trayPieceArea, trayScrollAxis(this.side), puzzle.pieceRotation);
+    this.tray = new PieceTray(scene, trayEntries, [...this.pieces.values()], puzzle.board.cellSize,
+      trayPieceArea, trayScrollAxis(this.side), puzzle.pieceRotation);
     this.board = new PannableBoard(scene, puzzle.board.size, capture, puzzle.hidesGuide);
     this.board.addPieces(placedPieces);
+    this.syncParkedPieces();
     this.fitButton = makeIconButton(scene, 'Fit board', drawFitBoardIcon, (pointer) => {
       if (pointer.wasCanceled) return;
-      this.cancelInteraction();
+      this.cancelActiveGesture();
       this.fitBoard();
     }).setVisible(false);
     this.nativeSizeButton = makeIconButton(scene, 'Native size (1×)', drawNativeSizeIcon, (pointer) => {
       if (pointer.wasCanceled) return;
-      this.cancelInteraction();
+      this.cancelActiveGesture();
       this.board.showNativeSize();
       this.updateZoomButtons();
     }).setVisible(false);
+    this.breakButton = makeIconButton(scene, 'Break piece off', drawBreakPieceIcon, (pointer) => {
+      if (pointer.wasCanceled || (!pointer.wasTouch && pointer.button !== 0) || this.pinch) return;
+      this.cancelActiveGesture();
+      this.setBreakArmed(!this.breakArmed);
+    }, { dragThreshold: tapSlop, clickInterval: 0 }).setVisible(false);
     this.placementEffects = new PlacementEffects(scene, this.board.layer);
     this.floatingPieces = scene.add.layer();
     this.fitButton.addToLayer(this.floatingPieces);
     this.nativeSizeButton.addToLayer(this.floatingPieces);
+    this.breakButton.addToLayer(this.floatingPieces);
     const dragCamera = scene.cameras.add().setName('Board overlay');
 
     // The panel cameras clip their own layers. The overlay draws above both panels.
@@ -194,6 +222,8 @@ export class PuzzleBoardView {
     scene.input.on('pointerup', this.endGesture);
     scene.input.on('pointerupoutside', this.cancelGesture);
     scene.input.on(Phaser.Input.Events.POINTER_WHEEL, this.handleWheel);
+    scene.input.keyboard?.on('keydown-ESC', this.cancelInteraction, this);
+    scene.game.events.on(Phaser.Core.Events.BLUR, this.cancelInteraction, this);
   }
 
   destroy() {
@@ -203,6 +233,8 @@ export class PuzzleBoardView {
     this.scene.input.off('pointerup', this.endGesture);
     this.scene.input.off('pointerupoutside', this.cancelGesture);
     this.scene.input.off(Phaser.Input.Events.POINTER_WHEEL, this.handleWheel);
+    this.scene.input.keyboard?.off('keydown-ESC', this.cancelInteraction, this);
+    this.scene.game.events.off(Phaser.Core.Events.BLUR, this.cancelInteraction, this);
     this.scene.input.setDefaultCursor('default');
     this.traySlide?.remove();
     this.tray.destroy();
@@ -210,7 +242,7 @@ export class PuzzleBoardView {
     this.seedDropFeedback?.destroy();
     this.placementEffects.destroy();
     this.board.destroy();
-    for (const { mask } of this.pieces) this.scene.textures.remove(mask);
+    for (const { mask } of this.pieces.values()) this.scene.textures.remove(mask);
   }
 
   setTrayPosition(position: TrayPosition) {
@@ -219,8 +251,13 @@ export class PuzzleBoardView {
     this.resize();
   }
 
+  setMissedDropMode(mode: MissedDropMode) {
+    this.missedDropMode = mode;
+  }
+
   showCompletion() {
     this.completionStage = 'revealing';
+    this.updateBreakButton();
     this.updateZoomButtons();
     this.board.revealFinishedArtwork();
     this.tray.hide();
@@ -244,12 +281,31 @@ export class PuzzleBoardView {
   }
 
   cancelInteraction() {
-    if (this.gesture?.kind === 'piece') this.tray.returnPiece(this.gesture.entry);
+    this.cancelActiveGesture();
+    this.setBreakArmed(false);
+  }
+
+  private cancelActiveGesture() {
+    const gesture = this.gesture;
+    if (gesture?.kind === 'piece') this.restoreLift(gesture);
     this.returnRejectedPiece();
     this.clearLiftShadow();
     this.gesture = undefined;
     this.pinch = undefined;
     this.scene.input.setDefaultCursor('default');
+  }
+
+  private setBreakArmed(armed: boolean) {
+    this.breakArmed = armed;
+    this.breakButton.setData('primary', armed);
+  }
+
+  private updateBreakButton() {
+    const available = this.completionStage === 'playing' && this.play.parkedGroups.some((group) => group.memberIds.length > 1);
+    if (!available) this.setBreakArmed(false);
+    if (this.breakButton.visible !== available) this.breakButton.setVisible(available);
+    const { x, y } = this.board.camera;
+    this.breakButton.setPosition(x + headerControlGap, y + headerControlGap);
   }
 
   private fitBoard() {
@@ -276,23 +332,24 @@ export class PuzzleBoardView {
 
   private layoutBoard(bounds: Phaser.Geom.Rectangle) {
     this.board.layout(bounds);
+    this.updateBreakButton();
     this.updateZoomButtons();
   }
 
   private readonly startGesture = (pointer: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]) => {
     if (this.completionStage === 'revealing' || this.pinch) return;
-    if (over.includes(this.fitButton) || over.includes(this.nativeSizeButton)) return;
+    if (over.includes(this.fitButton) || over.includes(this.nativeSizeButton) || over.includes(this.breakButton)) return;
     if (!pointer.wasTouch) {
       const gesture = this.gesture;
       const rightClick = pointer.button === 2;
       const leftClick = pointer.button === 0;
-      if (gesture?.kind === 'piece' && gesture.pointerId === pointer.id
+      if (gesture?.kind === 'piece' && gesture.pointer === pointer
         && (rightClick || (leftClick && gesture.dropOn === 'click'))) {
         this.finishGesture(pointer, gesture);
         return;
       }
       if (rightClick) {
-        this.pickUpOnRightClick(pointer);
+        if (!this.breakArmed) this.pickUpOnRightClick(pointer);
         return;
       }
     }
@@ -302,46 +359,74 @@ export class PuzzleBoardView {
     }
     const current = this.gesture;
     if (current) {
-      if (current.kind === 'tray-press' && current.pointerId !== pointer.id) current.canTap = false;
-      if (current.kind === 'pan' && current.pointer.wasTouch && pointer.wasTouch
-        && pointer.id !== current.pointerId && this.board.contains(pointer)) {
+      if ((current.kind === 'piece-press' || current.kind === 'break-press') && current.pointer !== pointer) {
+        current.canTap = false;
+      }
+      if (current.pointer !== pointer && current.pointer.wasTouch && pointer.wasTouch
+        && current.pointer.isDown && this.board.contains(current.pointer) && this.board.contains(pointer)) {
+        this.cancelActiveGesture();
         this.pinch = { fingers: [current.pointer, pointer], ...measurePinch(current.pointer, pointer) };
       }
       return;
     }
-    const entry = this.tray.pieceAt(pointer);
-    const pointerId = pointer.id;
-    if (entry && this.puzzle.canDrag(entry.piece.id)) {
-      if (pointer.wasTouch || this.puzzle.pieceRotation) {
+    const contact = this.pieceContactAt(pointer);
+    if (this.breakArmed && contact?.source === 'board') {
+      this.gesture = { kind: 'break-press', pointer, entry: contact.entry, start: { x: pointer.x, y: pointer.y }, canTap: true };
+      return;
+    }
+    if (!this.breakArmed && contact && this.play.puzzle.canDrag(contact.entry.piece.id)) {
+      if (contact.source === 'board' || pointer.wasTouch || this.play.puzzle.pieceRotation) {
         this.gesture = {
-          kind: 'tray-press', pointerId, entry, start: { x: pointer.x, y: pointer.y }, canTap: this.puzzle.pieceRotation,
+          kind: 'piece-press', pointer, ...contact, start: { x: pointer.x, y: pointer.y },
+          canTap: this.play.puzzle.pieceRotation,
         };
       } else {
-        this.startPieceDrag(pointer, entry, pointer);
+        this.startPieceDrag(pointer, contact, pointer);
       }
     } else if (this.board.contains(pointer)) {
-      this.gesture = { kind: 'pan', pointerId, pointer, previous: { x: pointer.x, y: pointer.y } };
+      this.gesture = { kind: 'pan', pointer, previous: { x: pointer.x, y: pointer.y } };
     } else if (this.tray.canScrollFrom(pointer)) {
-      this.gesture = { kind: 'scroll', pointerId, previous: { x: pointer.x, y: pointer.y } };
+      this.gesture = { kind: 'scroll', pointer, previous: { x: pointer.x, y: pointer.y } };
     }
     if (this.gesture && !pointer.wasTouch) this.scene.input.setDefaultCursor('grabbing');
   };
 
   private pickUpOnRightClick(pointer: Phaser.Input.Pointer) {
     if (this.gesture) return;
-    const entry = this.tray.pieceAt(pointer);
-    if (!entry || !this.puzzle.canDrag(entry.piece.id)) return;
-    this.startPieceDrag(pointer, entry, pointer, 'click');
+    const contact = this.pieceContactAt(pointer);
+    if (!contact || !this.play.puzzle.canDrag(contact.entry.piece.id)) return;
+    this.startPieceDrag(pointer, contact, pointer, 'click');
     this.scene.input.setDefaultCursor('grabbing');
   }
 
-  private startPieceDrag(pointer: Phaser.Input.Pointer, entry: PuzzlePieceView, grab: Point, dropOn: DropTrigger = 'release') {
+  private pieceContactAt(point: Point): PieceContact | undefined {
+    if (this.board.contains(point)) {
+      const local = this.board.toLocal(point);
+      for (let index = this.parkedPieces.length - 1; index >= 0; index--) {
+        const entry = this.parkedPieces[index];
+        if (entry.contains(local)) return { entry, source: 'board' };
+      }
+    } else {
+      const entry = this.tray.pieceAt(point);
+      if (entry) return { entry, source: 'tray' };
+    }
+  }
+
+  private startPieceDrag(pointer: Phaser.Input.Pointer, contact: PieceContact, grab: Point, dropOn: DropTrigger = 'release') {
     this.returnRejectedPiece();
-    const scale = this.board.zoom / this.tray.pieceScale;
-    const offset = { x: (entry.position.x - grab.x) * scale, y: (entry.position.y - grab.y) * scale };
-    this.gesture = { kind: 'piece', pointerId: pointer.id, entry, offset, dropOn };
-    this.tray.lift(entry);
-    entry.setScale(this.board.zoom);
+    const { entry, source } = contact;
+    const center = entry.position;
+    const hand = source === 'board' ? this.board.toLocal(grab) : grab;
+    const scale = source === 'board' ? 1 : this.tray.pieceScale;
+    const offset = { x: (center.x - hand.x) / scale, y: (center.y - hand.y) / scale };
+    const group = this.play.groupOf(entry.piece.id);
+    const members = group ? group.memberIds.map((id) => {
+      const member = this.pieces.get(id)!;
+      return { entry: member, offset: { x: member.position.x - center.x, y: member.position.y - center.y } };
+    }) : [{ entry, offset: { x: 0, y: 0 } }];
+    const lifted = { kind: 'piece', pointer, entry, source, offset, members, dropOn } as const;
+    this.gesture = lifted;
+    if (source === 'tray') this.tray.lift(entry);
     const { target, outline } = entry.piece;
     this.liftShadow = drawEffectImage(this.scene, outline.frame, 10, target, (context) => {
       context.beginPath();
@@ -353,15 +438,29 @@ export class PuzzleBoardView {
       context.fill();
     }).setAlpha(0.3).setRotation(entry.rotation);
     this.floatingPieces.add(this.liftShadow);
-    entry.addTo(this.floatingPieces);
-    this.moveDraggedPiece(entry, pointer, offset);
+    for (const member of members) member.entry.addTo(this.floatingPieces);
+    this.moveDraggedPiece(pointer, lifted);
   }
 
-  private moveDraggedPiece(entry: PuzzlePieceView, pointer: Point, offset: Point) {
-    const x = pointer.x + offset.x;
-    const y = pointer.y + offset.y;
-    entry.moveTo(x, y);
-    this.liftShadow?.setPosition(x + 2, y + 4).setScale(this.board.zoom / effectImageResolution);
+  private moveDraggedPiece(pointer: Point, gesture: Extract<Gesture, { kind: 'piece' }>) {
+    const center = this.dropCenter(pointer, gesture.offset);
+    for (const { entry, offset } of gesture.members) {
+      const screen = this.board.toScreen({ x: center.x + offset.x, y: center.y + offset.y });
+      entry.setScale(this.board.zoom);
+      entry.moveTo(screen.x, screen.y);
+    }
+    const screen = this.board.toScreen(center);
+    this.liftShadow?.setPosition(screen.x + 2, screen.y + 4).setScale(this.board.zoom / effectImageResolution);
+  }
+
+  private dropCenter(pointer: Point, offset: Point): Point {
+    const local = this.board.toLocal(pointer);
+    return { x: local.x + offset.x, y: local.y + offset.y };
+  }
+
+  private restoreLift({ entry, source }: PieceContact) {
+    if (source === 'tray') this.tray.returnPiece(entry);
+    else this.syncParkedPieces();
   }
 
   private clearLiftShadow() {
@@ -372,7 +471,7 @@ export class PuzzleBoardView {
   private readonly handleWheel = (pointer: Phaser.Input.Pointer, _over: Phaser.GameObjects.GameObject[], dx: number, dy: number) => {
     if (this.completionStage === 'revealing') return;
     if (this.trayBounds.contains(pointer.x, pointer.y)) {
-      if (this.gesture?.kind === 'tray-press') this.gesture.canTap = false;
+      if (this.gesture?.kind === 'piece-press') this.gesture.canTap = false;
       const delta = trayScrollAxis(this.side) === 'x' ? dx || dy : dy;
       this.tray.scrollBy(-0.75 * delta);
       return;
@@ -381,17 +480,11 @@ export class PuzzleBoardView {
     const { deltaMode } = pointer.event as WheelEvent;
     const pixelsPerUnit = deltaMode === WheelEvent.DOM_DELTA_PAGE ? this.board.camera.height
       : deltaMode === WheelEvent.DOM_DELTA_LINE ? 16 : 1;
-    const previousZoom = this.board.zoom;
     this.board.zoomAt(pointer, 1.5 ** (-dy * pixelsPerUnit / 200));
     this.updateZoomButtons();
 
     const gesture = this.gesture;
-    if (gesture?.kind === 'piece' && gesture.pointerId === pointer.id) {
-      gesture.entry.setScale(this.board.zoom);
-      const scale = this.board.zoom / previousZoom;
-      gesture.offset = { x: gesture.offset.x * scale, y: gesture.offset.y * scale };
-      this.moveGesture(pointer);
-    }
+    if (gesture?.kind === 'piece' && gesture.pointer === pointer) this.moveDraggedPiece(pointer, gesture);
   };
 
   private readonly moveGesture = (pointer: Phaser.Input.Pointer) => {
@@ -406,11 +499,13 @@ export class PuzzleBoardView {
       return;
     }
     const gesture = this.gesture;
-    if (!gesture || gesture.pointerId !== pointer.id) return;
-    if (gesture.kind === 'tray-press') {
-      this.moveTrayPress(pointer, gesture);
+    if (!gesture || gesture.pointer !== pointer) return;
+    if (gesture.kind === 'piece-press') {
+      this.movePiecePress(pointer, gesture);
+    } else if (gesture.kind === 'break-press') {
+      if (Math.hypot(pointer.x - gesture.start.x, pointer.y - gesture.start.y) >= tapSlop) gesture.canTap = false;
     } else if (gesture.kind === 'piece') {
-      this.moveDraggedPiece(gesture.entry, pointer, gesture.offset);
+      this.moveDraggedPiece(pointer, gesture);
     } else {
       const dx = pointer.x - gesture.previous.x;
       const dy = pointer.y - gesture.previous.y;
@@ -424,14 +519,14 @@ export class PuzzleBoardView {
     }
   };
 
-  private moveTrayPress(pointer: Phaser.Input.Pointer, press: Extract<Gesture, { kind: 'tray-press' }>) {
+  private movePiecePress(pointer: Phaser.Input.Pointer, press: Extract<Gesture, { kind: 'piece-press' }>) {
     const dx = pointer.x - press.start.x;
     const dy = pointer.y - press.start.y;
     const distance = Math.hypot(dx, dy);
     if (distance >= tapSlop) press.canTap = false;
 
-    if (!pointer.wasTouch) {
-      if (distance >= pieceDragThreshold) this.startPieceDrag(pointer, press.entry, press.start);
+    if (press.source === 'board' || !pointer.wasTouch) {
+      if (distance >= pieceDragThreshold) this.startPieceDrag(pointer, press, press.start);
       return;
     }
 
@@ -439,75 +534,108 @@ export class PuzzleBoardView {
     const alongTray = verticalTray ? dy : dx;
     const towardBoard = (verticalTray ? dx : dy) * boardDirection[this.side];
     if (towardBoard > 0 && Math.abs(alongTray) <= towardBoard * pieceDragSlope) {
-      if (distance >= pieceDragThreshold) this.startPieceDrag(pointer, press.entry, press.start);
+      if (distance >= pieceDragThreshold) this.startPieceDrag(pointer, press, press.start);
     } else if (Math.abs(alongTray) >= trayScrollThreshold) {
-      this.gesture = { kind: 'scroll', pointerId: pointer.id, previous: { x: pointer.x, y: pointer.y } };
+      this.gesture = { kind: 'scroll', pointer, previous: { x: pointer.x, y: pointer.y } };
       this.tray.scrollBy(alongTray);
     }
   }
 
-  private readonly endGesture = (pointer: Phaser.Input.Pointer) => {
-    if (this.ignoresRelease(pointer)) return;
+  private readonly endGesture = (pointer: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]) => {
     if (pointer.wasCanceled) {
       this.cancelGesture(pointer);
       return;
     }
+    if (this.ignoresRelease(pointer)) return;
     if (this.endPinch(pointer)) return;
     const gesture = this.gesture;
-    if (!gesture || gesture.pointerId !== pointer.id) return;
+    if (!gesture || gesture.pointer !== pointer) return;
+    if (gesture.kind === 'break-press' && over.length) {
+      this.cancelInteraction();
+      return;
+    }
     this.finishGesture(pointer, gesture);
   };
 
   private finishGesture(pointer: Phaser.Input.Pointer, gesture: Gesture) {
-    if (gesture.kind !== 'tray-press') this.moveGesture(pointer);
+    if (gesture.kind === 'pan' || gesture.kind === 'scroll') this.moveGesture(pointer);
     this.gesture = undefined;
     this.scene.input.setDefaultCursor('default');
-    if (gesture.kind === 'tray-press') {
-      if (gesture.canTap && Math.hypot(pointer.x - gesture.start.x, pointer.y - gesture.start.y) < tapSlop
-        && this.tray.pieceAt(pointer) === gesture.entry) this.turnTrayPiece(gesture.entry);
+    if (gesture.kind === 'piece-press' || gesture.kind === 'break-press') {
+      const tapped = gesture.canTap && Math.hypot(pointer.x - gesture.start.x, pointer.y - gesture.start.y) < tapSlop
+        && this.pieceContactAt(pointer)?.entry === gesture.entry;
+      if (gesture.kind === 'break-press') {
+        if (tapped) this.breakOff(gesture.entry);
+        else this.setBreakArmed(false);
+      } else if (tapped) this.turnPiece(gesture);
       return;
     }
     if (gesture.kind !== 'piece') return;
 
     this.clearLiftShadow();
-    this.dropPiece(gesture.entry, pointer);
+    this.dropPiece(pointer, gesture);
   }
 
-  private turnTrayPiece(entry: PuzzlePieceView) {
+  private breakOff(entry: PuzzlePieceView) {
+    if (!this.play.breakOff(entry.piece.id)) return;
+    this.setBreakArmed(false);
+    this.syncParkedPieces();
+    this.updateBreakButton();
+    this.actions.onWorkspaceChange();
+  }
+
+  private turnPiece({ entry, source }: PieceContact) {
     const { id } = entry.piece;
-    if (!this.puzzle.turnPiece(id)) return;
-    entry.setOrientation(this.puzzle.orientationOf(id));
-    this.tray.refreshVisibility(entry);
-    this.actions.onTurn();
+    if (!this.play.turnPiece(id)) return;
+    if (source === 'board') this.syncParkedPieces();
+    else {
+      entry.setOrientation(this.play.orientationOf(id));
+      this.tray.refreshVisibility(entry);
+    }
+    this.updateZoomButtons();
+    this.actions.onWorkspaceChange();
   }
 
-  private dropPiece(entry: PuzzlePieceView, pointer: Point) {
-    const { piece } = entry;
-    const result = this.board.contains(pointer)
-      ? this.puzzle.drop(piece.id, this.board.toLocal(entry.position)) : 'missed';
-    if (result === 'disconnected-from-seed') {
-      this.previewSeedRejection(entry);
-      return;
-    }
-    if (result !== 'placed') {
-      this.tray.returnPiece(entry);
+  private dropPiece(pointer: Point, gesture: Extract<Gesture, { kind: 'piece' }>) {
+    const { entry, offset } = gesture;
+    if (!this.board.contains(pointer)) {
+      const overTray = this.trayBounds.contains(pointer.x, pointer.y);
+      if (overTray && this.play.returnToTray(entry.piece.id)) {
+        this.reconcileWorkspace();
+        this.actions.onWorkspaceChange();
+      } else this.restoreLift(gesture);
       return;
     }
 
-    this.board.addPieces([piece]);
-    entry.setVisible(false);
-    this.tray.remove(entry, this.trayBounds);
-    this.updateTrayAvailability();
-    this.actions.onPlacement();
-    this.placementEffects.play(piece, this.puzzle.joinedSeams(piece));
+    const center = this.dropCenter(pointer, offset);
+    const result = this.play.dropOnBoard(entry.piece.id, center, this.missedDropMode);
+    if (result.kind === 'placed') {
+      const locked = result.lockedPieceIds.map((id) => this.pieces.get(id)!);
+      const pieces = locked.map((view) => view.piece);
+      for (const view of locked) view.setVisible(false);
+      this.board.addPieces(pieces);
+      this.reconcileWorkspace();
+      this.actions.onPlacement();
+      for (const piece of pieces) this.placementEffects.play(piece, this.play.puzzle.joinedSeams(piece));
+    } else if (result.kind === 'parked' || result.kind === 'joined') {
+      this.reconcileWorkspace();
+      this.actions.onWorkspaceChange();
+    } else if (result.kind === 'returned' && result.guideResult === 'disconnected-from-seed') {
+      this.previewSeedRejection(entry, true);
+      return;
+    } else this.restoreLift(gesture);
+
+    if (result.guideResult === 'disconnected-from-seed') this.previewSeedRejection(entry, false);
   }
 
-  private previewSeedRejection(entry: PuzzlePieceView) {
+  private previewSeedRejection(entry: PuzzlePieceView, previewReturningPiece: boolean) {
     const { piece } = entry;
-    this.rejectedPiece = entry;
-    entry.addTo(this.board.layer);
-    entry.setScale(1);
-    entry.moveTo(piece.target.x, piece.target.y);
+    if (previewReturningPiece) {
+      this.rejectedPiece = entry;
+      entry.addTo(this.board.layer);
+      entry.setScale(1);
+      entry.moveTo(piece.target.x, piece.target.y);
+    }
 
     const feedback = this.seedDropFeedback ??= new SeedDropFeedback(this.scene, this.board.layer, this.floatingPieces);
     feedback.layout(this.scene.scale.gameSize);
@@ -515,23 +643,51 @@ export class PuzzleBoardView {
   }
 
   private returnRejectedPiece() {
-    if (!this.rejectedPiece) return;
     this.seedDropFeedback?.clearPreview();
+    if (!this.rejectedPiece) return;
     this.tray.returnPiece(this.rejectedPiece);
     this.rejectedPiece = undefined;
   }
 
-  private updateTrayAvailability() {
-    for (const entry of this.pieces) {
-      const { id } = entry.piece;
-      if (!this.puzzle.isPlaced(id)) entry.setGrayscale(!this.puzzle.canDrag(id));
-    }
+  private trayEntries() {
+    return this.play.trayPieces.map(({ id }) => {
+      const entry = this.pieces.get(id)!;
+      entry.setOrientation(this.play.orientationOf(id));
+      entry.setGrayscale(!this.play.puzzle.canDrag(id));
+      return entry;
+    });
+  }
+
+  private reconcileWorkspace() {
+    this.tray.reconcile(this.trayEntries(), this.trayBounds);
+    this.syncParkedPieces();
+    this.updateBreakButton();
+    this.updateZoomButtons();
+  }
+
+  private syncParkedPieces() {
+    const corners: Point[] = [];
+    this.parkedPieces = this.play.parkedGroups.flatMap((group) => group.memberIds.map((id) => {
+      const entry = this.pieces.get(id)!;
+      const { x, y } = this.play.positionOf(id)!;
+      entry.addTo(this.board.layer);
+      entry.setOrientation(group.quarterTurns);
+      entry.setScale(1);
+      entry.moveTo(x, y);
+      entry.setVisible(true);
+      const bounds = entry.bounds;
+      corners.push({ x: bounds.left, y: bounds.top }, { x: bounds.right, y: bounds.bottom });
+      return entry;
+    }));
+    this.board.setParkedBounds(corners.length ? Bounds.around(corners) : undefined);
   }
 
   private readonly cancelGesture = (pointer: Phaser.Input.Pointer) => {
-    if (this.ignoresRelease(pointer)) return;
-    if (this.endPinch(pointer)) return;
-    if (this.gesture?.pointerId !== pointer.id) return;
+    if (this.endPinch(pointer)) {
+      if (pointer.wasCanceled) this.cancelInteraction();
+      return;
+    }
+    if (this.gesture?.pointer !== pointer && !this.breakArmed) return;
     this.cancelInteraction();
   };
 
@@ -546,7 +702,7 @@ export class PuzzleBoardView {
     this.pinch = undefined;
     const other = pinch.fingers.find((finger) => finger !== pointer && finger.isDown);
     this.gesture = other && {
-      kind: 'pan', pointerId: other.id, pointer: other, previous: { x: other.x, y: other.y },
+      kind: 'pan', pointer: other, previous: { x: other.x, y: other.y },
     };
     return true;
   }

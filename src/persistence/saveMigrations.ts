@@ -50,6 +50,14 @@ const migrations: readonly Migration[] = [
     const pieceCount = version7PieceCounts.get(recentOptions.pieceCount);
     return pieceCount === undefined ? document : { ...document, recentOptions: { ...recentOptions, pieceCount } };
   },
+  (document) => ({
+    ...document,
+    settings: {
+      ...(isRecord(document.settings) ? document.settings : {}),
+      missedDropMode: 'return-to-tray',
+    },
+    progress: mapSaveEntries(document.progress, (value) => isRecord(value) ? { ...value, parkedGroups: [] } : value),
+  }),
 ];
 
 function withRotationOff(value: unknown): unknown {

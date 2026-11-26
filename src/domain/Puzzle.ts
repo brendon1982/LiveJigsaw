@@ -1,7 +1,7 @@
 import type { Board, Cell } from './Board.ts';
 import { challengeModes, type ChallengeMode } from './challengeModes.ts';
 import type { ConnectorStyleId } from './connectorStyles.ts';
-import type { Point } from './geometry.ts';
+import { isQuarterTurns, type Point } from './geometry.ts';
 import { PieceOutline } from './PieceOutline.ts';
 import { seededRandom } from './seededRandom.ts';
 
@@ -37,17 +37,23 @@ export type PuzzleSnapshot = Readonly<{
   trayOrientations: Readonly<Record<string, number>>;
 }>;
 
+export type PuzzleRestore = Readonly<{
+  placedPieceIds: readonly string[];
+  trayOrientations: Readonly<Record<string, unknown>>;
+}>;
+
 export class Puzzle {
   readonly board: Board;
   readonly pieces: readonly PuzzlePiece[];
   readonly seed: number;
   readonly challengeMode: ChallengeMode;
   readonly pieceRotation: boolean;
-  private readonly snapTolerance: number;
+  readonly snapTolerance: number;
   private readonly piecesById: ReadonlyMap<string, PuzzlePiece>;
   private readonly trayOrder: readonly PuzzlePiece[];
   private placedPieceIds = new Set<string>();
   private trayOrientations: Map<string, number>;
+  private workspaceConnected = false;
 
   constructor(
     board: Board,
@@ -68,7 +74,9 @@ export class Puzzle {
     this.pieces = buildPieces(board, connectorStyle, seed);
     this.piecesById = new Map(this.pieces.map((piece) => [piece.id, piece]));
     this.trayOrder = shufflePieces(this.pieces, seed);
-    this.trayOrientations = pieceRotation ? startingOrientations(this.pieces, seed) : new Map();
+    this.trayOrientations = pieceRotation
+      ? startingOrientations(this.pieces, seed)
+      : new Map(this.pieces.map(({ id }) => [id, 0]));
   }
 
   get placedCount(): number {
@@ -88,17 +96,30 @@ export class Puzzle {
   }
 
   get trayPieces(): readonly PuzzlePiece[] {
-    return this.trayOrder.filter(({ id }) => !this.isPlaced(id));
+    return this.trayOrder.filter(({ id }) => this.trayOrientations.has(id));
   }
 
   canDrag(pieceId: string): boolean {
-    if (!this.piecesById.has(pieceId) || this.isPlaced(pieceId)) return false;
+    return this.isEligible(pieceId, this.placedPieceIds);
+  }
+
+  pieceById(pieceId: string): PuzzlePiece | undefined {
+    return this.piecesById.get(pieceId);
+  }
+
+  neighborIds(pieceId: string): readonly string[] {
+    const piece = this.piecesById.get(pieceId);
+    return piece ? neighboringEdges(piece).map(({ id }) => id).filter((id) => this.piecesById.has(id)) : [];
+  }
+
+  private isEligible(pieceId: string, placements: ReadonlySet<string>): boolean {
+    if (!this.piecesById.has(pieceId) || placements.has(pieceId)) return false;
     const windowSize = challengeModes[this.challengeMode].trayWindow;
     if (windowSize === null) return true;
 
     let availableSlots: number = windowSize;
     for (const piece of this.trayOrder) {
-      if (this.isPlaced(piece.id)) continue;
+      if (placements.has(piece.id)) continue;
       if (piece.id === pieceId) return true;
       availableSlots -= 1;
       if (availableSlots === 0) return false;
@@ -119,31 +140,62 @@ export class Puzzle {
   }
 
   turnPiece(pieceId: string): boolean {
-    if (!this.pieceRotation || !this.canDrag(pieceId)) return false;
+    return !this.workspaceConnected && this.turnTrayPiece(pieceId);
+  }
+
+  private turnTrayPiece(pieceId: string): boolean {
+    if (!this.pieceRotation || !this.trayOrientations.has(pieceId) || !this.canDrag(pieceId)) return false;
     this.trayOrientations.set(pieceId, (this.orientationOf(pieceId) + 1) % 4);
     return true;
   }
 
   snapshot(): PuzzleSnapshot {
-    return { placedPieceIds: [...this.placedPieceIds], trayOrientations: Object.fromEntries(this.trayOrientations) };
+    return {
+      placedPieceIds: [...this.placedPieceIds],
+      trayOrientations: this.pieceRotation ? Object.fromEntries(this.trayOrientations) : {},
+    };
   }
 
   /** Validates the whole snapshot before restoring, without replaying live challenge rules. */
-  restore({ placedPieceIds, trayOrientations }: {
-    placedPieceIds: readonly string[];
-    trayOrientations: Readonly<Record<string, unknown>>;
-  }): boolean {
+  restore(snapshot: PuzzleRestore): boolean {
+    return !this.workspaceConnected && this.restoreHomes(snapshot, new Set());
+  }
+
+  connectWorkspace() {
+    if (this.workspaceConnected) throw new Error('Puzzle already has a workspace');
+    this.workspaceConnected = true;
+    return {
+      placeGroup: this.placeGroup.bind(this),
+      turnTrayPiece: this.turnTrayPiece.bind(this),
+      takeFromTray: (id: string) => this.trayOrientations.delete(id),
+      returnToTray: (ids: readonly string[], quarterTurns: number) => {
+        for (const id of ids) this.trayOrientations.set(id, quarterTurns);
+      },
+      restoreHomes: this.restoreHomes.bind(this),
+    };
+  }
+
+  private restoreHomes({ placedPieceIds, trayOrientations }: PuzzleRestore, parkedIds: ReadonlySet<string>): boolean {
+    if (!Array.isArray(placedPieceIds) || !trayOrientations
+      || typeof trayOrientations !== 'object' || Array.isArray(trayOrientations)) return false;
     const placements = new Set(placedPieceIds);
     if (placements.size !== placedPieceIds.length || placedPieceIds.some((id) => !this.piecesById.has(id))) return false;
+    for (const id of parkedIds) {
+      if (!this.isEligible(id, placements)) return false;
+    }
 
     const orientations = new Map<string, number>();
-    const expectedTurns = this.pieceRotation ? this.pieces.length - placements.size : 0;
     const entries = Object.entries(trayOrientations);
+    const expectedTurns = this.pieceRotation ? this.pieces.length - placements.size - parkedIds.size : 0;
     if (entries.length !== expectedTurns) return false;
     for (const [id, turns] of entries) {
-      if (!this.piecesById.has(id) || placements.has(id)
-        || typeof turns !== 'number' || !Number.isInteger(turns) || turns < 0 || turns > 3) return false;
+      if (!this.piecesById.has(id) || placements.has(id) || parkedIds.has(id) || !isQuarterTurns(turns)) return false;
       orientations.set(id, turns);
+    }
+    if (!this.pieceRotation) {
+      for (const { id } of this.pieces) {
+        if (!placements.has(id) && !parkedIds.has(id)) orientations.set(id, 0);
+      }
     }
 
     this.placedPieceIds = placements;
@@ -152,23 +204,30 @@ export class Puzzle {
   }
 
   drop(pieceId: string, position: Point): DropResult {
-    const piece = this.piecesById.get(pieceId);
-    if (!piece) throw new RangeError(`Unknown piece: ${pieceId}`);
-    if (this.placedPieceIds.has(piece.id)) return 'already-placed';
-    if (!this.canDrag(piece.id)) return 'blocked';
-    if (this.orientationOf(piece.id) !== 0) return 'wrong-orientation';
-    if (!piece.acceptsDrop(position, this.snapTolerance)) return 'missed';
-    if (challengeModes[this.challengeMode].requiresSeedConnection && !this.canJoinSeedGroup(piece)) {
+    if (!this.piecesById.has(pieceId)) throw new RangeError(`Unknown piece: ${pieceId}`);
+    if (this.isPlaced(pieceId)) return 'already-placed';
+    if (this.workspaceConnected) return 'blocked';
+    return this.placeGroup([{ id: pieceId, position }], this.orientationOf(pieceId));
+  }
+
+  private placeGroup(members: readonly { id: string; position: Point }[], quarterTurns: number): DropResult {
+    const ids = members.map(({ id }) => id);
+    if (ids.some((id) => this.isPlaced(id))) return 'already-placed';
+    if (ids.length === 0 || ids.some((id) => !this.canDrag(id))) return 'blocked';
+    if (quarterTurns !== 0) return 'wrong-orientation';
+    if (!members.every(({ id, position }) => this.piecesById.get(id)!.acceptsDrop(position, this.snapTolerance))) {
+      return 'missed';
+    }
+    if (challengeModes[this.challengeMode].requiresSeedConnection && this.placedCount > 0
+      && !ids.some((id) => this.neighborIds(id).some((neighborId) => this.isPlaced(neighborId)))) {
       return 'disconnected-from-seed';
     }
 
-    this.placedPieceIds.add(piece.id);
-    this.trayOrientations.delete(piece.id);
+    for (const id of ids) {
+      this.placedPieceIds.add(id);
+      this.trayOrientations.delete(id);
+    }
     return 'placed';
-  }
-
-  private canJoinSeedGroup(piece: PuzzlePiece): boolean {
-    return this.placedCount === 0 || neighboringEdges(piece).some(({ id }) => this.isPlaced(id));
   }
 }
 

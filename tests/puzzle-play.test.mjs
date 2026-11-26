@@ -11,7 +11,7 @@ import { saveVersion } from '../src/persistence/saveMigrations.ts';
 const scenarios = [];
 const scenario = (name, run) => scenarios.push({ name, run });
 
-const settingsY = { theme: -159, firstFilter: -60, secondFilter: 2, firstTray: 98, secondTray: 160, done: 232 };
+const settingsY = { theme: -207, firstFilter: -108, secondFilter: -46, firstTray: 50, secondTray: 112, missedDrops: 208, done: 280 };
 const setupY = { size: -251, shape: -155, connector: -44, speed: 67, rotation: 163, challenge: 259, action: 329 };
 const resumeActionY = 114;
 const compactPuzzlePath = '/compact-fixture/tests/fixtures/compact-puzzle.html';
@@ -145,6 +145,20 @@ async function openPuzzle(t, options, path = '/', initPage) {
     const tap = options.hasTouch ? page.touchscreen.tap.bind(page.touchscreen) : page.mouse.click.bind(page.mouse);
     await tap(x + width / 2 + dx, y + height / 2 + dy);
   };
+  const clickSetting = async (dx, dy) => {
+    const { height } = await canvas.boundingBox();
+    const scale = Math.min(1, (height - 24) / 654);
+    await clickDialog(dx * scale, dy * scale);
+  };
+  const setMissedDropMode = async (mode) => {
+    const { width, height } = await canvas.boundingBox();
+    await page.evaluate(() => { window.paintedText = []; });
+    await clickDialog(width / 2 - 74, 43 - height / 2);
+    await waitForText('Missed drops');
+    await clickSetting(mode === 'park-on-board' ? 77 : -77, settingsY.missedDrops);
+    assert.equal((await readSave(page)).settings.missedDropMode, mode);
+    await clickSetting(101, settingsY.done);
+  };
   const clickSetup = async (dx, dy) => {
     const { width, height } = await canvas.boundingBox();
     const scale = Math.min(1, (width - 24) / 448, (height - 24) / 750);
@@ -184,7 +198,7 @@ async function openPuzzle(t, options, path = '/', initPage) {
     }
     await clickSetup(158, setupY.action);
   };
-  return { page, canvas, waitForText, errors, clickDialog, clickSetup, playSelection };
+  return { page, canvas, waitForText, errors, clickDialog, clickSetting, clickSetup, playSelection, setMissedDropMode };
 }
 
 async function openCompactPuzzle(t, options, path = compactPuzzlePath) {
@@ -209,11 +223,25 @@ async function playLayout(page) {
     const objects = scene.children.list;
     const divider = objects.find(({ input }) => ['ew-resize', 'ns-resize'].includes(input?.cursor));
     const trayLayer = objects.find((object) => object.type === 'Layer' && !(object.cameraFilter & tray.id));
+    const boardLayer = objects.find((object) => object.type === 'Layer' && !(object.cameraFilter & board.id));
+    const overlay = scene.cameras.getCamera('Board overlay');
+    const overlayLayer = objects.find((object) => object.type === 'Layer' && !(object.cameraFilter & overlay.id));
+    const iconButton = (name) => {
+      const button = overlayLayer.list.find((object) => object.name === name);
+      if (!button) return;
+      const { x, y, width, height, visible } = button;
+      return { x, y, width, height, visible, armed: button.getData('primary') };
+    };
     return {
       divider: { x: divider.x, y: divider.y },
-      board: { width: board.width, height: board.height, zoom: board.zoom },
+      board: { x: board.x, y: board.y, width: board.width, height: board.height, zoom: board.zoom },
+      breakButton: iconButton('Break piece off'),
+      fitButton: iconButton('Fit board'),
+      nativeSizeButton: iconButton('Native size (1×)'),
       artwork: { x: board.x - board.scrollX * board.zoom, y: board.y - board.scrollY * board.zoom },
       traySize: { width: tray.width, height: tray.height },
+      parked: boardLayer.list.filter(({ frame, visible }) => visible && frame?.name.startsWith('piece-'))
+        .map(({ frame, x, y, angle }) => ({ id: frame.name, x, y, angle })),
       tray: trayLayer.list.map(({ frame, x, y, displayWidth, displayHeight }) => ({
         id: frame.name, x, y, width: displayWidth, height: displayHeight,
       })),
@@ -442,6 +470,70 @@ scenario('the 420-piece tray only draws nearby piece masks', async (t) => {
   assert.deepEqual(errors, []);
 });
 
+scenario('a parking-only 420-piece save resumes across tablet orientations and rejects overlapping homes', async (t) => {
+  const portrait = { width: 680, height: 860 };
+  const landscape = { width: 1024, height: 768 };
+  const { page, waitForText, errors, clickDialog, playSelection, setMissedDropMode } = await openCompactPuzzle(t, {
+    viewport: portrait, hasTouch: true, isMobile: true,
+  }, `${compactPuzzlePath}?currentSizes`);
+  const { dispatch, moveFinger } = await touchController(page);
+  const getAttempt = async () => (await readSave(page)).progress.Windmill;
+  await setMissedDropMode('park-on-board');
+  await page.touchscreen.tap(350, 180);
+  await playSelection({ size: 420, pieceShape: 'square' });
+  await waitForText('0 of 420 placed');
+
+  const initial = await playLayout(page);
+  const first = initial.tray[0];
+  const size = puzzleSizePresets.at(-1).square;
+  const target = pieceTarget(initial, first.id, size);
+  const midpoint = initial.boardPoint(size.width / 2, size.height / 2);
+  const miss = initial.boardPoint(size.width * (target.x < midpoint.x ? 0.75 : 0.25), size.height / 2);
+  await dispatch('touchStart', [first.x, first.y]);
+  await dispatch('touchMove', [first.x, first.y - 30]);
+  await dispatch('touchMove', [miss.x, miss.y]);
+  assert.equal(await getAttempt(), undefined, 'Parking does not save until release');
+  await dispatch('touchEnd');
+  const parked = (await playLayout(page)).parked;
+  assert.deepEqual(parked.map(({ id }) => id), [first.id]);
+  const saved = await getAttempt();
+  assert.deepEqual(saved.placedPieceIds, []);
+  assert.deepEqual(saved.trayOrientations, {});
+
+  await page.setViewportSize(landscape);
+  await page.reload();
+  await waitForText('0 of 420 placed');
+  await page.touchscreen.tap(522, 180);
+  await waitForText('Resume');
+  await clickDialog(100, resumeActionY);
+  const resumed = await playLayout(page);
+  assert.deepEqual(resumed.parked, parked);
+  assert.deepEqual(resumed.tray.map(({ id }) => id), initial.tray.slice(1).map(({ id }) => id));
+  assert.equal((await readSave(page)).settings.missedDropMode, 'park-on-board');
+
+  await setMissedDropMode('return-to-tray');
+  const center = resumed.boardPoint(parked[0].x, parked[0].y);
+  const slot = resumed.tray[0];
+  await moveFinger(center.x, center.y, slot.x, slot.y);
+  assert.deepEqual((await playLayout(page)).parked, []);
+  assert.equal((await playLayout(page)).tray[0].id, first.id, 'Returning the piece restores its seeded slot');
+  assert.equal(await getAttempt(), undefined, 'Returning the last piece clears an otherwise untouched attempt');
+
+  await page.evaluate((attempt) => {
+    const key = 'live-jigsaw.save';
+    const save = JSON.parse(localStorage.getItem(key));
+    save.progress.Windmill = { ...attempt, placedPieceIds: [attempt.parkedGroups[0].anchorPieceId] };
+    save.history.Lighthouse = [{ setup: attempt.setup, completedAt: '2025-01-01T12:00:00.000Z' }];
+    localStorage.setItem(key, JSON.stringify(save));
+  }, saved);
+  await page.reload();
+  await waitForText('Completed');
+  await page.touchscreen.tap(522, 180);
+  await waitForText('Piece count');
+  assert.ok(!(await page.evaluate(() => window.paintedText)).includes('Resume'), 'An invalid workspace must not restore even its placements');
+  assert.deepEqual(errors, []);
+});
+
 scenario('the 420-piece Square tray renders cutouts without opposite-edge bleed', async (t) => {
   const { page, canvas, waitForText, errors, clickDialog } = await openCompactPuzzle(t, {
     viewport: { width: 1320, height: 780 },
@@ -455,7 +547,7 @@ scenario('the 420-piece Square tray renders cutouts without opposite-edge bleed'
   const placedPieceIds = createPuzzle(setup.size, setup.connectorStyle, setup.seed).pieces
     .map(({ id }) => id).filter((id) => id !== pieceId);
   await page.evaluate((save) => localStorage.setItem('live-jigsaw.save', JSON.stringify(save)), {
-    version: saveVersion, progress: { Windmill: { setup, placedPieceIds, trayOrientations: {} } },
+    version: saveVersion, progress: { Windmill: { setup, placedPieceIds, trayOrientations: {}, parkedGroups: [] } },
   });
   await page.reload();
   await waitForText('Windmill');
@@ -1097,7 +1189,7 @@ scenario('Hex Coast captures continuous roads and animated water', async (t) => 
 });
 
 scenario('picker Settings remembers the theme and filter on a narrow touch screen', async (t) => {
-  const { page, canvas, waitForText, errors, clickDialog } = await openPuzzle(t, {
+  const { page, canvas, waitForText, errors, clickSetting } = await openPuzzle(t, {
     viewport: { width: 375, height: 640 }, hasTouch: true, isMobile: true,
   });
   await waitForText('Select a Puzzle');
@@ -1105,9 +1197,9 @@ scenario('picker Settings remembers the theme and filter on a narrow touch scree
   assert.deepEqual(await pixelAt(page, forest, 5, 105), [38, 58, 54, 255]);
   await page.touchscreen.tap(301, 39);
   await waitForText('Color theme');
-  await clickDialog(21, settingsY.theme);
-  await clickDialog(-65, settingsY.secondFilter);
-  await clickDialog(101, settingsY.done);
+  await clickSetting(21, settingsY.theme);
+  await clickSetting(-65, settingsY.secondFilter);
+  await clickSetting(101, settingsY.done);
   const slate = await canvas.screenshot();
   assert.deepEqual(await pixelAt(page, slate, 5, 105), [39, 51, 68, 255]);
   assert.deepEqual(await pixelAt(page, slate, 5, 130), [39, 51, 68, 255], 'The Phaser canvas background should change too');
@@ -1117,10 +1209,10 @@ scenario('picker Settings remembers the theme and filter on a narrow touch scree
   assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 5, 105), [39, 51, 68, 255]);
   await page.touchscreen.tap(301, 39);
   await waitForText('Faded');
-  assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 64, 321), [76, 102, 135, 255], 'The saved filter should use the Slate selected tile fill after reload');
-  await clickDialog(102, settingsY.theme);
+  assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 72, 277), [76, 102, 135, 255], 'The saved filter should use the Slate selected tile fill after reload');
+  await clickSetting(102, settingsY.theme);
   await page.waitForFunction(() => JSON.parse(localStorage.getItem('live-jigsaw.save')).settings.theme === 'Dark');
-  await clickDialog(101, settingsY.done);
+  await clickSetting(101, settingsY.done);
   const dark = await canvas.screenshot();
   assert.deepEqual(await pixelAt(page, dark, 5, 105), [33, 33, 33, 255]);
   assert.deepEqual(await pixelAt(page, dark, 75, 170), await pixelAt(page, forest, 75, 170), 'Dark should preserve preview artwork');
@@ -1135,13 +1227,13 @@ scenario('picker Settings remembers the theme and filter on a narrow touch scree
   await page.reload();
   await waitForText('Select a Puzzle');
   assert.deepEqual((await readSave(page)).settings, {
-    theme: 'Slate', filter: 'sepia', trayFractions: { vertical: 0, horizontal: 0 },
+    theme: 'Slate', filter: 'sepia', trayFractions: { vertical: 0, horizontal: 0 }, missedDropMode: 'return-to-tray',
   });
   assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 5, 105), [39, 51, 68, 255]);
   assert.deepEqual(errors, []);
 });
 
-scenario('version 1 through 7 saves migrate with settings, options, progress, and history intact', async (t) => {
+scenario('version 1 through 8 saves migrate with settings, options, progress, and history intact', async (t) => {
   const { page, canvas, waitForText, errors, clickDialog } = await openPuzzle(t, { viewport: { width: 1320, height: 780 } });
   const size = { width: 512, height: 288, columns: 4, rows: 2, snapTolerance: 28 };
   const setup = {
@@ -1158,6 +1250,7 @@ scenario('version 1 through 7 saves migrate with settings, options, progress, an
   const storeSave = (data) => page.evaluate((value) => localStorage.setItem('live-jigsaw.save', JSON.stringify(value)), data);
   const trayFractions = { vertical: 0, horizontal: 0 };
   const settings = { ...original.settings, trayFractions };
+  const migratedSettings = { ...settings, missedDropMode: 'return-to-tray' };
   const sequentialCompletion = {
     setup: { ...setup, challengeMode: 'sequential' }, completedAt: '2025-01-02T12:00:00.000Z',
   };
@@ -1201,13 +1294,13 @@ scenario('version 1 through 7 saves migrate with settings, options, progress, an
     await waitForText('Completed');
     await waitForText('1 of 8 placed');
     assert.deepEqual(await readSave(page), {
-      version: 8,
-      settings,
+      version: 9,
+      settings: migratedSettings,
       recentOptions: {
         pieceCount: previous.version >= 4 ? 40 : 8, connectorStyle: 'classic', animationSpeed: 'Normal',
         challengeMode: 'none', pieceRotation: false, pieceShape: 'square',
       },
-      progress: { Windmill: { ...original.progress.Windmill, setup: noneSetup, trayOrientations: {} } },
+      progress: { Windmill: { ...original.progress.Windmill, setup: noneSetup, trayOrientations: {}, parkedGroups: [] } },
       history: { Lighthouse: [
         { ...original.history.Lighthouse[0], setup: noneSetup },
         ...(previous.version >= 3 ? [{ ...sequentialCompletion, setup: { ...sequentialSetupV5, pieceRotation: false } }] : []),
@@ -1248,7 +1341,8 @@ scenario('version 1 through 7 saves migrate with settings, options, progress, an
   await waitForText('Completed');
   await waitForText('1 of 392 placed');
   assert.deepEqual(await readSave(page), {
-    ...version6, version: 8,
+    ...version6, version: 9, settings: migratedSettings,
+    progress: { Windmill: { ...version6.progress.Windmill, parkedGroups: [] } },
     recentOptions: { ...version6.recentOptions, pieceCount: 420, pieceShape: 'square' },
   });
   await clickDialog(-320, -210);
@@ -1266,8 +1360,28 @@ scenario('version 1 through 7 saves migrate with settings, options, progress, an
   await waitForText('Completed');
   await waitForText('1 of 392 placed');
   assert.deepEqual(await readSave(page), {
-    ...version7, version: 8,
+    ...version7, version: 9, settings: migratedSettings,
+    progress: { Windmill: { ...version7.progress.Windmill, parkedGroups: [] } },
     recentOptions: { ...version7.recentOptions, pieceCount: 300 },
+  });
+
+  const rotating = createPuzzle(size, 'classic', 42, 'none', true);
+  const first = rotating.trayPieces[0];
+  while (rotating.orientationOf(first.id) !== 0) rotating.turnPiece(first.id);
+  rotating.drop(first.id, first.target);
+  rotating.turnPiece(rotating.trayPieces[0].id);
+  const version8 = {
+    ...version7, version: 8,
+    settings: { ...settings, trayFractions: { vertical: 0.36, horizontal: 0.18 } },
+    progress: { Windmill: { setup: { ...noneSetup, pieceRotation: true }, ...rotating.snapshot() } },
+  };
+  await storeSave(version8);
+  await page.reload();
+  await waitForText('Completed');
+  await waitForText('1 of 8 placed');
+  assert.deepEqual(await readSave(page), {
+    ...version8, version: 9, settings: { ...version8.settings, missedDropMode: 'return-to-tray' },
+    progress: { Windmill: { ...version8.progress.Windmill, parkedGroups: [] } },
   });
 
   const future = { ...original, version: 99, futureField: { keep: true } };
@@ -1363,6 +1477,270 @@ scenario('piece rotation distinguishes clicks and taps from drag, scroll, and ca
   await clickDialog(343, -210);
   await playSelection();
   assert.equal((await readSave(page)).recentOptions.pieceRotation, true, 'The next puzzle should default to the persisted choice');
+  assert.deepEqual(errors, []);
+});
+
+scenario('parking joins right-click drops, restores cancelled touch drags and returns a rotated group to the tray', async (t) => {
+  const { page, waitForText, errors, clickDialog, playSelection, setMissedDropMode } = await openCompactPuzzle(t, {
+    viewport: { width: 1320, height: 780 }, hasTouch: true, isMobile: true,
+  });
+  const { dispatch, moveFinger } = await touchController(page);
+  await setMissedDropMode('park-on-board');
+  await page.touchscreen.tap(340, 180);
+  await playSelection({ connectorStyle: 'None', pieceRotation: true });
+  await waitForText('0 of 8 placed');
+  await dragDivider(page, moveFinger, { x: 552 });
+  const initial = await playLayout(page);
+  const seededOrder = initial.tray.map(({ id }) => id);
+  const puzzle = createPuzzle(compactSize, 'none', 233, 'none', true);
+  const [left, right] = ['piece-0-0', 'piece-0-1'];
+  const clickAt = ({ x, y }, button) => page.mouse.click(x, y, { button });
+  const tapAt = ({ x, y }) => page.touchscreen.tap(x, y);
+  const trayEntry = async (id) => (await playLayout(page)).tray.find((entry) => entry.id === id);
+  for (const id of [left, right]) {
+    const entry = await trayEntry(id);
+    for (let turns = puzzle.orientationOf(id); turns % 4; turns++) await tapAt(entry);
+  }
+
+  await clickAt(await trayEntry(left), 'right');
+  await clickAt(initial.boardPoint(-96, 72), 'right');
+  assert.deepEqual((await playLayout(page)).parked.map(({ id }) => id), [left]);
+  await clickAt(await trayEntry(right), 'right');
+  await clickAt(initial.boardPoint(32, 72), 'left');
+  const joined = await playLayout(page);
+  assert.equal(joined.parked.length, 2);
+  const parked = (layout, id) => layout.parked.find((entry) => entry.id === id);
+  assert.equal(parked(joined, right).x - parked(joined, left).x, 128, 'The over-guide drop joins at the exact offset');
+  assert.ok(joined.parked.every(({ angle }) => angle === 0), 'Neither drop button rotates the group');
+  const joinedSave = await readSave(page);
+  assert.deepEqual(joinedSave.progress.Windmill.placedPieceIds, []);
+  assert.deepEqual(joinedSave.progress.Windmill.parkedGroups.map(({ memberIds }) => memberIds), [[left, right]]);
+  assert.ok(!Object.hasOwn(joinedSave.progress.Windmill.trayOrientations, left));
+  await page.reload();
+  await waitForText('0 of 8 placed');
+  await page.touchscreen.tap(340, 180);
+  await waitForText('Resume');
+  await clickDialog(100, resumeActionY);
+  assert.deepEqual((await playLayout(page)).parked, joined.parked);
+  assert.deepEqual(await readSave(page), joinedSave, 'Resuming the parked group does not rewrite it');
+
+  const overlapId = 'piece-1-3';
+  await clickAt(await trayEntry(overlapId), 'right');
+  const overlapAt = joined.boardPoint(parked(joined, right).x, parked(joined, right).y);
+  await clickAt(overlapAt, 'right');
+  assert.equal((await playLayout(page)).parked.at(-1).id, overlapId);
+  await clickAt(overlapAt, 'right');
+  await clickAt(joined.tray[0], 'right');
+  assert.deepEqual((await playLayout(page)).parked, joined.parked, 'The topmost outline receives input without disturbing the group below');
+
+  const { board } = joined;
+  await page.mouse.move(board.x + board.width - 80, board.y + board.height / 2);
+  await page.mouse.wheel(0, -900);
+  const zoomed = await playLayout(page);
+  const pieceOnScreen = (layout, id) => {
+    const { x, y } = parked(layout, id);
+    return layout.boardPoint(x, y);
+  };
+  assert.ok(pieceOnScreen(zoomed, left).x < board.x, 'Zoom can take the off-guide piece out of view');
+  const panY = board.y + board.height * 0.75;
+  let panNeeded = board.x + 220 - pieceOnScreen(zoomed, left).x;
+  while (panNeeded > 0) {
+    const distance = Math.min(panNeeded, board.width - 100);
+    await moveFinger(board.x + 40, panY, board.x + 40 + distance, panY);
+    panNeeded -= distance;
+  }
+  const recovered = await playLayout(page);
+  const leftOnScreen = pieceOnScreen(recovered, left);
+  assert.ok(leftOnScreen.x > board.x + 200 && leftOnScreen.x < board.x + board.width,
+    'Panning can recover the off-guide piece beyond the guide-only pan limit');
+
+  const { x, y } = pieceOnScreen(recovered, right);
+  await setMissedDropMode('return-to-tray');
+  assert.deepEqual((await readSave(page)).progress.Windmill, joinedSave.progress.Windmill);
+  await clickAt({ x, y }, 'right');
+  await clickAt({ x: x + 40, y: y + 100 }, 'left');
+  assert.deepEqual((await playLayout(page)).parked, recovered.parked, 'A missed drop restores the group pose in Return to tray mode');
+  await moveFinger(x, y, x + 40, y + 100, 'touchCancel');
+  assert.deepEqual((await playLayout(page)).parked, recovered.parked, 'Touch cancellation restores both members');
+  await dispatch('touchStart', [x, y]);
+  await dispatch('touchMove', [x + 20, y + 24]);
+  await dispatch('touchStart', [x + 20, y + 24], [x + 160, y + 24]);
+  await dispatch('touchMove', [x + 40, y + 24], [x + 140, y + 24]);
+  await dispatch('touchEnd');
+  const pinched = await playLayout(page);
+  assert.ok(pinched.board.zoom < recovered.board.zoom, 'A second touch takes over the active piece drag to pinch');
+  assert.deepEqual(pinched.parked, recovered.parked, 'Pinch does not commit the preview');
+
+  await setMissedDropMode('park-on-board');
+  const pivot = pieceOnScreen(pinched, right);
+  const grabbed = { x: pivot.x + 20, y: pivot.y };
+  const destination = { x: grabbed.x - 100, y: grabbed.y + 90 };
+  await page.mouse.move(grabbed.x, grabbed.y);
+  await page.mouse.down();
+  await page.mouse.move(destination.x, destination.y, { steps: 8 });
+  assert.deepEqual((await readSave(page)).progress.Windmill, joinedSave.progress.Windmill, 'A drag preview does not save');
+  await page.mouse.up();
+  const moved = await playLayout(page);
+  const movedPivot = pieceOnScreen(moved, right);
+  assert.ok(Math.abs(movedPivot.x - (destination.x - 20)) < 2 && Math.abs(movedPivot.y - destination.y) < 2,
+    'The zoomed drop preserves the grab point on the group');
+  assert.equal(parked(moved, right).x - parked(moved, left).x, 128);
+  await tapAt(movedPivot);
+  const turned = await playLayout(page);
+  assert.deepEqual(parked(turned, right), { ...parked(moved, right), angle: 90 });
+  assert.deepEqual(parked(turned, left), {
+    ...parked(moved, left), x: parked(turned, right).x, y: parked(turned, right).y - 128, angle: 90,
+  }, 'Touch rotation pivots around the tapped member');
+  const { x: anchorX, y: anchorY } = parked(turned, right);
+  assert.deepEqual((await readSave(page)).progress.Windmill.parkedGroups, [{
+    memberIds: [left, right], anchorPieceId: right, position: { x: anchorX, y: anchorY }, quarterTurns: 1,
+  }]);
+
+  const grab = pieceOnScreen(turned, right);
+  const slot = turned.tray.at(-1);
+  await moveFinger(grab.x, grab.y, slot.x, slot.y);
+  const returned = await playLayout(page);
+  assert.deepEqual(returned.parked, []);
+  assert.deepEqual(returned.tray.map(({ id }) => id), seededOrder);
+  const progress = (await readSave(page)).progress.Windmill;
+  assert.equal(progress.trayOrientations[left], 1);
+  assert.equal(progress.trayOrientations[right], 1);
+  assert.deepEqual(progress.placedPieceIds, []);
+  assert.deepEqual(progress.parkedGroups, []);
+  assert.deepEqual(errors, []);
+});
+
+scenario('break piece off targets the topmost member and splits a bridge on touch or mouse input', async (t) => {
+  const { page, waitForText, errors, playSelection, setMissedDropMode } = await openCompactPuzzle(t, {
+    viewport: { width: 1320, height: 780 }, hasTouch: true, isMobile: true,
+  });
+  const { dispatch, moveFinger } = await touchController(page);
+  await setMissedDropMode('park-on-board');
+  await page.touchscreen.tap(340, 180);
+  await playSelection({ connectorStyle: 'None', pieceRotation: true });
+  await waitForText('0 of 8 placed');
+  await dragDivider(page, moveFinger, { x: 552 });
+  const layout = () => playLayout(page);
+  const initial = await layout();
+  assert.equal(initial.breakButton.visible, false);
+  const puzzle = createPuzzle(compactSize, 'none', 233, 'none', true);
+  const chain = ['piece-0-0', 'piece-0-1', 'piece-0-2', 'piece-0-3'];
+  const [left, bridge, inner, end] = chain;
+  const cover = 'piece-1-3';
+  const clickAt = ({ x, y }, button = 'left') => page.mouse.click(x, y, { button });
+  const tapAt = ({ x, y }) => page.touchscreen.tap(x, y);
+  const buttonCenter = ({ x, y, width, height }) => ({ x: x + width / 2, y: y + height / 2 });
+  const trayEntry = async (id) => (await layout()).tray.find((entry) => entry.id === id);
+  const screenPiece = (state, id) => {
+    const { x, y } = state.parked.find((entry) => entry.id === id);
+    return state.boardPoint(x, y);
+  };
+  for (const [column, id] of chain.entries()) {
+    const entry = await trayEntry(id);
+    for (let turns = puzzle.orientationOf(id); turns % 4; turns++) await tapAt(entry);
+    await clickAt(entry, 'right');
+    await clickAt(initial.boardPoint(38 + 128 * column, 144));
+  }
+  const joined = await layout();
+  assert.deepEqual(joined.parked.map(({ id }) => id), chain);
+  assert.equal(joined.breakButton.visible, true);
+  assert.equal(joined.breakButton.width, joined.nativeSizeButton.width);
+  assert.equal(joined.breakButton.height, joined.nativeSizeButton.height);
+  assert.ok(joined.breakButton.x >= joined.board.x && joined.breakButton.x < joined.board.x + 20);
+  assert.equal(joined.breakButton.y - joined.board.y, joined.breakButton.x - joined.board.x);
+  const button = buttonCenter(joined.breakButton);
+  const bridgePoint = screenPiece(joined, bridge);
+
+  await clickAt(await trayEntry(cover), 'right');
+  await clickAt(bridgePoint);
+  const overlapped = await layout();
+  assert.equal(overlapped.parked.at(-1).id, cover);
+  await clickAt(button);
+  assert.equal((await layout()).breakButton.armed, true);
+  await clickAt(bridgePoint);
+  const masked = await layout();
+  assert.deepEqual(masked.parked, overlapped.parked, 'A topmost singleton blocks the joined member beneath');
+  assert.equal(masked.breakButton.armed, true);
+  await clickAt(button);
+  assert.equal((await layout()).breakButton.armed, false);
+  await clickAt(bridgePoint, 'right');
+  await clickAt(joined.tray[0]);
+  assert.deepEqual((await layout()).parked, joined.parked);
+
+  await tapAt(button);
+  await dispatch('touchStart', [bridgePoint.x, bridgePoint.y]);
+  await dispatch('touchCancel');
+  const cancelled = await layout();
+  assert.equal(cancelled.breakButton.armed, false);
+  assert.deepEqual(cancelled.parked, joined.parked);
+  await tapAt(button);
+  await moveFinger(bridgePoint.x, bridgePoint.y, bridgePoint.x, bridgePoint.y + 40);
+  const dragged = await layout();
+  assert.equal(dragged.breakButton.armed, false);
+  assert.deepEqual(dragged.parked, joined.parked, 'Dragging an armed contact has no piece side effects');
+
+  await tapAt(button);
+  const { x, y } = bridgePoint;
+  await dispatch('touchStart', [x, y]);
+  await dispatch('touchStart', [x, y], [x + 80, y]);
+  await dispatch('touchMove', [x - 10, y], [x + 90, y]);
+  await dispatch('touchEnd');
+  const pinched = await layout();
+  assert.ok(pinched.board.zoom > joined.board.zoom);
+  assert.equal(pinched.breakButton.armed, true, 'Pinching while pressing a member keeps break mode armed');
+  assert.deepEqual(pinched.parked, joined.parked, 'Pinch handoff does not detach or move a piece');
+
+  const pinchedBridge = screenPiece(pinched, bridge);
+  await tapAt(pinchedBridge);
+  const split = await layout();
+  assert.equal(split.breakButton.armed, false);
+  assert.deepEqual(split.parked, [0, 2, 3, 1].map((index) => joined.parked[index]),
+    'Detaching a bridge changes layer order, but not any center or orientation');
+  assert.deepEqual((await readSave(page)).progress.Windmill.parkedGroups.map(({ memberIds }) => memberIds),
+    [[left], [inner, end], [bridge]], 'The saved workspace records each remaining component separately');
+  await clickAt(pinchedBridge, 'right');
+  await clickAt(split.tray[0]);
+  assert.deepEqual((await layout()).parked.map(({ id }) => id), [left, inner, end], 'Only the detached bridge returns');
+
+  await clickAt(button);
+  await page.keyboard.press('Escape');
+  assert.equal((await layout()).breakButton.armed, false);
+  await clickAt(button);
+
+  const beforeFit = await layout();
+  assert.equal(beforeFit.fitButton.visible, true);
+  await tapAt(buttonCenter(beforeFit.fitButton));
+  const fitted = await layout();
+  assert.equal(fitted.fitButton.visible, false);
+  assert.equal(fitted.breakButton.armed, true, 'Fit board keeps break mode armed');
+
+  const { board } = fitted;
+  await page.mouse.move(board.x + board.width / 2, board.y + board.height / 2);
+  await page.mouse.wheel(0, 200);
+  const wheeled = await layout();
+  assert.ok(wheeled.board.zoom < board.zoom);
+  assert.equal(wheeled.breakButton.armed, true, 'Wheel zoom keeps break mode armed');
+
+  assert.equal(wheeled.nativeSizeButton.visible, true);
+  await tapAt(buttonCenter(wheeled.nativeSizeButton));
+  const native = await layout();
+  assert.equal(native.board.zoom, 1);
+  assert.equal(native.breakButton.armed, true, '1× keeps break mode armed');
+  const endPoint = screenPiece(native, end);
+  await clickAt(endPoint);
+  const singles = await layout();
+  assert.equal(singles.breakButton.visible, false);
+  assert.deepEqual(singles.parked, split.parked.slice(0, 3), 'A mouse click detaches without rotating');
+
+  await clickAt(endPoint, 'right');
+  await clickAt(endPoint);
+  assert.equal((await layout()).breakButton.visible, true, 'A later drop can rejoin the pieces');
+  await clickAt(endPoint, 'right');
+  await clickAt(pieceTarget(await layout(), end));
+  await waitForText('2 of 8 placed');
+  assert.deepEqual((await layout()).parked.map(({ id }) => id), [left]);
+  assert.equal((await layout()).breakButton.visible, false);
+  assert.deepEqual((await readSave(page)).progress.Windmill.placedPieceIds, [inner, end]);
   assert.deepEqual(errors, []);
 });
 
@@ -1676,14 +2054,15 @@ scenario('picker tag and completion filters combine and refresh after play', asy
     seed: 42, connectorStyle: 'none', animationSpeed: 'Normal', challengeMode: 'none', pieceRotation: false,
   };
   const original = {
-    version: 8,
-    settings: { trayFractions: { vertical: 0, horizontal: 0 } },
+    version: saveVersion,
+    settings: { trayFractions: { vertical: 0, horizontal: 0 }, missedDropMode: 'return-to-tray' },
     progress: {
-      Lighthouse: { setup, placedPieceIds: ['piece-0-0'], trayOrientations: {} },
+      Lighthouse: { setup, placedPieceIds: ['piece-0-0'], trayOrientations: {}, parkedGroups: [] },
       Windmill: {
         setup,
         placedPieceIds: ['piece-0-1', 'piece-0-2', 'piece-0-3', 'piece-1-0', 'piece-1-1', 'piece-1-2', 'piece-1-3'],
         trayOrientations: {},
+        parkedGroups: [],
       },
     },
     history: { Lighthouse: [{ setup, completedAt: '2025-01-01T12:00:00.000Z' }] },
@@ -2195,7 +2574,7 @@ scenario('tray settings move the live tray and rotate touch gestures with it', a
   await waitForText('0 of 8 placed');
   await assertSide('Bottom');
   await openTraySettings();
-  assert.deepEqual(await sample(365, 591), selectedColor, 'Auto should be selected without a saved setting');
+  assert.deepEqual(await sample(365, 543), selectedColor, 'Auto should be selected without a saved setting');
   await closeSettings();
 
   for (const side of ['Left', 'Right', 'Top', 'Bottom']) {
@@ -2286,7 +2665,7 @@ scenario('tray settings move the live tray and rotate touch gestures with it', a
   await page.reload();
   await waitForText('Windmill');
   await openTraySettings();
-  assert.deepEqual(await sample(537, 489), selectedColor, 'Right should remain selected after reload');
+  assert.deepEqual(await sample(537, 441), selectedColor, 'Right should remain selected after reload');
   await closeSettings();
   await page.touchscreen.tap(522, 180);
   await waitForText('Resume');

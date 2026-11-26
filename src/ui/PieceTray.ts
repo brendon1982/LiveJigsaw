@@ -26,6 +26,7 @@ export class PieceTray {
   constructor(
     private readonly scene: UIScene,
     entries: PuzzlePieceView[],
+    allViews: readonly PuzzlePieceView[],
     cellSize: Size,
     targetPieceArea: number,
     private axis: TrayScrollAxis,
@@ -34,7 +35,7 @@ export class PieceTray {
     this.entries = entries;
     const cellArea = cellSize.width * cellSize.height;
     this.pieceScale = Math.min(1, Math.sqrt(targetPieceArea / cellArea));
-    const slotSizes = entries.map(({ frame, piece }) => {
+    const slotSizes = allViews.map(({ frame, piece }) => {
       const { x, y } = frame.toLocal(piece.target);
       // The base-cell center can be off-center in the image when only one side has a tab.
       return {
@@ -42,8 +43,8 @@ export class PieceTray {
         height: Math.max(frame.height * this.pieceScale + pieceSpacing, 2 * Math.max(y, frame.height - y) * this.pieceScale + 2),
       };
     });
-    const uprightWidth = Math.ceil(Math.max(...slotSizes.map(({ width }) => width)));
-    const uprightHeight = Math.ceil(Math.max(...slotSizes.map(({ height }) => height)));
+    const uprightWidth = Math.ceil(Math.max(1, ...slotSizes.map(({ width }) => width)));
+    const uprightHeight = Math.ceil(Math.max(1, ...slotSizes.map(({ height }) => height)));
     // A square slot fits the same pivot-centered bounds at every quarter turn.
     const rotatedSize = Math.max(uprightWidth, uprightHeight);
     this.cellWidth = pieceRotation ? rotatedSize : uprightWidth;
@@ -145,14 +146,21 @@ export class PieceTray {
 
   returnPiece(entry: PuzzlePieceView) {
     this.lifted = undefined;
-    entry.addTo(this.layer);
+    entry.addTo(this.layer, this.entries.indexOf(entry));
     entry.setScale(this.pieceScale);
     this.syncPositions();
   }
 
-  remove(entry: PuzzlePieceView, bounds: Phaser.Geom.Rectangle) {
+  reconcile(entries: PuzzlePieceView[], bounds: Phaser.Geom.Rectangle) {
     this.lifted = undefined;
-    this.entries = this.entries.filter((candidate) => candidate !== entry);
+    if (entries.length === this.entries.length && entries.every((entry, index) => entry === this.entries[index])) return;
+    const previousEntries = new Set(this.entries);
+    this.entries = entries;
+    for (const [index, entry] of entries.entries()) {
+      if (previousEntries.has(entry)) continue;
+      entry.addTo(this.layer, index);
+      entry.setScale(this.pieceScale);
+    }
     this.layout(bounds);
   }
 

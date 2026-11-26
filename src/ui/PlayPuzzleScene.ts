@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import type RexUIPlugin from 'phaser4-rex-plugins/templates/ui/ui-plugin.js';
 import { challengeModes } from '../domain/challengeModes';
-import type { PuzzleSnapshot } from '../domain/Puzzle';
+import { PuzzlePlay, type PuzzlePlaySnapshot } from '../domain/PuzzlePlay';
 import { createPuzzle } from '../domain/puzzleSizes';
 import { gameSave } from '../persistence';
 import type { PuzzleSetup } from '../persistence/GameSave';
@@ -18,7 +18,7 @@ import { styleWithTheme } from './theme';
 export type PuzzleSelection = {
   source: PuzzleSource;
   setup: PuzzleSetup;
-  snapshot?: PuzzleSnapshot;
+  snapshot?: PuzzlePlaySnapshot;
 };
 
 // Target base-cell area in screen pixels squared, matching the previous short rectangles.
@@ -36,7 +36,8 @@ export class PlayPuzzleScene extends Phaser.Scene {
   create({ source, setup, snapshot }: PuzzleSelection) {
     const { size, connectorStyle, animationSpeed, seed, challengeMode, pieceRotation } = setup;
     const puzzle = createPuzzle(size, connectorStyle, seed, challengeMode, pieceRotation);
-    if (snapshot && !puzzle.restore(snapshot)) throw new Error('Invalid puzzle snapshot');
+    const play = new PuzzlePlay(puzzle);
+    if (snapshot && !play.restore(snapshot)) throw new Error('Invalid puzzle snapshot');
     const capture = new LivePuzzleCapture(this, source, {
       ...puzzle.board.size, seed: puzzle.seed, animationSpeed,
     });
@@ -46,7 +47,10 @@ export class PlayPuzzleScene extends Phaser.Scene {
     }, 150);
     const settings = makeSettingsButton(this, () => {
       board.cancelInteraction();
-      openSettings(this, { onTrayPositionChange: (position) => board.setTrayPosition(position) });
+      openSettings(this, {
+        onTrayPositionChange: (position) => board.setTrayPosition(position),
+        onMissedDropModeChange: (mode) => board.setMissedDropMode(mode),
+      });
     }, playHeader);
     const title = this.add.text(0, 0, source.title, {
       fontFamily: 'system-ui', fontSize: '34px', fontStyle: 'bold',
@@ -92,7 +96,7 @@ export class PlayPuzzleScene extends Phaser.Scene {
       layoutHeader();
     };
     let completionAction: Phaser.Time.TimerEvent | undefined;
-    const saveProgress = () => gameSave.saveProgress(source.scene.key, { setup, ...puzzle.snapshot() });
+    const saveProgress = () => gameSave.saveProgress(source.scene.key, { setup, ...play.snapshot() });
     const onPlacement = () => {
       updateProgress();
       if (puzzle.isComplete) {
@@ -105,12 +109,13 @@ export class PlayPuzzleScene extends Phaser.Scene {
         saveProgress();
       }
     };
-    const { trayPosition = 'Auto', trayFractions } = gameSave.settings;
-    const board = new PuzzleBoardView(this, puzzle, capture, trayPieceArea, {
+    const { trayPosition = 'Auto', trayFractions, missedDropMode } = gameSave.settings;
+    const board = new PuzzleBoardView(this, play, capture, trayPieceArea, {
       position: trayPosition,
       fractions: trayFractions,
       onResize: (fractions) => gameSave.updateSettings({ trayFractions: fractions }),
-    }, { onPlacement, onTurn: saveProgress });
+    }, { onPlacement, onWorkspaceChange: saveProgress });
+    board.setMissedDropMode(missedDropMode);
     updateProgress();
     capture.start();
 

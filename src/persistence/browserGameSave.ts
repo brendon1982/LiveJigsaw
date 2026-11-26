@@ -1,9 +1,10 @@
 import { challengeModes, type ChallengeMode } from '../domain/challengeModes';
 import { connectorStyles, type ConnectorStyleId } from '../domain/connectorStyles';
+import { PuzzlePlay } from '../domain/PuzzlePlay';
 import { createPuzzle, defaultPieceShape, getPieceCount, pieceShapeIds, puzzleSizePresets, type PuzzleSize } from '../domain/puzzleSizes';
 import { puzzleAnimationSpeeds, type PuzzleAnimationSpeed } from '../puzzles/PuzzleSource';
 import {
-  defaultTrayFractions, trayPositions,
+  defaultMissedDropMode, defaultTrayFractions, hasProgress, trayPositions,
   type PuzzleCompletion, type PuzzleOptions, type PuzzleProgress, type PuzzleSetup, type SaveData, type SaveStorage,
 } from './GameSave';
 import { isRecord, migrateSave, saveVersion } from './saveMigrations';
@@ -11,7 +12,9 @@ import { isRecord, migrateSave, saveVersion } from './saveMigrations';
 const storageKey = 'live-jigsaw.save';
 const themeKey = 'live-jigsaw.theme';
 const filterKey = 'live-jigsaw.puzzle-filter';
-const emptySave: SaveData = { settings: { trayFractions: defaultTrayFractions }, progress: {}, history: {} };
+const emptySave: SaveData = {
+  settings: { trayFractions: defaultTrayFractions, missedDropMode: defaultMissedDropMode }, progress: {}, history: {},
+};
 
 export class BrowserSaveStorage implements SaveStorage {
   private preserveStoredSave = false;
@@ -82,6 +85,7 @@ function readSave(data: Record<string, unknown>): SaveData {
       theme: typeof settings.theme === 'string' ? settings.theme : undefined,
       filter: typeof settings.filter === 'string' ? settings.filter : undefined,
       trayPosition: trayPositions.find((position) => position === settings.trayPosition),
+      missedDropMode: settings.missedDropMode === 'park-on-board' ? settings.missedDropMode : defaultMissedDropMode,
       trayFractions: {
         vertical: readFraction(trayFractions.vertical) ?? defaultTrayFractions.vertical,
         horizontal: readFraction(trayFractions.horizontal) ?? defaultTrayFractions.horizontal,
@@ -164,13 +168,16 @@ function readSetup(value: unknown): PuzzleSetup | undefined {
 function readProgress(value: unknown): PuzzleProgress | undefined {
   if (!isRecord(value)) return;
   const setup = readSetup(value.setup);
-  const { placedPieceIds, trayOrientations } = value;
+  const { placedPieceIds, trayOrientations, parkedGroups } = value;
   if (!setup || !isRecord(trayOrientations) || !Array.isArray(placedPieceIds)
-    || (!setup.pieceRotation && placedPieceIds.length === 0)
+    || !Array.isArray(parkedGroups)
     || placedPieceIds.length >= getPieceCount(setup.size)
     || !placedPieceIds.every((id): id is string => typeof id === 'string')) return;
   const puzzle = createPuzzle(setup.size, setup.connectorStyle, setup.seed, setup.challengeMode, setup.pieceRotation);
-  if (puzzle.restore({ placedPieceIds, trayOrientations })) return { setup, ...puzzle.snapshot() };
+  const play = new PuzzlePlay(puzzle);
+  if (!play.restore({ placedPieceIds, trayOrientations, parkedGroups })) return;
+  const snapshot = play.snapshot();
+  if (hasProgress(snapshot)) return { setup, ...snapshot };
 }
 
 function readCompletion(value: unknown): PuzzleCompletion | undefined {

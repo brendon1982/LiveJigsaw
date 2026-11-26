@@ -1,11 +1,13 @@
 import type { ChallengeMode } from '../domain/challengeModes';
 import type { ConnectorStyleId } from '../domain/connectorStyles';
-import type { PuzzleSnapshot } from '../domain/Puzzle';
+import type { MissedDropMode, PuzzlePlaySnapshot } from '../domain/PuzzlePlay';
 import type { PieceShape, PuzzleSize } from '../domain/puzzleSizes';
 import type { PuzzleAnimationSpeed } from '../puzzles/PuzzleSource';
 
 export const trayPositions = ['Left', 'Right', 'Bottom', 'Top', 'Auto'] as const;
 export type TrayPosition = typeof trayPositions[number];
+
+export const defaultMissedDropMode: MissedDropMode = 'return-to-tray';
 
 export type TrayFractions = Readonly<{ vertical: number; horizontal: number }>;
 export const defaultTrayFractions: TrayFractions = { vertical: 0, horizontal: 0 };
@@ -15,6 +17,7 @@ export type SavedSettings = Readonly<{
   filter?: string;
   trayPosition?: TrayPosition;
   trayFractions: TrayFractions;
+  missedDropMode: MissedDropMode;
 }>;
 
 export type PuzzleOptions = Readonly<{
@@ -27,7 +30,7 @@ export type PuzzleOptions = Readonly<{
 }>;
 
 export type PuzzleSetup = Omit<PuzzleOptions, 'pieceCount' | 'pieceShape'> & Readonly<{ size: PuzzleSize; seed: number }>;
-export type PuzzleProgress = Readonly<{ setup: PuzzleSetup }> & PuzzleSnapshot;
+export type PuzzleProgress = Readonly<{ setup: PuzzleSetup }> & PuzzlePlaySnapshot;
 export type PuzzleCompletion = Readonly<{ setup: PuzzleSetup; completedAt: string }>;
 
 export type SaveData = Readonly<{
@@ -40,6 +43,10 @@ export type SaveData = Readonly<{
 export interface SaveStorage {
   load(): SaveData;
   save(data: SaveData): void;
+}
+
+export function hasProgress({ placedPieceIds, parkedGroups, trayOrientations }: PuzzlePlaySnapshot): boolean {
+  return placedPieceIds.length > 0 || parkedGroups.length > 0 || Object.keys(trayOrientations).length > 0;
 }
 
 export class GameSave {
@@ -74,7 +81,10 @@ export class GameSave {
   }
 
   saveProgress(sourceKey: string, progress: PuzzleProgress) {
-    this.update({ ...this.data, progress: { ...this.data.progress, [sourceKey]: progress } });
+    const attempts = hasProgress(progress)
+      ? { ...this.data.progress, [sourceKey]: progress }
+      : this.withoutProgress(sourceKey);
+    this.update({ ...this.data, progress: attempts });
   }
 
   completeAttempt(sourceKey: string, completion: PuzzleCompletion) {

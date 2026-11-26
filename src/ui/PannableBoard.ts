@@ -14,6 +14,7 @@ export class PannableBoard {
   private readonly placedImage: Phaser.GameObjects.Image;
   private readonly placedPath = new Path2D();
   private viewport = new Phaser.Geom.Rectangle();
+  private parkedBounds?: Bounds;
   private offset: Point;
   private usesFitZoom = false;
   private showingFinishedArtwork = false;
@@ -137,6 +138,18 @@ export class PannableBoard {
     };
   }
 
+  toScreen(point: Point): Point {
+    return {
+      x: this.viewport.x + this.offset.x + point.x * this.zoom,
+      y: this.viewport.y + this.offset.y + point.y * this.zoom,
+    };
+  }
+
+  setParkedBounds(bounds?: Bounds) {
+    this.parkedBounds = bounds;
+    this.pan(0, 0);
+  }
+
   get zoom(): number {
     return this.camera.zoom;
   }
@@ -207,9 +220,14 @@ export class PannableBoard {
   }
 
   pan(dx: number, dy: number) {
+    const parked = this.parkedBounds;
+    const left = parked ? Math.min(0, parked.x) : 0;
+    const top = parked ? Math.min(0, parked.y) : 0;
+    const right = parked ? Math.max(this.size.width, parked.x + parked.width) : this.size.width;
+    const bottom = parked ? Math.max(this.size.height, parked.y + parked.height) : this.size.height;
     this.offset = {
-      x: this.limitOffset(this.offset.x + dx, this.viewport.width, this.size.width * this.zoom),
-      y: this.limitOffset(this.offset.y + dy, this.viewport.height, this.size.height * this.zoom),
+      x: this.limitOffset(this.offset.x + dx, this.viewport.width, left, right),
+      y: this.limitOffset(this.offset.y + dy, this.viewport.height, top, bottom),
     };
     this.camera.setScroll(-this.offset.x / this.zoom, -this.offset.y / this.zoom);
   }
@@ -234,8 +252,8 @@ export class PannableBoard {
     };
   }
 
-  private limitOffset(offset: number, viewport: number, content: number): number {
+  private limitOffset(offset: number, viewport: number, start: number, end: number): number {
     const center = viewport / 2;
-    return Phaser.Math.Clamp(offset, center - content, center);
+    return Phaser.Math.Clamp(offset, center - end * this.zoom, center - start * this.zoom);
   }
 }

@@ -1,6 +1,10 @@
 export type Point = Readonly<{ x: number; y: number }>;
 export type Size = Readonly<{ width: number; height: number }>;
 
+export function isQuarterTurns(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 3;
+}
+
 export class Bounds {
   readonly x: number;
   readonly y: number;

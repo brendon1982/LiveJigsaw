@@ -48,6 +48,7 @@ export function makeIconButton(
   name: string,
   drawIcon: (art: Phaser.GameObjects.Graphics, color: number) => void,
   click: (pointer: Phaser.Input.Pointer) => void,
+  { dragThreshold, clickInterval }: { dragThreshold?: number; clickInterval?: number } = {},
 ) {
   const size = hasTouchTargets() ? 54 : 42;
   const background = scene.rexUI.add.roundRectangle(0, 0, 1, 1, 9);
@@ -55,12 +56,14 @@ export function makeIconButton(
   const icon = scene.add.container(0, 0, [art]).setSize(24, 24);
   const button = scene.rexUI.add.label({ width: size, height: size, align: 'center', background, icon })
     .setName(name).setOrigin(0).layout();
-  styleButton(button, background, (color) => drawIcon(art, Phaser.Display.Color.HexStringToColor(color).color));
-  return bindClick(scene, button, click);
+  styleButton(button, background, (color) => drawIcon(art, Phaser.Display.Color.HexStringToColor(color).color), false, dragThreshold);
+  return bindClick(scene, button, click, dragThreshold, clickInterval);
 }
 
-function bindClick(scene: UIScene, button: ButtonLabel, click: (pointer: Phaser.Input.Pointer) => void, dragThreshold?: number) {
-  scene.rexUI.add.click(button, { threshold: dragThreshold })
+function bindClick(scene: UIScene, button: ButtonLabel, click: (pointer: Phaser.Input.Pointer) => void,
+  dragThreshold?: number, clickInterval = 100,
+) {
+  scene.rexUI.add.click(button, { threshold: dragThreshold, clickInterval })
     .on('click', (_button: unknown, _object: unknown, pointer: Phaser.Input.Pointer) => click(pointer));
   button.input!.cursor = 'pointer';
   return button;

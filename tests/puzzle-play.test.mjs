@@ -5,7 +5,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { chromium } from 'playwright-core';
 import { PNG } from 'pngjs';
 import { build, preview } from 'vite';
-import { createPuzzle, puzzleSizes } from '../src/domain/puzzleSizes.ts';
+import { createPuzzle } from '../src/domain/puzzleSizes.ts';
 
 const scenarios = [];
 const scenario = (name, run) => scenarios.push({ name, run });
@@ -13,6 +13,9 @@ const scenario = (name, run) => scenarios.push({ name, run });
 const settingsY = { theme: -159, firstFilter: -60, secondFilter: 2, firstTray: 98, secondTray: 160, done: 232 };
 const setupY = { size: -203, connector: -92, speed: 19, rotation: 115, challenge: 211, action: 281 };
 const resumeActionY = 114;
+const compactPuzzlePath = '/compact-fixture/tests/fixtures/compact-puzzle.html';
+const compactSize = { width: 512, height: 288, columns: 4, rows: 2, snapTolerance: 28 };
+let compactPuzzleBuild;
 
 async function seedNextAttempt(page, seed) {
   await page.evaluate((seed) => {
@@ -135,7 +138,8 @@ async function openPuzzle(t, options, path = '/', initPage) {
   const playSelection = async ({ size, connectorStyle, animationSpeed, challengeMode, pieceRotation } = {}) => {
     await waitForText('Challenge mode');
     if (size) {
-      const index = [8, 32, 64, 128].indexOf(size);
+      const sizes = path === compactPuzzlePath ? [8, 32, 64, 128] : [32, 64, 128];
+      const index = sizes.indexOf(size);
       assert.ok(index >= 0);
       await waitForText(String(size));
       await clickSetup(-156 + 104 * index, setupY.size);
@@ -159,6 +163,18 @@ async function openPuzzle(t, options, path = '/', initPage) {
     await clickSetup(158, setupY.action);
   };
   return { page, canvas, waitForText, errors, clickDialog, clickSetup, playSelection };
+}
+
+async function openCompactPuzzle(t, options) {
+  compactPuzzleBuild ??= build({
+    base: '/compact-fixture/',
+    build: {
+      outDir: 'dist/compact-fixture',
+      rollupOptions: { input: 'tests/fixtures/compact-puzzle.html' },
+    },
+  });
+  await compactPuzzleBuild;
+  return openPuzzle(t, options, compactPuzzlePath);
 }
 
 scenario('the picker renders before requesting offscreen previews', async (t) => {
@@ -262,6 +278,8 @@ scenario('the 128-piece tray only draws nearby piece masks', async (t) => {
     viewport: { width: 1320, height: 780 },
   }, '/', trackPieceMaskDraws);
   await page.mouse.click(340, 180);
+  for (const count of ['32', '64', '128']) await waitForText(count);
+  assert.ok(!(await page.evaluate(() => window.paintedText)).includes('8'));
   await playSelection({ size: 128 });
   await waitForText('0 of 128 placed');
 
@@ -277,7 +295,7 @@ scenario('the 128-piece tray only draws nearby piece masks', async (t) => {
 });
 
 scenario('right-click picks up pieces that either mouse button can drop without opening the browser menu', async (t) => {
-  const { page, canvas, waitForText, errors, playSelection } = await openPuzzle(t, {
+  const { page, canvas, waitForText, errors, playSelection } = await openCompactPuzzle(t, {
     viewport: { width: 1320, height: 780 },
   });
   await page.mouse.click(340, 180);
@@ -321,7 +339,7 @@ scenario('right-click picks up pieces that either mouse button can drop without 
 });
 
 scenario('live pieces scroll, reflow, and snap to the pannable board', async (t) => {
-  const { page, canvas, waitForText, errors, clickDialog, playSelection } = await openPuzzle(t, { viewport: { width: 1320, height: 780 } });
+  const { page, canvas, waitForText, errors, clickDialog, playSelection } = await openCompactPuzzle(t, { viewport: { width: 1320, height: 780 } });
   const bounds = await canvas.boundingBox();
   assert.equal(bounds.width, 1320);
   assert.equal(bounds.height, 780);
@@ -555,7 +573,7 @@ scenario('the landscape scenes animate on the board', async (t) => {
     await page.mouse.click(index % 2 ? 935 : 340, 570);
     await playSelection({ connectorStyle: 'Angular', animationSpeed: 'Fast' });
     await waitForText(title);
-    await waitForText('0 of 8 placed');
+    await waitForText('0 of 32 placed');
     let firstArtwork;
     let animated = false;
     for (const deadline = Date.now() + 4000; Date.now() < deadline;) {
@@ -578,7 +596,7 @@ scenario('the landscape scenes animate on the board', async (t) => {
 });
 
 scenario('parallax seeds place both foreground and background artwork', async (t) => {
-  const { page, waitForText, errors, playSelection } = await openPuzzle(t, { viewport: { width: 1320, height: 780 } });
+  const { page, waitForText, errors, playSelection } = await openCompactPuzzle(t, { viewport: { width: 1320, height: 780 } });
 
   const artworkPosition = async ({ name, cardX, scroll, rowY, matches }, seed) => {
     await scrollPickerTo(page, scroll);
@@ -655,7 +673,7 @@ scenario('the medieval village is captured during loading and animates after reo
     await page.mouse.click(340, 600);
     await playSelection({ animationSpeed: 'Fast' });
     await waitForText('Medieval Village');
-    await waitForText('0 of 8 placed');
+    await waitForText('0 of 32 placed');
   };
   await openVillage();
   await loading.promise;
@@ -685,7 +703,7 @@ scenario('the medieval village is captured during loading and animates after reo
 });
 
 scenario('Hex Coast captures continuous roads and animated water', async (t) => {
-  const { page, waitForText, errors, playSelection } = await openPuzzle(t, {
+  const { page, waitForText, errors, playSelection } = await openCompactPuzzle(t, {
     viewport: { width: 1320, height: 780 },
   });
   const atlasLoaded = (name) => page.waitForResponse((response) =>
@@ -910,7 +928,7 @@ scenario('version 1 through 5 saves migrate with settings, options, progress, an
 });
 
 scenario('piece rotation distinguishes clicks and taps from drag, scroll, and cancellation', async (t) => {
-  const { page, canvas, waitForText, errors, clickDialog, playSelection } = await openPuzzle(t, {
+  const { page, canvas, waitForText, errors, clickDialog, playSelection } = await openCompactPuzzle(t, {
     viewport: { width: 1320, height: 780 }, hasTouch: true, isMobile: true,
   });
   const { dispatch, moveFinger } = await touchController(page);
@@ -921,7 +939,7 @@ scenario('piece rotation distinguishes clicks and taps from drag, scroll, and ca
   await waitForText('0 of 8 placed');
   assert.equal((await readSave(page)).recentOptions.pieceRotation, true);
 
-  const puzzle = createPuzzle(puzzleSizes[0], 'none', 233, 'none', true);
+  const puzzle = createPuzzle(compactSize, 'none', 233, 'none', true);
   const { id, target } = puzzle.trayPieces[0];
   const x = 79.5;
   const y = 135.5;
@@ -993,7 +1011,7 @@ scenario('piece rotation distinguishes clicks and taps from drag, scroll, and ca
 });
 
 scenario('Sequential locks tray pieces while keeping touch scrolling and saves the active order', async (t) => {
-  const { page, canvas, waitForText, errors, clickDialog, playSelection } = await openPuzzle(t, {
+  const { page, canvas, waitForText, errors, clickDialog, playSelection } = await openCompactPuzzle(t, {
     viewport: { width: 1320, height: 780 }, hasTouch: true, isMobile: true,
   });
   const { moveFinger } = await touchController(page);
@@ -1045,7 +1063,7 @@ scenario('Sequential locks tray pieces while keeping touch scrolling and saves t
 });
 
 scenario('Seed previews an on-target disconnected drop without saving it', async (t) => {
-  const { page, canvas, waitForText, errors, playSelection } = await openPuzzle(t, {
+  const { page, canvas, waitForText, errors, playSelection } = await openCompactPuzzle(t, {
     viewport: { width: 1320, height: 780 }, hasTouch: true, isMobile: true,
   });
   const { moveFinger } = await touchController(page);
@@ -1103,7 +1121,7 @@ scenario('Seed previews an on-target disconnected drop without saving it', async
 });
 
 scenario('No Guide progress resumes, resets, and records each completion', async (t) => {
-  const { page, canvas, waitForText, errors, clickDialog, clickSetup, playSelection } = await openPuzzle(t, {
+  const { page, canvas, waitForText, errors, clickDialog, clickSetup, playSelection } = await openCompactPuzzle(t, {
     viewport: { width: 1320, height: 780 },
   });
   const pickWindmill = () => page.mouse.click(340, 180);
@@ -1419,7 +1437,7 @@ scenario('the picker preserves an active filter and its scroll offset until relo
   const scrolled = await canvas.screenshot();
   await page.mouse.click(340, 340);
   await playSelection();
-  await waitForText('0 of 8 placed');
+  await waitForText('0 of 32 placed');
   await page.evaluate(() => { window.paintedText = []; });
   await page.mouse.click(99, 43);
   await waitForText('Filters (1)');
@@ -1539,9 +1557,9 @@ scenario('the picker scrolls past two cards and clips previews', async (t) => {
     await waitForText('Connector style');
     await waitForText('None'); // The default challenge mode, not a connector caption.
     const paintedText = await page.evaluate(() => window.paintedText);
-    assert.ok(paintedText.includes('8'), 'The size tile should show only its piece count');
-    assert.ok(!paintedText.includes('Classic · 8'));
-    assert.ok(!paintedText.includes('32'), 'Sizes that exceed the source viewport should not be offered');
+    assert.ok(paintedText.includes('32'), 'The size tile should show only its piece count');
+    assert.ok(!paintedText.includes('Classic · 32'));
+    assert.ok(!paintedText.includes('8'), 'The retired size should not be offered');
     for (const label of ['Classic', 'Rounded', 'Angular']) {
       assert.ok(!paintedText.includes(label), `The ${label} connector option should not draw a caption`);
     }
@@ -1567,7 +1585,7 @@ scenario('the picker scrolls past two cards and clips previews', async (t) => {
     assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 120, 175), previewColor, 'Cancel should preserve the picker scroll position');
     await page.mouse.click(340, 175);
     await playSelection();
-    await waitForText('0 of 8 placed');
+    await waitForText('0 of 32 placed');
     await page.waitForFunction(() => window.sourceAnimationSpeed === 'Normal');
     await page.evaluate(() => { window.paintedText = []; });
     await page.mouse.click(99, 43);
@@ -1582,15 +1600,15 @@ scenario('the picker scrolls past two cards and clips previews', async (t) => {
     await waitForText('Select a Puzzle');
     await scrollPickerTo(page, 0);
     await page.mouse.click(340, 175);
-    await playSelection({ size: 32, connectorStyle: 'None', animationSpeed: 'Fast' });
-    await waitForText('0 of 32 placed');
+    await playSelection({ size: 64, connectorStyle: 'None', animationSpeed: 'Fast' });
+    await waitForText('0 of 64 placed');
     await page.reload();
     await waitForText('Windmill');
     await page.mouse.click(1003, 175);
     await playSelection();
-    await waitForText('0 of 32 placed');
+    await waitForText('0 of 64 placed');
     assert.deepEqual((await readSave(page)).recentOptions, {
-      pieceCount: 32, connectorStyle: 'none', animationSpeed: 'Fast', challengeMode: 'none', pieceRotation: false,
+      pieceCount: 64, connectorStyle: 'none', animationSpeed: 'Fast', challengeMode: 'none', pieceRotation: false,
     });
 
     await page.evaluate(() => { window.paintedText = []; });
@@ -1601,10 +1619,10 @@ scenario('the picker scrolls past two cards and clips previews', async (t) => {
     assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 120, 175), previewColor);
     await page.mouse.click(340, 175);
     await playSelection();
-    await waitForText('0 of 8 placed');
+    await waitForText('0 of 64 placed');
     await page.waitForFunction(() => window.sourceAnimationSpeed === 'Fast');
     assert.deepEqual((await readSave(page)).recentOptions, {
-      pieceCount: 8, connectorStyle: 'none', animationSpeed: 'Fast', challengeMode: 'none', pieceRotation: false,
+      pieceCount: 64, connectorStyle: 'none', animationSpeed: 'Fast', challengeMode: 'none', pieceRotation: false,
     });
     assert.deepEqual(errors, []);
   });
@@ -1642,7 +1660,7 @@ scenario('the picker scrolls past two cards and clips previews', async (t) => {
     assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 140, 410), previewColor, 'A swipe should reveal the third card');
     await page.touchscreen.tap(400, 410);
     await playSelection({ connectorStyle: 'None', animationSpeed: 'Fast' });
-    await waitForText('0 of 8 placed');
+    await waitForText('0 of 32 placed');
     await page.waitForFunction(() => window.sourceAnimationSpeed === 'Fast');
     await page.evaluate(() => { window.paintedText = []; });
     await page.touchscreen.tap(99, 49);
@@ -1654,7 +1672,7 @@ scenario('the picker scrolls past two cards and clips previews', async (t) => {
 });
 
 scenario('tablet touch scrolls, resizes, zooms, cancels, and places pieces', async (t) => {
-  const { page, canvas, waitForText, errors, clickDialog, playSelection } = await openPuzzle(t, {
+  const { page, canvas, waitForText, errors, clickDialog, playSelection } = await openCompactPuzzle(t, {
     viewport: { width: 1024, height: 768 },
     hasTouch: true,
     isMobile: true,
@@ -1731,7 +1749,7 @@ scenario('tablet touch scrolls, resizes, zooms, cancels, and places pieces', asy
 scenario('tray settings move the live tray and rotate touch gestures with it', async (t) => {
   const portrait = { width: 680, height: 860 };
   const landscape = { width: 1024, height: 768 };
-  const { page, canvas, waitForText, errors, clickDialog, playSelection } = await openPuzzle(t, {
+  const { page, canvas, waitForText, errors, clickDialog, playSelection } = await openCompactPuzzle(t, {
     viewport: portrait, hasTouch: true, isMobile: true,
   });
   const { dispatch, moveFinger } = await touchController(page);

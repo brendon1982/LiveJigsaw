@@ -38,7 +38,7 @@ Keep extensions small. Add board layouts and cut rules to the domain when a conc
 
 ## Rendering details
 
-- Keep board geometry in logical pixels. Scale texture frame coordinates at the capture boundary. Use 2× capture and linear filtering to smooth geometry when the source and GPU texture limits allow it.
+- Keep board geometry, capture textures, and piece frames at the same logical pixel scale. Use linear filtering when sampling the live texture.
 - Use named texture frames. Phaser treats numeric frame `0` as an omitted frame and falls back to the first registered frame.
 - Capture after scene updates. The board guide and pieces share the same live texture. The UI cameras clip the tray and board to their panels. Convert board drops to logical coordinates after accounting for pan.
 

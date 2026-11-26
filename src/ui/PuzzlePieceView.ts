@@ -14,13 +14,13 @@ export class PuzzlePieceView {
 
   constructor(scene: Phaser.Scene, capture: LivePuzzleCapture, readonly piece: PuzzlePiece) {
     const { frame: outlineBounds, points } = piece.outline;
-    const { texture, scale } = capture;
-    // Round the crop outward in texture pixels and keep geometry in logical pixels.
-    const left = Math.floor(outlineBounds.x * scale);
-    const top = Math.floor(outlineBounds.y * scale);
-    const width = Math.ceil((outlineBounds.x + outlineBounds.width) * scale) - left;
-    const height = Math.ceil((outlineBounds.y + outlineBounds.height) * scale) - top;
-    const frame = new Bounds(left / scale, top / scale, width / scale, height / scale);
+    const { texture } = capture;
+    // Round the texture crop outward to include the full outline.
+    const left = Math.floor(outlineBounds.x);
+    const top = Math.floor(outlineBounds.y);
+    const width = Math.ceil(outlineBounds.x + outlineBounds.width) - left;
+    const height = Math.ceil(outlineBounds.y + outlineBounds.height) - top;
+    const frame = new Bounds(left, top, width, height);
     this.frame = frame;
     const localPoints = points.map((point) => frame.toLocal(point));
     const maskKey = `live-puzzle-mask-${piece.id}`;
@@ -29,7 +29,6 @@ export class PuzzlePieceView {
     this.mask = mask;
 
     const context = mask.context;
-    context.scale(scale, scale);
     context.beginPath();
     context.moveTo(localPoints[0].x, localPoints[0].y);
     for (const point of localPoints.slice(1)) context.lineTo(point.x, point.y);
@@ -42,8 +41,7 @@ export class PuzzlePieceView {
 
     const origin = frame.toLocal(piece.target);
     this.image = scene.add.image(0, 0, texture.key, piece.id)
-      .setOrigin(origin.x / frame.width, origin.y / frame.height)
-      .setDisplaySize(frame.width, frame.height);
+      .setOrigin(origin.x / frame.width, origin.y / frame.height);
     this.image.enableFilters().filters!.internal.addMask(maskKey);
 
     const hitPoints = points.map(({ x, y }) => ({ x: x - piece.target.x, y: y - piece.target.y }));

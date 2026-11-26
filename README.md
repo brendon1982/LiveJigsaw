@@ -1,12 +1,12 @@
 # Live Jigsaw
 
-A browser jigsaw prototype built around live, self-running Phaser 4 scenes. Choose from sizes of 8, 32, 64, or 128 pieces, depending on the scene. Each puzzle draws the source into one shared texture.
+A browser jigsaw prototype built around live, self-running Phaser 4 scenes. Choose from sizes of 32, 64, or 128 pieces, depending on the scene. Each puzzle draws the source into one shared texture.
 
 The play area fills the window. Scroll the piece tray with the mouse wheel, scrollbar, or by dragging empty space. Drag the divider to make room for more columns. Drag the board to bring any puzzle corner to the center of the board viewport. The faint live image guides placement.
 
 On a tablet, swipe vertically anywhere in the tray to scroll. Drag a piece to the right to pick it up. Drag the board with one finger to pan and pinch with two fingers to zoom.
 
-Each source declares its maximum viewport. The engine uses it to offer puzzle sizes and decides whether to use 2× supersampling within the source and GPU texture limits. For sources with a maximum viewport of 1024 × 576, the 8-piece puzzle uses 2× capture if the GPU allows it, while larger puzzles use native resolution.
+Each source declares its maximum viewport for new puzzles. The shared texture matches the board dimensions, subject to the GPU texture limit. Existing 8-piece puzzles can still be resumed.
 
 ## Local development
 

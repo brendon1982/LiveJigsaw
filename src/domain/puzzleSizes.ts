@@ -11,7 +11,6 @@ export type PuzzleSize = Size & Readonly<{
 }>;
 
 export const puzzleSizes = [
-  { width: 512, height: 288, columns: 4, rows: 2, snapTolerance: 28 },
   { width: 1024, height: 576, columns: 8, rows: 4, snapTolerance: 28 },
   { width: 1024, height: 576, columns: 8, rows: 8, snapTolerance: 18 },
   { width: 1024, height: 576, columns: 16, rows: 8, snapTolerance: 16 },
@@ -38,15 +37,4 @@ export function createPuzzle(
 ): Puzzle {
   const board = new Board(size, size.columns, size.rows);
   return new Puzzle(board, size.snapTolerance, connectorStyle, seed, challengeMode, pieceRotation);
-}
-
-export function captureScale(size: Size, maximum: Size, textureLimit: number): number {
-  const captureLimit = {
-    width: Math.min(maximum.width, textureLimit),
-    height: Math.min(maximum.height, textureLimit),
-  };
-  if (!fitsViewport(size, captureLimit)) throw new RangeError('The puzzle exceeds the available texture size');
-
-  const supersampledSize = { width: size.width * 2, height: size.height * 2 };
-  return fitsViewport(supersampledSize, captureLimit) ? 2 : 1;
 }

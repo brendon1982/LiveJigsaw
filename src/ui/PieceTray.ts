@@ -7,6 +7,7 @@ import type { PuzzlePieceView } from './PuzzlePieceView';
 import { styleWithTheme } from './theme';
 
 const scrollbarSpace = 24;
+const pieceSpacing = 4;
 
 export class PieceTray {
   readonly layer: Phaser.GameObjects.Layer;
@@ -36,8 +37,8 @@ export class PieceTray {
       const { x, y } = frame.toLocal(piece.target);
       // The base-cell center can be off-center in the image when only one side has a tab.
       return {
-        width: Math.max(frame.width * this.pieceScale + 16, 2 * Math.max(x, frame.width - x) * this.pieceScale + 2),
-        height: Math.max(frame.height * this.pieceScale + 16, 2 * Math.max(y, frame.height - y) * this.pieceScale + 2),
+        width: Math.max(frame.width * this.pieceScale + pieceSpacing, 2 * Math.max(x, frame.width - x) * this.pieceScale + 2),
+        height: Math.max(frame.height * this.pieceScale + pieceSpacing, 2 * Math.max(y, frame.height - y) * this.pieceScale + 2),
       };
     });
     const uprightWidth = Math.ceil(Math.max(...slotSizes.map(({ width }) => width)));

@@ -289,6 +289,29 @@ function trackPieceMaskDraws(page) {
   });
 }
 
+scenario('the board starts fitted to the space left by the saved tray width', async (t) => {
+  const { page, canvas, waitForText, errors, playSelection } = await openPuzzle(t, {
+    viewport: { width: 1320, height: 780 },
+  }, '/', (page) => page.addInitScript(() => {
+    localStorage.setItem('live-jigsaw.save', JSON.stringify({
+      version: 6,
+      settings: { trayPosition: 'Left', trayFractions: { vertical: 0.4, horizontal: 0 } },
+    }));
+  }));
+  await page.mouse.click(340, 180);
+  await playSelection({ size: 392 });
+  await waitForText('0 of 392 placed');
+
+  const screenshot = await canvas.screenshot();
+  const panelBackground = [32, 46, 42, 255];
+  assert.deepEqual(await pixelAt(page, screenshot, 490, 700), [52, 66, 62, 255], 'The saved tray width should be restored');
+  assert.deepEqual(await pixelAt(page, screenshot, 900, 180), panelBackground, 'The artwork should fit vertically after restoring the tray');
+  assert.notDeepEqual(await pixelAt(page, screenshot, 900, 250), panelBackground, 'The fitted artwork should be visible');
+  assert.deepEqual(await pixelAt(page, screenshot, 900, 700), panelBackground, 'The artwork should be centered vertically');
+  assert.deepEqual(await pixelAt(page, screenshot, 1267, 113), panelBackground, 'Fit board should start hidden');
+  assert.deepEqual(errors, []);
+});
+
 scenario('the 392-piece tray only draws nearby piece masks', async (t) => {
   const { page, waitForText, errors, playSelection } = await openPuzzle(t, {
     viewport: { width: 1320, height: 780 },
@@ -544,7 +567,7 @@ scenario('live pieces scroll, reflow, and snap to the pannable board', async (t)
   const tower = await pixelAt(page, beforePan, 1124, 492);
   assert.notDeepEqual(await pixelAt(page, afterPan, 1124, 492), tower);
   assert.deepEqual(await pixelAt(page, afterPan, 1024, 412), tower, 'The 32-piece artwork should move with both pan axes');
-  await drag(313, 391, 635, 268);
+  await drag(313, 391, 689, 288);
   await waitForText('1 of 32 placed');
   assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 1267, 113), [237, 243, 233, 255], 'Panning should show the four-way arrow');
   await click(1267, 113);

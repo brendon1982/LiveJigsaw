@@ -109,8 +109,7 @@ export class PuzzleBoardView {
     this.fitButton = makeIconButton(scene, 'Fit board', drawFitBoardIcon, (pointer) => {
       if (pointer.wasCanceled) return;
       this.cancelInteraction();
-      this.board.fit();
-      this.updateFitButton();
+      this.fitBoard();
     }).setVisible(false);
     this.placementEffects = new PlacementEffects(scene, this.board.layer);
     this.floatingPieces = scene.add.layer();
@@ -147,10 +146,7 @@ export class PuzzleBoardView {
           this.completionStage = 'finished';
         }
         this.layoutBoard(this.panels!.layoutBoardOnly(workspace));
-        if (finishSlide) {
-          this.board.fit();
-          this.updateFitButton();
-        }
+        if (finishSlide) this.fitBoard();
         return;
       }
       const side = resolveTraySide(this.trayPosition, gameSize);
@@ -174,6 +170,7 @@ export class PuzzleBoardView {
     };
     scene.scale.on(Phaser.Scale.Events.RESIZE, this.resize);
     this.resize();
+    this.fitBoard();
 
     scene.input.on('pointerdown', this.startGesture);
     scene.input.on('pointermove', this.moveGesture);
@@ -236,6 +233,11 @@ export class PuzzleBoardView {
     this.gesture = undefined;
     this.pinch = undefined;
     this.scene.input.setDefaultCursor('default');
+  }
+
+  private fitBoard() {
+    this.board.fit();
+    this.updateFitButton();
   }
 
   private updateFitButton() {

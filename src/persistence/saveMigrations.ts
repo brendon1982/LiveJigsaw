@@ -37,6 +37,11 @@ const migrations: readonly Migration[] = [
     history: mapSaveEntries(document.history, (value) => Array.isArray(value)
       ? value.map((entry) => isRecord(entry) ? withRotationSetup(entry) : entry) : value),
   }),
+  (document) => {
+    if (!isRecord(document.recentOptions)) return document;
+    const { pieceCount, ...options } = document.recentOptions;
+    return { ...document, recentOptions: { ...options, pieceCount: pieceCount === 392 ? 420 : pieceCount, pieceShape: 'square' } };
+  },
 ];
 
 function withRotationOff(value: unknown): unknown {

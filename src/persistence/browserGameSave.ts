@@ -1,6 +1,6 @@
 import { challengeModes, type ChallengeMode } from '../domain/challengeModes';
 import { connectorStyles, type ConnectorStyleId } from '../domain/connectorStyles';
-import { createPuzzle, getPieceCount, puzzleSizes, type PuzzleSize } from '../domain/puzzleSizes';
+import { createPuzzle, getPieceCount, pieceShapeIds, puzzleSizePresets, type PuzzleSize } from '../domain/puzzleSizes';
 import { puzzleAnimationSpeeds, type PuzzleAnimationSpeed } from '../puzzles/PuzzleSource';
 import {
   defaultTrayFractions, trayPositions,
@@ -125,13 +125,17 @@ function isChallengeMode(value: unknown): value is ChallengeMode {
 function readOptions(value: unknown): PuzzleOptions | undefined {
   if (!isRecord(value)) return;
   const { pieceCount, connectorStyle, animationSpeed, challengeMode, pieceRotation } = value;
+  const pieceShape = pieceShapeIds.find((shape) => shape === value.pieceShape) ?? 'square';
   if (isConnectorStyle(connectorStyle) && isAnimationSpeed(animationSpeed) && isChallengeMode(challengeMode)
     && typeof pieceRotation === 'boolean') {
-    return { pieceCount: isPositiveInteger(pieceCount) ? pieceCount : undefined, connectorStyle, animationSpeed, challengeMode, pieceRotation };
+    return {
+      pieceCount: isPositiveInteger(pieceCount) ? pieceCount : undefined, pieceShape,
+      connectorStyle, animationSpeed, challengeMode, pieceRotation,
+    };
   }
 }
 
-const maximumPieceCount = Math.max(...puzzleSizes.map(getPieceCount));
+const maximumPieceCount = Math.max(...puzzleSizePresets.map((preset) => getPieceCount(preset.square)));
 
 function isPositiveInteger(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value > 0;

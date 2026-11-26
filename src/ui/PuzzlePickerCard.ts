@@ -1,12 +1,12 @@
 import Phaser from 'phaser';
-import { availablePuzzleSizes, puzzleSizes } from '../domain/puzzleSizes';
+import { availablePuzzleSizes } from '../domain/puzzleSizes';
 import type { PuzzleSource } from '../puzzles/PuzzleSource';
 import { addPressFeedback, type UIScene } from './button';
 import { headerControlGap, headerGap } from './puzzleHeader';
 import { palette, styleWithTheme } from './theme';
 
 export const maxPickerCardWidth = 560;
-const previewSize = puzzleSizes[0];
+const previewSize = { width: 1024, height: 576 };
 const previewHeight = maxPickerCardWidth * previewSize.height / previewSize.width;
 const cornerRadius = 16;
 const footerHeight = 72;

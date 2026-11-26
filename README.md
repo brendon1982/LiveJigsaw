@@ -1,6 +1,6 @@
 # Live Jigsaw
 
-A browser jigsaw prototype built around live, self-running Phaser 4 scenes. Choose from sizes of 32, 64, 128, 288, or 392 pieces, depending on the scene. Each puzzle draws the source into one shared texture.
+A browser jigsaw prototype built around live, self-running Phaser 4 scenes. Choose 32, 64, 128, 288, or 420 pieces, then choose square pieces or short or long rectangles in either orientation. Each puzzle draws the source into one shared texture.
 
 The play area fills the window. Scroll the piece tray with the mouse wheel, scrollbar, or by dragging empty space. Drag the divider to make room for more columns. Drag the board to bring any puzzle corner to the center of the board viewport. The faint live image guides placement.
 

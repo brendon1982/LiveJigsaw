@@ -8,11 +8,17 @@
   <body>
     <main id="game"></main>
     <script type="module">
-      import { puzzleSizes } from '../../src/domain/puzzleSizes';
+      import { pieceShapeIds, puzzleSizePresets } from '../../src/domain/puzzleSizes';
 
       // Keep the compact board for fixed-coordinate interaction scenarios only.
-      puzzleSizes.splice(3);
-      puzzleSizes.unshift({ width: 512, height: 288, columns: 4, rows: 2, snapTolerance: 28 });
+      const fixedSizes = [
+        { width: 512, height: 288, columns: 4, rows: 2, snapTolerance: 28 },
+        { width: 1024, height: 576, columns: 8, rows: 4, snapTolerance: 28 },
+        { width: 1024, height: 576, columns: 8, rows: 8, snapTolerance: 18 },
+        { width: 1024, height: 576, columns: 16, rows: 8, snapTolerance: 16 },
+      ];
+      puzzleSizePresets.splice(0, puzzleSizePresets.length,
+        ...fixedSizes.map((size) => Object.fromEntries(pieceShapeIds.map((shape) => [shape, size]))));
       await import('../../src/main');
     </script>
   </body>

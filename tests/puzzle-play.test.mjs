@@ -11,7 +11,7 @@ const scenarios = [];
 const scenario = (name, run) => scenarios.push({ name, run });
 
 const settingsY = { theme: -159, firstFilter: -60, secondFilter: 2, firstTray: 98, secondTray: 160, done: 232 };
-const setupY = { size: -203, connector: -92, speed: 19, rotation: 115, challenge: 211, action: 281 };
+const setupY = { size: -251, shape: -155, connector: -44, speed: 67, rotation: 163, challenge: 259, action: 329 };
 const resumeActionY = 114;
 const compactPuzzlePath = '/compact-fixture/tests/fixtures/compact-puzzle.html';
 const compactSize = { width: 512, height: 288, columns: 4, rows: 2, snapTolerance: 28 };
@@ -146,19 +146,24 @@ async function openPuzzle(t, options, path = '/', initPage) {
   };
   const clickSetup = async (dx, dy) => {
     const { width, height } = await canvas.boundingBox();
-    const scale = Math.min(1, (width - 24) / 448, (height - 24) / 654);
+    const scale = Math.min(1, (width - 24) / 448, (height - 24) / 750);
     await clickDialog(dx * scale, dy * scale);
   };
-  const playSelection = async ({ size, connectorStyle, animationSpeed, challengeMode, pieceRotation } = {}) => {
+  const playSelection = async ({ size, pieceShape, connectorStyle, animationSpeed, challengeMode, pieceRotation } = {}) => {
     await waitForText('Challenge mode');
     if (size) {
       const compact = path === compactPuzzlePath;
-      const sizes = compact ? [8, 32, 64, 128] : [32, 64, 128, 288, 392];
+      const sizes = compact ? [8, 32, 64, 128] : [32, 64, 128, 288, 420];
       const index = sizes.indexOf(size);
       assert.ok(index >= 0);
       await waitForText(String(size));
       const x = compact ? -156 + 104 * index : -169.6 + 84.8 * index;
       await clickSetup(x, setupY.size);
+    }
+    if (pieceShape) {
+      const index = ['square', 'vertical-long', 'horizontal-long', 'vertical-short', 'horizontal-short'].indexOf(pieceShape);
+      assert.ok(index >= 0);
+      await clickSetup(-169.6 + 84.8 * index, setupY.shape);
     }
     if (connectorStyle) {
       const index = ['Classic', 'Rounded', 'Angular', 'None'].indexOf(connectorStyle);
@@ -299,8 +304,8 @@ scenario('the board starts fitted to the space left by the saved tray width', as
     }));
   }));
   await page.mouse.click(340, 180);
-  await playSelection({ size: 392 });
-  await waitForText('0 of 392 placed');
+  await playSelection({ size: 420 });
+  await waitForText('0 of 420 placed');
 
   const screenshot = await canvas.screenshot();
   const panelBackground = [32, 46, 42, 255];
@@ -312,15 +317,15 @@ scenario('the board starts fitted to the space left by the saved tray width', as
   assert.deepEqual(errors, []);
 });
 
-scenario('the 392-piece tray only draws nearby piece masks', async (t) => {
+scenario('the 420-piece tray only draws nearby piece masks', async (t) => {
   const { page, waitForText, errors, playSelection } = await openPuzzle(t, {
     viewport: { width: 1320, height: 780 },
   }, '/', trackPieceMaskDraws);
   await page.mouse.click(340, 180);
-  for (const count of ['32', '64', '128', '288', '392']) await waitForText(count);
+  for (const count of ['32', '64', '128', '288', '420']) await waitForText(count);
   assert.ok(!(await page.evaluate(() => window.paintedText)).includes('8'));
-  await playSelection({ size: 392 });
-  await waitForText('0 of 392 placed');
+  await playSelection({ size: 420 });
+  await waitForText('0 of 420 placed');
 
   const assertMaskDraws = async () => {
     const draws = await page.evaluate(() => window.countPieceMaskDraws());
@@ -333,14 +338,22 @@ scenario('the 392-piece tray only draws nearby piece masks', async (t) => {
   assert.deepEqual(errors, []);
 });
 
-scenario('the 288-piece option opens by touch in portrait', async (t) => {
+scenario('a rectangular 288-piece puzzle opens by touch in portrait and remembers its shape', async (t) => {
   const { page, waitForText, errors, playSelection } = await openPuzzle(t, {
     viewport: { width: 680, height: 800 }, hasTouch: true,
   });
   await page.touchscreen.tap(350, 180);
-  await playSelection({ size: 288 });
+  await playSelection({ size: 288, pieceShape: 'horizontal-long' });
   await waitForText('0 of 288 placed');
-  assert.equal((await readSave(page)).recentOptions.pieceCount, 288);
+  const recentOptions = (await readSave(page)).recentOptions;
+  assert.equal(recentOptions.pieceCount, 288);
+  assert.equal(recentOptions.pieceShape, 'horizontal-long');
+  await page.reload();
+  await waitForText('Windmill');
+  await page.touchscreen.tap(350, 180);
+  await playSelection();
+  await waitForText('0 of 288 placed');
+  assert.deepEqual((await readSave(page)).recentOptions, recentOptions);
   assert.deepEqual(errors, []);
 });
 
@@ -872,7 +885,7 @@ scenario('picker Settings remembers the theme and filter on a narrow touch scree
   assert.deepEqual(errors, []);
 });
 
-scenario('version 1 through 5 saves migrate with settings, options, progress, and history intact', async (t) => {
+scenario('version 1 through 6 saves migrate with settings, options, progress, and history intact', async (t) => {
   const { page, canvas, waitForText, errors, clickDialog } = await openPuzzle(t, { viewport: { width: 1320, height: 780 } });
   const size = { width: 512, height: 288, columns: 4, rows: 2, snapTolerance: 28 };
   const setup = {
@@ -932,11 +945,11 @@ scenario('version 1 through 5 saves migrate with settings, options, progress, an
     await waitForText('Completed');
     await waitForText('1 of 8 placed');
     assert.deepEqual(await readSave(page), {
-      version: 6,
+      version: 7,
       settings,
       recentOptions: {
         pieceCount: previous.version >= 4 ? 32 : 8, connectorStyle: 'classic', animationSpeed: 'Normal',
-        challengeMode: 'none', pieceRotation: false,
+        challengeMode: 'none', pieceRotation: false, pieceShape: 'square',
       },
       progress: { Windmill: { ...original.progress.Windmill, setup: noneSetup, trayOrientations: {} } },
       history: { Lighthouse: [
@@ -965,6 +978,28 @@ scenario('version 1 through 5 saves migrate with settings, options, progress, an
   await page.mouse.click(340, 180);
   await waitForText('Resume');
   await waitForText('Challenge mode: None');
+
+  const legacySize = { width: 1792, height: 1008, columns: 28, rows: 14, snapTolerance: 16 };
+  const legacySetup = { ...noneSetup, size: legacySize };
+  const version6 = {
+    version: 6, settings,
+    recentOptions: { ...version5.recentOptions, pieceCount: 392, pieceRotation: false },
+    progress: { Windmill: { setup: legacySetup, placedPieceIds: ['piece-0-0'], trayOrientations: {} } },
+    history: { Lighthouse: [{ ...original.history.Lighthouse[0], setup: legacySetup }] },
+  };
+  await storeSave(version6);
+  await page.reload();
+  await waitForText('Completed');
+  await waitForText('1 of 392 placed');
+  assert.deepEqual(await readSave(page), {
+    ...version6, version: 7,
+    recentOptions: { ...version6.recentOptions, pieceCount: 420, pieceShape: 'square' },
+  });
+  await clickDialog(-320, -210);
+  await waitForText('Resume');
+  await page.evaluate(() => { window.paintedText = []; });
+  await clickDialog(96, resumeActionY);
+  await waitForText('1 of 392 placed');
 
   const future = { ...original, version: 99, futureField: { keep: true } };
   await storeSave(future);
@@ -1258,13 +1293,13 @@ scenario('No Guide progress resumes, resets, and records each completion', async
   }
   assert.ok(!resumeText.includes('1 of 8 pieces placed'));
   await clickDialog(-6, resumeActionY);
-  await waitForText('Puzzle size');
+  await waitForText('Piece count');
   await clickSetup(-52, setupY.size);
   await page.keyboard.press('Escape');
   await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   assert.deepEqual(await getAttempt(), firstSave);
   assert.deepEqual((await readSave(page)).recentOptions, {
-    pieceCount: 8, connectorStyle: 'none', animationSpeed: 'Fast', challengeMode: 'no-guide', pieceRotation: false,
+    pieceCount: 8, pieceShape: 'square', connectorStyle: 'none', animationSpeed: 'Fast', challengeMode: 'no-guide', pieceRotation: false,
   });
   await page.evaluate(() => { window.paintedText = []; });
   await pickWindmill();
@@ -1342,7 +1377,7 @@ scenario('No Guide progress resumes, resets, and records each completion', async
   await page.reload();
   await waitForText('Completed');
   await pickWindmill();
-  await waitForText('Puzzle size');
+  await waitForText('Piece count');
   assert.equal(await page.evaluate(() => window.paintedText.includes('Resume')), false);
   assert.deepEqual(errors, []);
 });
@@ -1356,7 +1391,7 @@ scenario('picker tag and completion filters combine and refresh after play', asy
     seed: 42, connectorStyle: 'none', animationSpeed: 'Normal', challengeMode: 'none', pieceRotation: false,
   };
   const original = {
-    version: 6,
+    version: 7,
     settings: { trayFractions: { vertical: 0, horizontal: 0 } },
     progress: {
       Lighthouse: { setup, placedPieceIds: ['piece-0-0'], trayOrientations: {} },
@@ -1472,7 +1507,7 @@ scenario('picker tag and completion filters combine and refresh after play', asy
     await pixelAt(page, shortenedResults, 20, 405), 'The shorter result list should clamp back to the top');
   await pickFirst();
   await waitForText('Meadow');
-  await waitForText('Puzzle size');
+  await waitForText('Piece count');
   assert.deepEqual(errors, []);
 });
 
@@ -1497,7 +1532,7 @@ scenario('the picker preserves an active filter and its scroll offset until relo
   await page.reload();
   await waitForText('Windmill');
   await page.mouse.click(340, 180);
-  await waitForText('Puzzle size');
+  await waitForText('Piece count');
   await waitForText('Windmill');
   assert.deepEqual(errors, []);
 });
@@ -1615,16 +1650,24 @@ scenario('the picker scrolls past two cards and clips previews', async (t) => {
     for (const label of ['Classic', 'Rounded', 'Angular']) {
       assert.ok(!paintedText.includes(label), `The ${label} connector option should not draw a caption`);
     }
+    for (const label of ['Square', 'Vertical Long', 'Horizontal Long', 'Vertical Short', 'Horizontal Short']) {
+      assert.ok(!paintedText.includes(label), `The ${label} piece shape should not draw a caption`);
+    }
+    const setupPixel = (screenshot, x, y) => {
+      const scale = (540 - 24) / 750;
+      return pixelAt(page, screenshot, Math.round(660 + x * scale), Math.round(270 + y * scale));
+    };
     const selectedFill = [75, 108, 94, 255];
     const beforeSelection = await canvas.screenshot();
-    assert.deepEqual(await pixelAt(page, beforeSelection, 516, 212), selectedFill);
+    assert.deepEqual(await setupPixel(beforeSelection, -182, setupY.connector + 20), selectedFill);
     const iconFill = [101, 135, 122, 255];
-    assert.deepEqual(await pixelAt(page, beforeSelection, 525, 101), selectedFill, 'The size tile should have no illustration');
-    assert.deepEqual(await pixelAt(page, beforeSelection, 777, 202), iconFill, 'The connector illustration should draw above the dialog and tile');
+    assert.deepEqual(await setupPixel(beforeSelection, -169.6, setupY.size - 12), selectedFill, 'The count tile should have no illustration');
+    assert.deepEqual(await setupPixel(beforeSelection, -169.6, setupY.shape), iconFill, 'The square illustration should draw above its tile');
+    assert.deepEqual(await setupPixel(beforeSelection, 156, setupY.connector + 5), iconFill, 'The connector illustration should draw above its tile');
     await clickSetup(-52, setupY.connector);
     const afterSelection = await canvas.screenshot();
-    assert.notDeepEqual(await pixelAt(page, afterSelection, 516, 212), selectedFill);
-    assert.deepEqual(await pixelAt(page, afterSelection, 593, 212), selectedFill);
+    assert.notDeepEqual(await setupPixel(afterSelection, -182, setupY.connector + 20), selectedFill);
+    assert.deepEqual(await setupPixel(afterSelection, -78, setupY.connector + 20), selectedFill);
     await page.setViewportSize({ width: 375, height: 540 });
     await page.waitForFunction(() => document.querySelector('canvas').width === 375);
     const [cornerRed] = await pixelAt(page, await canvas.screenshot(), 373, 538);
@@ -1660,7 +1703,7 @@ scenario('the picker scrolls past two cards and clips previews', async (t) => {
     await playSelection();
     await waitForText('0 of 64 placed');
     assert.deepEqual((await readSave(page)).recentOptions, {
-      pieceCount: 64, connectorStyle: 'none', animationSpeed: 'Fast', challengeMode: 'none', pieceRotation: false,
+      pieceCount: 64, pieceShape: 'square', connectorStyle: 'none', animationSpeed: 'Fast', challengeMode: 'none', pieceRotation: false,
     });
 
     await page.evaluate(() => { window.paintedText = []; });
@@ -1674,7 +1717,7 @@ scenario('the picker scrolls past two cards and clips previews', async (t) => {
     await waitForText('0 of 64 placed');
     await page.waitForFunction(() => window.sourceAnimationSpeed === 'Fast');
     assert.deepEqual((await readSave(page)).recentOptions, {
-      pieceCount: 64, connectorStyle: 'none', animationSpeed: 'Fast', challengeMode: 'none', pieceRotation: false,
+      pieceCount: 64, pieceShape: 'square', connectorStyle: 'none', animationSpeed: 'Fast', challengeMode: 'none', pieceRotation: false,
     });
     assert.deepEqual(errors, []);
   });

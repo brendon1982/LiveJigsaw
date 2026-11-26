@@ -1,7 +1,9 @@
 import Phaser from 'phaser';
 import { challengeModes, type ChallengeMode } from '../domain/challengeModes';
 import { connectorStyles, type ConnectorStyleId } from '../domain/connectorStyles';
-import { availablePuzzleSizes, getPieceCount, type PuzzleSize } from '../domain/puzzleSizes';
+import {
+  availablePuzzleSizes, getPieceCount, pieceShapeIds, pieceShapes, type PieceShape, type PuzzleSize,
+} from '../domain/puzzleSizes';
 import type { PuzzleOptions, PuzzleProgress } from '../persistence/GameSave';
 import { puzzleAnimationSpeeds, type PuzzleSource } from '../puzzles/PuzzleSource';
 import { makeButtonLabel, makeOptionTile, type UIScene } from './button';
@@ -18,6 +20,7 @@ export const pickerControlDepth = depth.controls;
 type Option = {
   name: string;
   label?: string;
+  height?: number;
   drawIcon?: () => Phaser.GameObjects.Container;
 };
 
@@ -28,15 +31,21 @@ export function showPuzzleOptions(
   play: (size: PuzzleSize, options: Omit<PuzzleOptions, 'pieceCount'>) => void,
   onClose: () => void,
 ) {
-  const sizes = availablePuzzleSizes(source.maxViewport);
   const styles = Object.keys(connectorStyles) as ConnectorStyleId[];
-  const sizeChoices = sizes.map((size) => ({ size, count: getPieceCount(size) }));
+  const sizeChoices = availablePuzzleSizes(source.maxViewport).map((preset) => ({
+    preset, count: getPieceCount(preset.square),
+  }));
   const initialSize = sizeChoices.find(({ count }) => count === defaults?.pieceCount) ?? sizeChoices[0];
   const sizeTileWidth = sizeChoices.length > 4 ? fiveOptionWidth : optionWidth;
   const sizeButtons = makeRadioButtons(scene, sizeChoices.map(({ count }) => ({
     name: String(count),
     label: String(count),
   })), String(initialSize.count), sizeTileWidth);
+  const shapeButtons = makeRadioButtons(scene, pieceShapeIds.map((shape) => ({
+    name: shape,
+    height: 52,
+    drawIcon: () => drawPieceShapeIcon(scene, shape),
+  })), defaults?.pieceShape ?? 'square', fiveOptionWidth);
   const styleButtons = makeRadioButtons(scene, styles.map((style) => ({
     name: style,
     drawIcon: () => drawConnectorIcon(scene, style),
@@ -55,7 +64,8 @@ export function showPuzzleOptions(
 
   const content = scene.rexUI.add.sizer({ orientation: 'y', width: contentWidth, space: { item: 14 } });
   const sections = [
-    ['Puzzle size', sizeButtons],
+    ['Piece count', sizeButtons],
+    ['Piece shape', shapeButtons],
     ['Connector style', styleButtons],
     ['Animation speed', speedButtons],
     ['Piece rotation', rotationButtons],
@@ -80,12 +90,13 @@ export function showPuzzleOptions(
 
     const selectedCount = Number(sizeButtons.getSelectedButtonName());
     const sizeChoice = sizeChoices.find(({ count }) => count === selectedCount);
+    const pieceShape = pieceShapeIds.find((id) => id === shapeButtons.getSelectedButtonName());
     const style = styles.find((id) => id === styleButtons.getSelectedButtonName());
     const speed = puzzleAnimationSpeeds.find((name) => name === speedButtons.getSelectedButtonName());
     const challengeMode = modes.find((id) => id === modeButtons.getSelectedButtonName());
     const pieceRotation = rotationButtons.getSelectedButtonName() === 'On';
-    if (sizeChoice && style && speed && challengeMode) {
-      play(sizeChoice.size, { connectorStyle: style, animationSpeed: speed, challengeMode, pieceRotation });
+    if (sizeChoice && pieceShape && style && speed && challengeMode) {
+      play(sizeChoice.preset[pieceShape], { pieceShape, connectorStyle: style, animationSpeed: speed, challengeMode, pieceRotation });
     }
   });
 }
@@ -210,6 +221,15 @@ function makeRadioButtons(
   });
   for (const { button } of tiles) button.input!.cursor = 'pointer';
   return buttons.setSelectedButtonName(selectedName);
+}
+
+function drawPieceShapeIcon(scene: UIScene, shape: PieceShape) {
+  const { width, height } = pieceShapes[shape];
+  const iconSize = 36;
+  const scale = iconSize / Math.max(width, height);
+  const art = scene.add.rectangle(0, 0, width * scale, height * scale, palette.optionIcon)
+    .setStrokeStyle(1.5, palette.optionIconOutline);
+  return scene.add.container(0, 0, [art]).setSize(iconSize, iconSize);
 }
 
 function drawConnectorIcon(scene: UIScene, style: ConnectorStyleId) {

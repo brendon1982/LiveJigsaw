@@ -64,9 +64,9 @@ export class SelectPuzzleScene extends Phaser.Scene {
     };
     const openSetup = (source: PuzzleSource) => {
       openDialog();
-      showPuzzleOptions(this, source, gameSave.recentOptions, (size, options) => {
+      showPuzzleOptions(this, source, gameSave.recentOptions, (size, { pieceShape, ...options }) => {
         const [seed] = crypto.getRandomValues(new Uint32Array(1));
-        gameSave.startAttempt(source.scene.key, { ...options, pieceCount: getPieceCount(size) });
+        gameSave.startAttempt(source.scene.key, { ...options, pieceCount: getPieceCount(size), pieceShape });
         play({ source, setup: { ...options, size, seed } });
       }, closeDialog);
     };

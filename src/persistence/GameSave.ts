@@ -1,7 +1,7 @@
 import type { ChallengeMode } from '../domain/challengeModes';
 import type { ConnectorStyleId } from '../domain/connectorStyles';
 import type { PuzzleSnapshot } from '../domain/Puzzle';
-import type { PuzzleSize } from '../domain/puzzleSizes';
+import type { PieceShape, PuzzleSize } from '../domain/puzzleSizes';
 import type { PuzzleAnimationSpeed } from '../puzzles/PuzzleSource';
 
 export const trayPositions = ['Left', 'Right', 'Bottom', 'Top', 'Auto'] as const;
@@ -19,13 +19,14 @@ export type SavedSettings = Readonly<{
 
 export type PuzzleOptions = Readonly<{
   pieceCount?: number;
+  pieceShape: PieceShape;
   connectorStyle: ConnectorStyleId;
   animationSpeed: PuzzleAnimationSpeed;
   challengeMode: ChallengeMode;
   pieceRotation: boolean;
 }>;
 
-export type PuzzleSetup = Omit<PuzzleOptions, 'pieceCount'> & Readonly<{ size: PuzzleSize; seed: number }>;
+export type PuzzleSetup = Omit<PuzzleOptions, 'pieceCount' | 'pieceShape'> & Readonly<{ size: PuzzleSize; seed: number }>;
 export type PuzzleProgress = Readonly<{ setup: PuzzleSetup }> & PuzzleSnapshot;
 export type PuzzleCompletion = Readonly<{ setup: PuzzleSetup; completedAt: string }>;
 

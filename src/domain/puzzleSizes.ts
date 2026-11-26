@@ -14,6 +14,8 @@ export const puzzleSizes = [
   { width: 1024, height: 576, columns: 8, rows: 4, snapTolerance: 28 },
   { width: 1024, height: 576, columns: 8, rows: 8, snapTolerance: 18 },
   { width: 1024, height: 576, columns: 16, rows: 8, snapTolerance: 16 },
+  { width: 1536, height: 864, columns: 24, rows: 12, snapTolerance: 16 },
+  { width: 1792, height: 1008, columns: 28, rows: 14, snapTolerance: 16 },
 ] as const satisfies readonly PuzzleSize[];
 
 export function getPieceCount({ columns, rows }: Pick<PuzzleSize, 'columns' | 'rows'>): number {

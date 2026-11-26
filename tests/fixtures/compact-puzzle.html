@@ -11,6 +11,7 @@
       import { puzzleSizes } from '../../src/domain/puzzleSizes';
 
       // Keep the compact board for fixed-coordinate interaction scenarios only.
+      puzzleSizes.splice(3);
       puzzleSizes.unshift({ width: 512, height: 288, columns: 4, rows: 2, snapTolerance: 28 });
       await import('../../src/main');
     </script>

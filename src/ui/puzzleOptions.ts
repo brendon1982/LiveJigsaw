@@ -10,6 +10,7 @@ import { palette } from './theme';
 const optionWidth = 96;
 const optionGap = 8;
 const contentWidth = 4 * optionWidth + 3 * optionGap;
+const fiveOptionWidth = (contentWidth - 4 * optionGap) / 5;
 // RexUI sizer children are separate entries in the Phaser display list.
 const depth = { cover: 1, panel: 2, controls: 3, tileContents: 4 };
 export const pickerControlDepth = depth.controls;
@@ -31,10 +32,11 @@ export function showPuzzleOptions(
   const styles = Object.keys(connectorStyles) as ConnectorStyleId[];
   const sizeChoices = sizes.map((size) => ({ size, count: getPieceCount(size) }));
   const initialSize = sizeChoices.find(({ count }) => count === defaults?.pieceCount) ?? sizeChoices[0];
+  const sizeTileWidth = sizeChoices.length > 4 ? fiveOptionWidth : optionWidth;
   const sizeButtons = makeRadioButtons(scene, sizeChoices.map(({ count }) => ({
     name: String(count),
     label: String(count),
-  })), String(initialSize.count));
+  })), String(initialSize.count), sizeTileWidth);
   const styleButtons = makeRadioButtons(scene, styles.map((style) => ({
     name: style,
     drawIcon: () => drawConnectorIcon(scene, style),
@@ -49,7 +51,7 @@ export function showPuzzleOptions(
   const modeButtons = makeRadioButtons(scene, modes.map((mode) => ({
     name: mode,
     label: mode === 'sequential-window' ? challengeModes[mode].label.replace(' ', '\n') : challengeModes[mode].label,
-  })), defaults?.challengeMode ?? 'none', (contentWidth - 4 * optionGap) / 5, '14px');
+  })), defaults?.challengeMode ?? 'none', fiveOptionWidth, '14px');
 
   const content = scene.rexUI.add.sizer({ orientation: 'y', width: contentWidth, space: { item: 14 } });
   const sections = [

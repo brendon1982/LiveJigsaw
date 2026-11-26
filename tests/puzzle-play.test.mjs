@@ -152,11 +152,13 @@ async function openPuzzle(t, options, path = '/', initPage) {
   const playSelection = async ({ size, connectorStyle, animationSpeed, challengeMode, pieceRotation } = {}) => {
     await waitForText('Challenge mode');
     if (size) {
-      const sizes = path === compactPuzzlePath ? [8, 32, 64, 128] : [32, 64, 128];
+      const compact = path === compactPuzzlePath;
+      const sizes = compact ? [8, 32, 64, 128] : [32, 64, 128, 288, 392];
       const index = sizes.indexOf(size);
       assert.ok(index >= 0);
       await waitForText(String(size));
-      await clickSetup(-156 + 104 * index, setupY.size);
+      const x = compact ? -156 + 104 * index : -169.6 + 84.8 * index;
+      await clickSetup(x, setupY.size);
     }
     if (connectorStyle) {
       const index = ['Classic', 'Rounded', 'Angular', 'None'].indexOf(connectorStyle);
@@ -287,15 +289,15 @@ function trackPieceMaskDraws(page) {
   });
 }
 
-scenario('the 128-piece tray only draws nearby piece masks', async (t) => {
+scenario('the 392-piece tray only draws nearby piece masks', async (t) => {
   const { page, waitForText, errors, playSelection } = await openPuzzle(t, {
     viewport: { width: 1320, height: 780 },
   }, '/', trackPieceMaskDraws);
   await page.mouse.click(340, 180);
-  for (const count of ['32', '64', '128']) await waitForText(count);
+  for (const count of ['32', '64', '128', '288', '392']) await waitForText(count);
   assert.ok(!(await page.evaluate(() => window.paintedText)).includes('8'));
-  await playSelection({ size: 128 });
-  await waitForText('0 of 128 placed');
+  await playSelection({ size: 392 });
+  await waitForText('0 of 392 placed');
 
   const assertMaskDraws = async () => {
     const draws = await page.evaluate(() => window.countPieceMaskDraws());
@@ -305,6 +307,17 @@ scenario('the 128-piece tray only draws nearby piece masks', async (t) => {
   await page.mouse.move(85, 140);
   await page.mouse.wheel(0, 30000);
   await assertMaskDraws();
+  assert.deepEqual(errors, []);
+});
+
+scenario('the 288-piece option opens by touch in portrait', async (t) => {
+  const { page, waitForText, errors, playSelection } = await openPuzzle(t, {
+    viewport: { width: 680, height: 800 }, hasTouch: true,
+  });
+  await page.touchscreen.tap(350, 180);
+  await playSelection({ size: 288 });
+  await waitForText('0 of 288 placed');
+  assert.equal((await readSave(page)).recentOptions.pieceCount, 288);
   assert.deepEqual(errors, []);
 });
 

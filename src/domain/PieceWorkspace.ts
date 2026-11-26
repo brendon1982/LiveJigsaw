@@ -1,4 +1,5 @@
 import { isQuarterTurns, type Point } from './geometry.ts';
+import { pieceFootprint, translateFootprint, type ParkedSingle } from './parkedPieceLayout.ts';
 import type { Puzzle } from './Puzzle.ts';
 
 export type ParkedGroup = Readonly<{
@@ -28,6 +29,39 @@ export class PieceWorkspace {
   positionOf(group: ParkedGroup, pieceId: string): Point {
     const offset = this.rotatedOffset(group.anchorPieceId, pieceId, group.quarterTurns);
     return { x: group.position.x + offset.x, y: group.position.y + offset.y };
+  }
+
+  occupiedFootprints() {
+    return this.groups.flatMap((group) => this.layoutOf(group).footprints
+      .map((footprint) => translateFootprint(footprint, group.position)));
+  }
+
+  layoutOf(group: ParkedGroup) {
+    const centers = group.memberIds.map((id) => this.rotatedOffset(group.anchorPieceId, id, group.quarterTurns));
+    const footprints = group.memberIds.map((id, index) => {
+      const footprint = pieceFootprint(this.puzzle.pieceById(id)!, group.quarterTurns);
+      return translateFootprint(footprint, centers[index]);
+    });
+    return { group, centers, footprints };
+  }
+
+  moveGroups(positions: ReadonlyMap<ParkedGroup, Point>): boolean {
+    let changed = false;
+    const groups = this.groups.map((group) => {
+      const position = positions.get(group);
+      if (!position || (position.x === group.position.x && position.y === group.position.y)) return group;
+      changed = true;
+      return freezeGroup({ ...group, position });
+    });
+    if (changed) this.replaceGroups(groups);
+    return changed;
+  }
+
+  parkSingles(pieces: readonly ParkedSingle[]): void {
+    const singles = pieces.map(({ pieceId, position, quarterTurns }) => freezeGroup({
+      memberIds: [pieceId], anchorPieceId: pieceId, position, quarterTurns,
+    }));
+    this.replaceGroups([...this.groups, ...singles]);
   }
 
   settleDrop(group: ParkedGroup, { lifted, parkOnMiss }: { lifted?: ParkedGroup; parkOnMiss: boolean }) {
@@ -146,6 +180,7 @@ export class PieceWorkspace {
         const expected = this.positionOf(resting, id);
         const distance = Math.hypot(center.x - expected.x, center.y - expected.y);
         if (distance > this.puzzle.snapTolerance) continue;
+        if (!resting.memberIds.every((restingId) => this.puzzle.canDrag(restingId))) continue;
         // A detached piece can start within snap range. Let it move away without sticking.
         if (start && distance > 0 && distance >= Math.hypot(start.x - expected.x, start.y - expected.y)) continue;
         // Ties keep the first match in member order, then top/right/bottom/left order.

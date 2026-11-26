@@ -340,13 +340,17 @@ test('combined restore rejects invalid groups and overlapping homes without chan
   assert.deepEqual(play.snapshot(), before);
 });
 
-test('restore tests eligibility against restored placements and rejects turns when rotation is disabled', () => {
-  const { play } = givenPuzzle({ challengeMode: 'sequential' });
+test('restore rejects joined gated pieces and turns when rotation is disabled', () => {
+  const { play, puzzle } = givenPuzzle({ challengeMode: 'sequential' });
   const [first, second] = play.trayPieces;
   const group = { memberIds: [second.id], anchorPieceId: second.id, position: offGuide, quarterTurns: 0 };
   const snapshot = { placedPieceIds: [], trayOrientations: {}, parkedGroups: [group] };
-  assert.equal(play.restore(snapshot), false);
+  const [neighborId] = puzzle.neighborIds(second.id);
+  assert.equal(play.restore({ ...snapshot, parkedGroups: [{ ...group, memberIds: [second.id, neighborId] }] }), false);
+  assert.equal(play.restore(snapshot), true);
+  assert.equal(puzzle.canDrag(second.id), false);
   assert.equal(play.restore({ ...snapshot, placedPieceIds: [first.id] }), true);
+  assert.equal(puzzle.canDrag(second.id), true);
   assert.equal(play.restore({ ...play.snapshot(), parkedGroups: [{ ...group, quarterTurns: 1 }] }), false);
   assert.equal(play.turnPiece(second.id), false);
   assert.deepEqual(play.positionOf(second.id), offGuide);

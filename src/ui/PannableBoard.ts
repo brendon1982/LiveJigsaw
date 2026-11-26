@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import type { Bounds, Point, Size } from '../domain/geometry';
+import { Bounds, type Point, type Size } from '../domain/geometry';
 import type { PuzzlePiece } from '../domain/Puzzle';
 import type { LivePuzzleCapture } from '../rendering/LivePuzzleCapture';
 import { activePuzzleFilter, onPuzzleFilterChange, type PuzzleArtworkFilter } from './puzzleFilter';
@@ -152,6 +152,12 @@ export class PannableBoard {
     return this.camera.zoom;
   }
 
+  get reachableBounds(): Bounds {
+    const marginX = this.panMargin(this.viewport.width);
+    const marginY = this.panMargin(this.viewport.height);
+    return new Bounds(-marginX, -marginY, this.size.width + 2 * marginX, this.size.height + 2 * marginY);
+  }
+
   get isFitted(): boolean {
     const zoom = this.fitZoom;
     const centered = this.centeredOffset(zoom);
@@ -249,9 +255,12 @@ export class PannableBoard {
   }
 
   private limitOffset(offset: number, viewportLength: number, guideLength: number): number {
-    const boardMargin = viewportLength / (2 * this.minimumZoom);
-    const screenMargin = boardMargin * this.zoom;
+    const screenMargin = this.panMargin(viewportLength) * this.zoom;
     const minOffset = viewportLength - guideLength * this.zoom - screenMargin;
     return Phaser.Math.Clamp(offset, minOffset, screenMargin);
+  }
+
+  private panMargin(viewportLength: number): number {
+    return viewportLength / (2 * this.minimumZoom);
   }
 }

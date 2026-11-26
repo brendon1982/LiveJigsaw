@@ -206,6 +206,7 @@ async function openPuzzle(t, options, path = '/', initPage) {
 async function openCompactPuzzle(t, options, path = compactPuzzlePath) {
   compactPuzzleBuild ??= build({
     base: '/compact-fixture/',
+    logLevel: 'warn',
     build: {
       outDir: 'dist/compact-fixture',
       rollupOptions: { input: 'tests/fixtures/compact-puzzle.html' },
@@ -238,6 +239,8 @@ async function playLayout(page) {
       divider: { x: divider.x, y: divider.y },
       board: { x: board.x, y: board.y, width: board.width, height: board.height, zoom: board.zoom },
       breakButton: iconButton('Break piece off'),
+      moveTrayButton: iconButton('Move Tray to Board'),
+      sortButton: iconButton('Sort Edge Pieces'),
       fitButton: iconButton('Fit board'),
       nativeSizeButton: iconButton('Native size (1×)'),
       artwork: { x: board.x - board.scrollX * board.zoom, y: board.y - board.scrollY * board.zoom },
@@ -275,6 +278,194 @@ async function dragDivider(page, drag, destination) {
   const { divider } = await playLayout(page);
   await drag(divider.x, divider.y, destination.x ?? divider.x, destination.y ?? divider.y);
 }
+
+async function pressIcon(page, button, touch = false) {
+  assert.ok(button.visible, 'The icon should be visible');
+  const x = button.x + button.width / 2;
+  const y = button.y + button.height / 2;
+  if (touch) await page.touchscreen.tap(x, y);
+  else await page.mouse.click(x, y);
+}
+
+scenario('board tools park the tray, sort at a zoomed mouse target, and restore the result', async (t) => {
+  const { page, waitForText, errors, clickDialog, playSelection, setAllowLoosePiecesOnBoard } =
+    await openCompactPuzzle(t, { viewport: { width: 1320, height: 780 } });
+  await page.mouse.click(340, 180);
+  await playSelection({ connectorStyle: 'None', pieceRotation: false });
+  await waitForText('0 of 8 placed');
+  let layout = await playLayout(page);
+  assert.equal(layout.sortButton.visible, false);
+  assert.equal(layout.moveTrayButton.visible, true);
+  await setAllowLoosePiecesOnBoard(false);
+  assert.equal((await playLayout(page)).moveTrayButton.visible, false);
+  await setAllowLoosePiecesOnBoard(true);
+
+  await page.evaluate(() => {
+    const setItem = Storage.prototype.setItem;
+    window.workspaceSaves = 0;
+    Storage.prototype.setItem = function (key, value) {
+      if (this === localStorage && key === 'live-jigsaw.save') window.workspaceSaves++;
+      return setItem.call(this, key, value);
+    };
+  });
+  await pressIcon(page, (await playLayout(page)).moveTrayButton);
+  layout = await playLayout(page);
+  assert.equal(layout.moveTrayButton.visible, false);
+  assert.equal(layout.tray.length, 0);
+  assert.equal(layout.parked.length, 8);
+  const parked = (await readSave(page)).progress.Windmill;
+  assert.equal(parked.parkedGroups.length, 8);
+  assert.deepEqual(parked.placedPieceIds, []);
+
+  await pressIcon(page, layout.sortButton);
+  assert.equal((await playLayout(page)).sortButton.armed, true);
+  const center = layout.boardPoint(256, 144);
+  await page.mouse.move(center.x, center.y);
+  await page.mouse.wheel(0, -300);
+  await page.mouse.down();
+  await page.mouse.move(center.x + 100, center.y + 95, { steps: 5 });
+  await page.mouse.up();
+  layout = await playLayout(page);
+  assert.ok(layout.board.zoom > 1);
+  assert.deepEqual((await readSave(page)).progress.Windmill, parked, 'Panning must not sort');
+  const target = layout.boardPoint(256, 144);
+  await page.mouse.click(target.x, target.y);
+  const sorted = await playLayout(page);
+  assert.deepEqual(sorted.artwork, layout.artwork, 'Sorting must not move the camera');
+  assert.equal(sorted.sortButton.armed, false);
+  const midrange = (axis) => {
+    const values = sorted.parked.map((piece) => piece[axis]);
+    return (Math.min(...values) + Math.max(...values)) / 2;
+  };
+  assert.ok(Math.abs(midrange('x') - 256) < 2 && Math.abs(midrange('y') - 144) < 2,
+    'The bundle must center on the logical target after pan and zoom');
+  assert.equal(await page.evaluate(() => window.workspaceSaves), 2, 'Each tool should save once');
+
+  await page.reload();
+  await waitForText('Windmill');
+  await page.mouse.click(340, 180);
+  await waitForText('Resume');
+  await clickDialog(100, resumeActionY);
+  assert.deepEqual((await playLayout(page)).parked, sorted.parked);
+  assert.deepEqual(errors, []);
+});
+
+scenario('touch board tools fit on compact screens and distinguish taps from pinch and cancellation', async (t) => {
+  const { page, waitForText, errors, clickDialog } = await openCompactPuzzle(t, {
+    viewport: { width: 1320, height: 780 }, hasTouch: true,
+  });
+  const parkedGroups = [
+    { memberIds: ['piece-0-0', 'piece-0-1'], anchorPieceId: 'piece-0-0', position: { x: -150, y: 80 }, quarterTurns: 0 },
+    { memberIds: ['piece-1-0'], anchorPieceId: 'piece-1-0', position: { x: 300, y: 300 }, quarterTurns: 0 },
+  ];
+  await page.evaluate((save) => localStorage.setItem('live-jigsaw.save', JSON.stringify(save)), {
+    version: saveVersion,
+    progress: { Windmill: {
+      setup: { size: compactSize, seed: 42, connectorStyle: 'none', animationSpeed: 'Normal', challengeMode: 'none', pieceRotation: false },
+      placedPieceIds: [], trayOrientations: {}, parkedGroups,
+    } },
+  });
+  await page.reload();
+  await waitForText('Windmill');
+  await page.touchscreen.tap(340, 180);
+  await waitForText('Resume');
+  await clickDialog(100, resumeActionY);
+  await waitForText('0 of 8 placed');
+  await page.setViewportSize({ width: 275, height: 680 });
+  await page.waitForFunction(() => document.querySelector('canvas').width === 275);
+  const { dispatch } = await touchController(page);
+  let layout = await playLayout(page);
+  await pressIcon(page, layout.breakButton, true);
+  layout = await playLayout(page);
+  assert.equal(layout.breakButton.armed, true);
+  await pressIcon(page, layout.sortButton, true);
+  layout = await playLayout(page);
+  assert.equal(layout.breakButton.armed, false);
+  assert.equal(layout.sortButton.armed, true);
+
+  const before = (await readSave(page)).progress.Windmill;
+  const fittedZoom = layout.board.zoom;
+  const y = layout.board.y + 170;
+  await dispatch('touchStart', [95, y]);
+  await dispatch('touchStart', [95, y], [175, y]);
+  await dispatch('touchMove', [75, y], [195, y]);
+  await dispatch('touchEnd');
+  layout = await playLayout(page);
+  assert.ok(layout.board.zoom > fittedZoom, 'The two contacts should zoom, not sort');
+  assert.deepEqual((await readSave(page)).progress.Windmill, before);
+  const { breakButton, moveTrayButton, sortButton, fitButton, nativeSizeButton } = layout;
+  for (const button of [breakButton, moveTrayButton, sortButton, fitButton, nativeSizeButton]) {
+    assert.ok(button.visible && button.x >= layout.board.x && button.x + button.width <= layout.board.x + layout.board.width);
+  }
+  assert.equal(breakButton.y, moveTrayButton.y);
+  assert.equal(moveTrayButton.y, sortButton.y);
+  assert.ok(breakButton.x + breakButton.width < moveTrayButton.x && moveTrayButton.x + moveTrayButton.width < sortButton.x);
+  assert.ok(fitButton.y >= sortButton.y + sortButton.height && nativeSizeButton.y === fitButton.y);
+
+  await dispatch('touchStart', [130, y]);
+  await dispatch('touchCancel');
+  layout = await playLayout(page);
+  assert.equal(layout.sortButton.armed, false);
+  assert.deepEqual((await readSave(page)).progress.Windmill, before);
+  await pressIcon(page, layout.sortButton, true);
+  await page.touchscreen.tap(130, y);
+  layout = await playLayout(page);
+  assert.equal(layout.sortButton.armed, false);
+  const sorted = (await readSave(page)).progress.Windmill;
+  assert.notDeepEqual(sorted.parkedGroups[1].position, before.parkedGroups[1].position);
+  assert.deepEqual(sorted.parkedGroups[0].memberIds, parkedGroups[0].memberIds);
+  await pressIcon(page, layout.moveTrayButton, true);
+  assert.equal((await playLayout(page)).moveTrayButton.visible, false);
+  assert.equal((await readSave(page)).progress.Windmill.parkedGroups.length, 7);
+  assert.deepEqual(errors, []);
+});
+
+scenario('Sequential bulk-parked pieces stay gated even when they overlap the active piece', async (t) => {
+  const { page, canvas, waitForText, errors, clickDialog, playSelection } =
+    await openCompactPuzzle(t, { viewport: { width: 1320, height: 780 } });
+  await page.mouse.click(340, 180);
+  await playSelection({ connectorStyle: 'None', challengeMode: 'sequential', pieceRotation: false });
+  await waitForText('0 of 8 placed');
+  let layout = await playLayout(page);
+  const [active, gated] = layout.tray;
+  await pressIcon(page, layout.moveTrayButton);
+  assert.equal((await playLayout(page)).parked.length, 8);
+
+  // Recreate the overlap fallback with the gated piece drawn above the active one.
+  const overlap = { x: 256, y: 0 };
+  await page.evaluate(({ active, gated, overlap }) => {
+    const key = 'live-jigsaw.save';
+    const save = JSON.parse(localStorage.getItem(key));
+    const progress = save.progress.Windmill;
+    const groups = progress.parkedGroups.filter(({ anchorPieceId }) => ![active, gated].includes(anchorPieceId));
+    progress.parkedGroups = [...groups, ...[active, gated].map((id) => ({
+      anchorPieceId: id, memberIds: [id], quarterTurns: 0, position: overlap,
+    }))];
+    localStorage.setItem(key, JSON.stringify(save));
+  }, { active: active.id, gated: gated.id, overlap });
+  await page.reload();
+  await waitForText('Windmill');
+  await page.mouse.click(340, 180);
+  await waitForText('Resume');
+  await clickDialog(100, resumeActionY);
+  layout = await playLayout(page);
+  const start = layout.boardPoint(overlap.x, overlap.y);
+  const target = pieceTarget(layout, active.id);
+  const sample = async () => pixelAt(page, await canvas.screenshot(), start.x, start.y);
+  const [red, green, blue] = await sample();
+  assert.equal(red, green);
+  assert.equal(green, blue, 'The gated parked piece on top should be grayscale');
+
+  await page.mouse.move(start.x, start.y);
+  await page.mouse.down();
+  await page.mouse.move(target.x, target.y, { steps: 6 });
+  await page.mouse.up();
+  await waitForText('1 of 8 placed');
+  assert.deepEqual((await readSave(page)).progress.Windmill.placedPieceIds, [active.id]);
+  const [nextRed, nextGreen] = await sample();
+  assert.notEqual(nextRed, nextGreen, 'The newly eligible parked piece should regain its color');
+  assert.deepEqual(errors, []);
+});
 
 scenario('the play workspace fills the viewport beneath the padded header', async (t) => {
   const { page, waitForText, errors, playSelection } = await openCompactPuzzle(t, {
@@ -333,9 +524,10 @@ scenario('the board keeps fixed pan bounds through zoom with a parked piece', as
   const assertNear = (actual, expected, label) => {
     assert.ok(Math.abs(actual - expected) < 1, `${label}: expected ${expected}, got ${actual}`);
   };
+  const verticalTravel = height / 2 - 75; // Start below the board toolbar.
   const pan = (horizontal, vertical) => moveFinger(
-    center.x - horizontal * (width / 2 - 30), center.y - vertical * (height / 2 - 50),
-    center.x + horizontal * (width / 2 - 30), center.y + vertical * (height / 2 - 50),
+    center.x - horizontal * (width / 2 - 30), center.y - vertical * verticalTravel,
+    center.x + horizontal * (width / 2 - 30), center.y + vertical * verticalTravel,
   );
   for (const [dx, dy, cornerX, cornerY] of [
     [1, 1, 0, 0], [-1, 0, guideWidth, 0], [1, -1, 0, guideHeight], [-1, 0, guideWidth, guideHeight],
@@ -2016,6 +2208,8 @@ scenario('Seed returns loose pieces when cut off or when the seed is placed', as
   assert.deepEqual(split.parked, joined.parked.slice(0, 1));
   assert.ok(split.tray.some(({ id }) => id === right));
   assert.equal(split.breakButton.visible, false);
+  assert.equal(split.moveTrayButton.visible, false, 'Seed must hide bulk parking with a nonempty tray');
+  assert.equal(split.sortButton.visible, false, 'Seed must hide Sort even with a parked edge');
   assert.deepEqual((await readSave(page)).progress.Windmill.parkedGroups.map(({ memberIds }) => memberIds), [[left]]);
 
   await dropFromTray(seed, 320, 72);
@@ -2916,7 +3110,8 @@ scenario('tray settings move the live tray and rotate touch gestures with it', a
   assert.deepEqual(errors, []);
 });
 
-const concurrency = Number(process.env.LIVE_JIGSAW_BROWSER_CONCURRENCY ?? 8);
+const concurrency = Number(process.env.LIVE_JIGSAW_BROWSER_CONCURRENCY ?? 4);
+const timeout = Number(process.env.LIVE_JIGSAW_BROWSER_TIMEOUT ?? 20_000);
 describe('puzzle play', { concurrency }, () => {
-  for (const { name, run } of scenarios) test(name, { concurrency: 1 }, run);
+  for (const { name, run } of scenarios) test(name, { timeout }, run);
 });

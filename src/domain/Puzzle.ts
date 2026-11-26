@@ -175,12 +175,18 @@ export class Puzzle {
     };
   }
 
-  private restoreHomes({ placedPieceIds, trayOrientations }: PuzzleRestore, parkedIds: ReadonlySet<string>): boolean {
+  private restoreHomes(
+    { placedPieceIds, trayOrientations }: PuzzleRestore, parkedIds: ReadonlySet<string>, joinedIds: readonly string[] = [],
+  ): boolean {
     if (!Array.isArray(placedPieceIds) || !trayOrientations
       || typeof trayOrientations !== 'object' || Array.isArray(trayOrientations)) return false;
     const placements = new Set(placedPieceIds);
     if (placements.size !== placedPieceIds.length || placedPieceIds.some((id) => !this.piecesById.has(id))) return false;
     for (const id of parkedIds) {
+      if (placements.has(id)) return false;
+    }
+    // Bulk parking can move a gated piece to the board, but it still cannot join a group.
+    for (const id of joinedIds) {
       if (!this.isEligible(id, placements)) return false;
     }
 

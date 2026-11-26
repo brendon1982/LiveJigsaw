@@ -15,6 +15,7 @@ import { PuzzlePieceView } from './PuzzlePieceView';
 import { SeedDropFeedback } from './SeedDropFeedback';
 
 type DropTrigger = 'release' | 'click';
+type BoardTool = 'break' | 'sort';
 
 type PieceSource = 'tray' | 'board';
 type PieceContact = { entry: PuzzlePieceView; source: PieceSource };
@@ -23,6 +24,7 @@ type LiftedMember = { entry: PuzzlePieceView; offset: Point };
 type Gesture = { pointer: Phaser.Input.Pointer } & (
   | ({ kind: 'piece-press'; start: Point; canTap: boolean } & PieceContact)
   | { kind: 'break-press'; entry: PuzzlePieceView; start: Point; canTap: boolean }
+  | { kind: 'sort-press'; start: Point; canTap: boolean }
   | ({ kind: 'piece'; offset: Point; members: LiftedMember[]; dropOn: DropTrigger } & PieceContact)
   | { kind: 'pan'; previous: Point }
   | { kind: 'scroll'; previous: Point }
@@ -98,13 +100,31 @@ function drawBreakPieceIcon(art: Phaser.GameObjects.Graphics, color: number) {
   art.strokePath();
 }
 
+function drawMoveTrayIcon(art: Phaser.GameObjects.Graphics, color: number) {
+  art.clear().lineStyle(2, color).beginPath();
+  art.moveTo(-11, -8).lineTo(-11, 8).lineTo(-4, 8);
+  art.moveTo(2, -8).lineTo(11, -8).lineTo(11, 8).lineTo(2, 8);
+  art.moveTo(-6, 0).lineTo(6, 0).moveTo(2, -4).lineTo(6, 0).lineTo(2, 4);
+  art.strokePath();
+}
+
+function drawSortEdgesIcon(art: Phaser.GameObjects.Graphics, color: number) {
+  art.clear().lineStyle(2, color).strokeRect(-10, -8, 20, 16).beginPath();
+  art.moveTo(-10, 0).lineTo(10, 0).moveTo(0, -8).lineTo(0, 8);
+  art.strokePath();
+}
+
 export class PuzzleBoardView {
   private readonly tray: PieceTray;
   private readonly board: PannableBoard;
   private readonly fitButton: ReturnType<typeof makeIconButton>;
   private readonly nativeSizeButton: ReturnType<typeof makeIconButton>;
   private readonly breakButton: ReturnType<typeof makeIconButton>;
-  private breakArmed = false;
+  private readonly moveTrayButton: ReturnType<typeof makeIconButton>;
+  private readonly sortButton: ReturnType<typeof makeIconButton>;
+  private readonly toolButtons: readonly ReturnType<typeof makeIconButton>[];
+  private readonly zoomButtons: readonly ReturnType<typeof makeIconButton>[];
+  private armedTool?: BoardTool;
   private readonly placementEffects: PlacementEffects;
   private seedDropFeedback?: SeedDropFeedback;
   private readonly floatingPieces: Phaser.GameObjects.Layer;
@@ -161,16 +181,21 @@ export class PuzzleBoardView {
       this.board.showNativeSize();
       this.updateZoomButtons();
     }).setVisible(false);
-    this.breakButton = makeIconButton(scene, 'Break piece off', drawBreakPieceIcon, (pointer) => {
-      if (pointer.wasCanceled || (!pointer.wasTouch && pointer.button !== 0) || this.pinch) return;
-      this.cancelActiveGesture();
-      this.setBreakArmed(!this.breakArmed);
-    }, { dragThreshold: tapSlop, clickInterval: 0 }).setVisible(false);
+    const makeToolButton = (name: string, icon: Parameters<typeof makeIconButton>[2], run: () => void) =>
+      makeIconButton(scene, name, icon, (pointer) => {
+        if (pointer.wasCanceled || (!pointer.wasTouch && pointer.button !== 0) || this.pinch) return;
+        if (pointer.wasTouch && this.gesture?.pointer.wasTouch) return;
+        this.cancelActiveGesture();
+        run();
+      }, { dragThreshold: tapSlop, clickInterval: 0 }).setVisible(false);
+    this.breakButton = makeToolButton('Break piece off', drawBreakPieceIcon, () => this.toggleTool('break'));
+    this.moveTrayButton = makeToolButton('Move Tray to Board', drawMoveTrayIcon, () => this.moveTrayToBoard());
+    this.sortButton = makeToolButton('Sort Edge Pieces', drawSortEdgesIcon, () => this.toggleTool('sort'));
+    this.toolButtons = [this.breakButton, this.moveTrayButton, this.sortButton];
+    this.zoomButtons = [this.fitButton, this.nativeSizeButton];
     this.placementEffects = new PlacementEffects(scene, this.board.layer);
     this.floatingPieces = scene.add.layer();
-    this.fitButton.addToLayer(this.floatingPieces);
-    this.nativeSizeButton.addToLayer(this.floatingPieces);
-    this.breakButton.addToLayer(this.floatingPieces);
+    for (const button of [...this.zoomButtons, ...this.toolButtons]) button.addToLayer(this.floatingPieces);
     const dragCamera = scene.cameras.add().setName('Board overlay');
 
     // The panel cameras clip their own layers. The overlay draws above both panels.
@@ -266,11 +291,12 @@ export class PuzzleBoardView {
 
   setAllowLoosePiecesOnBoard(allow: boolean) {
     this.allowLoosePiecesOnBoard = allow;
+    this.updateToolButtons();
   }
 
   showCompletion() {
     this.completionStage = 'revealing';
-    this.updateBreakButton();
+    this.updateToolButtons();
     this.updateZoomButtons();
     this.board.revealFinishedArtwork();
     this.tray.hide();
@@ -295,7 +321,7 @@ export class PuzzleBoardView {
 
   cancelInteraction() {
     this.cancelActiveGesture();
-    this.setBreakArmed(false);
+    this.setArmedTool();
   }
 
   private cancelActiveGesture() {
@@ -308,25 +334,38 @@ export class PuzzleBoardView {
     this.updateIdleCursor();
   }
 
-  private setBreakArmed(armed: boolean) {
-    if (this.breakArmed === armed) return;
-    this.breakArmed = armed;
-    this.breakButton.setData('primary', armed);
+  private toggleTool(tool: BoardTool) {
+    this.setArmedTool(this.armedTool === tool ? undefined : tool);
+  }
+
+  private setArmedTool(tool?: BoardTool) {
+    if (this.armedTool === tool) return;
+    this.armedTool = tool;
+    this.breakButton.setData('primary', tool === 'break');
+    this.sortButton.setData('primary', tool === 'sort');
     this.updateIdleCursor();
   }
 
   private updateIdleCursor(pointer = this.scene.input.mousePointer) {
     const { input } = this.scene;
-    const cursor = this.breakArmed && this.board.contains(pointer) ? breakCursor : 'default';
+    let cursor = 'default';
+    if (this.board.contains(pointer)) {
+      if (this.armedTool === 'break') cursor = breakCursor;
+      if (this.armedTool === 'sort') cursor = 'crosshair';
+    }
     if (input.manager.defaultCursor !== cursor) input.setDefaultCursor(cursor);
   }
 
-  private updateBreakButton() {
-    const available = this.completionStage === 'playing' && this.play.parkedGroups.some((group) => group.memberIds.length > 1);
-    if (!available) this.setBreakArmed(false);
-    if (this.breakButton.visible !== available) this.breakButton.setVisible(available);
-    const { x, y } = this.board.camera;
-    this.breakButton.setPosition(x + headerControlGap, y + headerControlGap);
+  private updateToolButtons() {
+    const playing = this.completionStage === 'playing';
+    this.breakButton.setVisible(playing && this.play.parkedGroups.some((group) => group.memberIds.length > 1));
+    this.moveTrayButton.setVisible(playing && this.play.puzzle.challengeMode !== 'seed'
+      && this.allowLoosePiecesOnBoard && this.play.trayPieces.length > 0);
+    this.sortButton.setVisible(playing && this.play.hasSortableParkedEdges);
+    if ((this.armedTool === 'break' && !this.breakButton.visible) || (this.armedTool === 'sort' && !this.sortButton.visible)) {
+      this.setArmedTool();
+    }
+    this.layoutBoardControls();
   }
 
   private fitBoard() {
@@ -340,26 +379,43 @@ export class PuzzleBoardView {
     const showNativeSize = canZoom && !this.board.isNativeSize;
     if (this.fitButton.visible !== showFit) this.fitButton.setVisible(showFit);
     if (this.nativeSizeButton.visible !== showNativeSize) this.nativeSizeButton.setVisible(showNativeSize);
+    this.layoutBoardControls();
+  }
 
+  private layoutBoardControls() {
     const { x, y, width } = this.board.camera;
-    let right = x + width - headerControlGap;
-    for (const button of [this.fitButton, this.nativeSizeButton]) {
+    const top = y + headerControlGap;
+    let left = x + headerControlGap;
+    let toolHeight = 0;
+    for (const button of this.toolButtons) {
       if (!button.visible) continue;
-      const left = Math.max(x, right - button.width);
-      button.setPosition(left, y + headerControlGap);
-      right = left - headerControlGap;
+      button.setPosition(left, top);
+      left += button.width + headerControlGap;
+      toolHeight = Math.max(toolHeight, button.height);
+    }
+
+    let right = x + width - headerControlGap;
+    const zoomWidth = this.zoomButtons.reduce((sum, button) => button.visible ? sum + button.width + headerControlGap : sum, 0);
+    const zoomTop = toolHeight && right - zoomWidth + headerControlGap < left ? top + toolHeight + headerControlGap : top;
+    for (const button of this.zoomButtons) {
+      if (!button.visible) continue;
+      const buttonLeft = Math.max(x, right - button.width);
+      button.setPosition(buttonLeft, zoomTop);
+      right = buttonLeft - headerControlGap;
     }
   }
 
   private layoutBoard(bounds: Phaser.Geom.Rectangle) {
     this.board.layout(bounds);
-    this.updateBreakButton();
+    this.updateToolButtons();
     this.updateZoomButtons();
   }
 
   private readonly startGesture = (pointer: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]) => {
     if (this.completionStage === 'revealing' || this.pinch) return;
-    if (over.includes(this.fitButton) || over.includes(this.nativeSizeButton) || over.includes(this.breakButton)) return;
+    const onControl = this.toolButtons.some((button) => over.includes(button))
+      || this.zoomButtons.some((button) => over.includes(button));
+    if (onControl && !pointer.wasTouch) return;
     if (!pointer.wasTouch) {
       const gesture = this.gesture;
       const rightClick = pointer.button === 2;
@@ -370,7 +426,7 @@ export class PuzzleBoardView {
         return;
       }
       if (rightClick) {
-        if (!this.breakArmed) this.pickUpOnRightClick(pointer);
+        if (!this.armedTool) this.pickUpOnRightClick(pointer);
         return;
       }
     }
@@ -380,7 +436,7 @@ export class PuzzleBoardView {
     }
     const current = this.gesture;
     if (current) {
-      if ((current.kind === 'piece-press' || current.kind === 'break-press') && current.pointer !== pointer) {
+      if ('canTap' in current && current.pointer !== pointer) {
         current.canTap = false;
       }
       if (current.pointer !== pointer && current.pointer.wasTouch && pointer.wasTouch
@@ -390,12 +446,17 @@ export class PuzzleBoardView {
       }
       return;
     }
+    if (onControl) return;
+    if (this.armedTool === 'sort' && this.board.contains(pointer)) {
+      this.gesture = { kind: 'sort-press', pointer, start: { x: pointer.x, y: pointer.y }, canTap: true };
+      return;
+    }
     const contact = this.pieceContactAt(pointer);
-    if (this.breakArmed && contact?.source === 'board') {
+    if (this.armedTool === 'break' && contact?.source === 'board') {
       this.gesture = { kind: 'break-press', pointer, entry: contact.entry, start: { x: pointer.x, y: pointer.y }, canTap: true };
       return;
     }
-    if (!this.breakArmed && contact && this.play.puzzle.canDrag(contact.entry.piece.id)) {
+    if (!this.armedTool && contact && this.play.puzzle.canDrag(contact.entry.piece.id)) {
       if (contact.source === 'board' || pointer.wasTouch || this.play.puzzle.pieceRotation) {
         this.gesture = {
           kind: 'piece-press', pointer, ...contact, start: { x: pointer.x, y: pointer.y },
@@ -425,7 +486,7 @@ export class PuzzleBoardView {
       const local = this.board.toLocal(point);
       for (let index = this.parkedPieces.length - 1; index >= 0; index--) {
         const entry = this.parkedPieces[index];
-        if (entry.contains(local)) return { entry, source: 'board' };
+        if (this.play.puzzle.canDrag(entry.piece.id) && entry.contains(local)) return { entry, source: 'board' };
       }
     } else {
       const entry = this.tray.pieceAt(point);
@@ -511,12 +572,13 @@ export class PuzzleBoardView {
     this.updateZoomButtons();
 
     const gesture = this.gesture;
+    if (gesture?.kind === 'sort-press') gesture.canTap = false;
     if (gesture?.kind === 'piece' && gesture.pointer === pointer) this.moveDraggedPiece(pointer, gesture);
   };
 
   private readonly moveGesture = (pointer: Phaser.Input.Pointer) => {
     const gesture = this.gesture;
-    if (this.breakArmed && !pointer.wasTouch && (!gesture || gesture.kind === 'break-press')) {
+    if (this.armedTool && !pointer.wasTouch && (!gesture || gesture.kind === 'break-press' || gesture.kind === 'sort-press')) {
       this.updateIdleCursor(pointer);
     }
     const pinch = this.pinch;
@@ -534,6 +596,8 @@ export class PuzzleBoardView {
       this.movePiecePress(pointer, gesture);
     } else if (gesture.kind === 'break-press') {
       if (Math.hypot(pointer.x - gesture.start.x, pointer.y - gesture.start.y) >= tapSlop) gesture.canTap = false;
+    } else if (gesture.kind === 'sort-press') {
+      this.panFromSortPress(pointer, gesture);
     } else if (gesture.kind === 'piece') {
       this.moveDraggedPiece(pointer, gesture);
     } else {
@@ -548,6 +612,16 @@ export class PuzzleBoardView {
       gesture.previous = { x: pointer.x, y: pointer.y };
     }
   };
+
+  private panFromSortPress(pointer: Phaser.Input.Pointer, press: Extract<Gesture, { kind: 'sort-press' }>) {
+    const dx = pointer.x - press.start.x;
+    const dy = pointer.y - press.start.y;
+    if (Math.hypot(dx, dy) < tapSlop) return;
+    this.board.pan(dx, dy);
+    this.updateZoomButtons();
+    this.gesture = { kind: 'pan', pointer, previous: { x: pointer.x, y: pointer.y } };
+    if (!pointer.wasTouch) this.scene.input.setDefaultCursor('grabbing');
+  }
 
   private movePiecePress(pointer: Phaser.Input.Pointer, press: Extract<Gesture, { kind: 'piece-press' }>) {
     const dx = pointer.x - press.start.x;
@@ -584,20 +658,25 @@ export class PuzzleBoardView {
       this.cancelInteraction();
       return;
     }
+    if (gesture.kind === 'sort-press' && over.length) gesture.canTap = false;
     this.finishGesture(pointer, gesture);
   };
 
   private finishGesture(pointer: Phaser.Input.Pointer, gesture: Gesture) {
-    if (gesture.kind === 'pan' || gesture.kind === 'scroll') this.moveGesture(pointer);
+    if (gesture.kind === 'pan' || gesture.kind === 'scroll' || gesture.kind === 'sort-press') this.moveGesture(pointer);
     this.gesture = undefined;
     this.updateIdleCursor();
-    if (gesture.kind === 'piece-press' || gesture.kind === 'break-press') {
-      const tapped = gesture.canTap && Math.hypot(pointer.x - gesture.start.x, pointer.y - gesture.start.y) < tapSlop
-        && this.pieceContactAt(pointer)?.entry === gesture.entry;
+    if ('canTap' in gesture) {
+      const tapped = gesture.canTap && Math.hypot(pointer.x - gesture.start.x, pointer.y - gesture.start.y) < tapSlop;
+      if (gesture.kind === 'sort-press') {
+        if (tapped && this.armedTool === 'sort' && this.board.contains(pointer)) this.sortEdgesAt(pointer);
+        return;
+      }
+      const tappedPiece = tapped && this.pieceContactAt(pointer)?.entry === gesture.entry;
       if (gesture.kind === 'break-press') {
-        if (tapped) this.breakOff(gesture.entry);
-        else this.setBreakArmed(false);
-      } else if (tapped) this.turnPiece(gesture);
+        if (tappedPiece) this.breakOff(gesture.entry);
+        else this.setArmedTool();
+      } else if (tappedPiece) this.turnPiece(gesture);
       return;
     }
     if (gesture.kind !== 'piece') return;
@@ -606,11 +685,25 @@ export class PuzzleBoardView {
     this.dropPiece(pointer, gesture);
   }
 
+  private moveTrayToBoard() {
+    this.setArmedTool();
+    if (!this.play.moveTrayToBoard(this.board.reachableBounds, this.allowLoosePiecesOnBoard)) return;
+    this.reconcileWorkspace();
+    this.actions.onWorkspaceChange();
+  }
+
+  private sortEdgesAt(point: Point) {
+    this.setArmedTool();
+    if (!this.play.sortParkedEdges(this.board.toLocal(point), this.board.reachableBounds)) return;
+    this.reconcileWorkspace();
+    this.actions.onWorkspaceChange();
+  }
+
   private breakOff(entry: PuzzlePieceView) {
     const { id } = entry.piece;
     const start = { x: entry.position.x, y: entry.position.y };
     if (!this.play.breakOff(id, this.allowLoosePiecesOnBoard)) return;
-    this.setBreakArmed(false);
+    this.setArmedTool();
     this.reconcileWorkspace();
     const end = this.play.positionOf(id);
     if (end) this.slideDetachedPiece(entry, start, end);
@@ -724,8 +817,7 @@ export class PuzzleBoardView {
   private reconcileWorkspace() {
     this.tray.reconcile(this.trayEntries(), this.trayBounds);
     this.syncParkedPieces();
-    this.updateBreakButton();
-    this.updateZoomButtons();
+    this.updateToolButtons();
   }
 
   private syncParkedPieces() {
@@ -736,6 +828,7 @@ export class PuzzleBoardView {
       entry.setParked(true);
       entry.addTo(this.board.layer);
       entry.setOrientation(group.quarterTurns);
+      entry.setGrayscale(!this.play.puzzle.canDrag(id));
       entry.setScale(1);
       entry.moveTo(x, y);
       entry.setVisible(true);
@@ -748,7 +841,7 @@ export class PuzzleBoardView {
       if (pointer.wasCanceled) this.cancelInteraction();
       return;
     }
-    if (this.gesture?.pointer !== pointer && !this.breakArmed) return;
+    if (this.gesture?.pointer !== pointer && !this.armedTool) return;
     this.cancelInteraction();
   };
 

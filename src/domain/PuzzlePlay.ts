@@ -1,4 +1,5 @@
-import type { Point } from './geometry.ts';
+import { Bounds, type Point } from './geometry.ts';
+import { planEdgeSorting, planTrayParking } from './parkedPieceLayout.ts';
 import { PieceWorkspace, type ParkedGroup } from './PieceWorkspace.ts';
 import type { DropResult, Puzzle, PuzzleRestore, PuzzleSnapshot } from './Puzzle.ts';
 
@@ -28,6 +29,10 @@ export class PuzzlePlay {
 
   get parkedGroups(): readonly ParkedGroup[] {
     return this.workspace.parkedGroups;
+  }
+
+  get hasSortableParkedEdges(): boolean {
+    return this.puzzle.challengeMode !== 'seed' && this.parkedGroups.some((group) => this.isParkedEdge(group));
   }
 
   groupOf(pieceId: string): ParkedGroup | undefined {
@@ -78,6 +83,48 @@ export class PuzzlePlay {
     return boardDrop(settled, guideResult);
   }
 
+  moveTrayToBoard(area: Bounds, allowLoosePiecesOnBoard: boolean, random = Math.random): boolean {
+    if (!allowLoosePiecesOnBoard || this.puzzle.challengeMode === 'seed') return false;
+    const tray = this.trayPieces.map((piece) => ({ piece, quarterTurns: this.puzzle.orientationOf(piece.id) }));
+    if (tray.length === 0) return false;
+
+    const { width, height } = this.puzzle.board.size;
+    const guide = new Bounds(0, 0, width, height);
+    const occupied = [...this.workspace.occupiedFootprints(), ...this.placedFootprints()];
+    const parking = planTrayParking(tray, area, guide, occupied, random);
+    if (parking.length === 0) return false;
+
+    this.workspace.parkSingles(parking);
+    for (const { pieceId } of parking) this.homes.takeFromTray(pieceId);
+    return true;
+  }
+
+  sortParkedEdges(at: Point, area: Bounds, random = Math.random): boolean {
+    if (this.puzzle.challengeMode === 'seed') return false;
+    const edges = [];
+    const otherGroups = [];
+    for (const group of this.parkedGroups) {
+      const layout = this.workspace.layoutOf(group);
+      if (this.isParkedEdge(group)) edges.push(layout);
+      else otherGroups.push(layout);
+    }
+    if (edges.length === 0) return false;
+
+    const positions = planEdgeSorting(edges, otherGroups, at, area, this.placedFootprints(), random);
+    return this.workspace.moveGroups(positions);
+  }
+
+  private isParkedEdge(group: ParkedGroup): boolean {
+    if (group.memberIds.length !== 1) return false;
+    const { row, column } = this.puzzle.pieceById(group.anchorPieceId)!.cell;
+    const { rows, columns } = this.puzzle.board;
+    return row === 0 || row === rows - 1 || column === 0 || column === columns - 1;
+  }
+
+  private placedFootprints(): Bounds[] {
+    return this.puzzle.pieces.filter(({ id }) => this.puzzle.isPlaced(id)).map(({ outline }) => outline.frame);
+  }
+
   returnToTray(grabbedPieceId: string): boolean {
     const group = this.groupOf(grabbedPieceId);
     if (!group) return false;
@@ -115,7 +162,8 @@ export class PuzzlePlay {
     const groups = this.workspace.readSnapshot(snapshot.parkedGroups);
     if (!groups) return false;
     const parkedIds = new Set(groups.flatMap(({ memberIds }) => memberIds));
-    if (!this.homes.restoreHomes(snapshot, parkedIds)) return false;
+    const joinedIds = groups.filter(({ memberIds }) => memberIds.length > 1).flatMap(({ memberIds }) => memberIds);
+    if (!this.homes.restoreHomes(snapshot, parkedIds, joinedIds)) return false;
     this.workspace.replaceGroups(groups);
     return true;
   }

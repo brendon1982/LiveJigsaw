@@ -128,8 +128,7 @@ export class PieceWorkspace {
     }
 
     const { x, y } = this.positionOf(group, pieceId);
-    // Leave the piece outside the join radius so it can be moved without immediately rejoining.
-    const distance = this.puzzle.snapTolerance + 6;
+    const distance = (this.puzzle.snapTolerance + 6) / 2;
     return { x: x + away.x * distance, y: y + away.y * distance };
   }
 
@@ -137,14 +136,18 @@ export class PieceWorkspace {
     let closest: { resting: ParkedGroup; distance: number } | undefined;
     for (const id of group.memberIds) {
       const center = this.positionOf(group, id);
+      const start = lifted && this.positionOf(lifted, id);
       for (const neighborId of this.puzzle.neighborIds(id)) {
         const resting = this.groupOf(neighborId);
         if (!resting || resting === lifted || resting.quarterTurns !== group.quarterTurns) continue;
 
         const expected = this.positionOf(resting, id);
         const distance = Math.hypot(center.x - expected.x, center.y - expected.y);
+        if (distance > this.puzzle.snapTolerance) continue;
+        // A detached piece can start within snap range. Let it move away without sticking.
+        if (start && distance > 0 && distance >= Math.hypot(start.x - expected.x, start.y - expected.y)) continue;
         // Ties keep the first match in member order, then top/right/bottom/left order.
-        if (distance <= this.puzzle.snapTolerance && (!closest || distance < closest.distance)) {
+        if (!closest || distance < closest.distance) {
           closest = { resting, distance };
         }
       }

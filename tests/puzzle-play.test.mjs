@@ -1743,7 +1743,8 @@ scenario('break piece off targets the topmost member and splits a bridge on touc
   assert.deepEqual(split.parked.slice(0, -1), [0, 2, 3].map((index) => joined.parked[index]));
   const detached = split.parked.at(-1);
   assert.deepEqual(detached, { ...joined.parked[1], y: detached.y }, 'Only the bridge moves, without rotating');
-  assert.ok(detached.y < joined.parked[1].y - puzzle.snapTolerance, 'The bridge moves away from both neighbors');
+  const detachDistance = (puzzle.snapTolerance + 6) / 2;
+  assert.equal(detached.y, joined.parked[1].y - detachDistance, 'The bridge moves away from both neighbors');
   assert.ok(split.parkedBorders.some(({ x, y }) => x === detached.x && y === detached.y));
   assert.deepEqual((await readSave(page)).progress.Windmill.parkedGroups.map(({ memberIds }) => memberIds),
     [[left], [inner, end], [bridge]], 'The saved workspace records each remaining component separately');
@@ -1782,7 +1783,7 @@ scenario('break piece off targets the topmost member and splits a bridge on touc
   assert.deepEqual(singles.parked.slice(0, -1), split.parked.slice(0, 2));
   const detachedEnd = singles.parked.at(-1);
   assert.deepEqual(detachedEnd, { ...joined.parked[3], x: detachedEnd.x }, 'A mouse click detaches without rotating');
-  assert.ok(detachedEnd.x > joined.parked[3].x + puzzle.snapTolerance, 'The end moves directly away from its neighbor');
+  assert.equal(detachedEnd.x, joined.parked[3].x + detachDistance, 'The end moves directly away from its neighbor');
 
   await clickAt(screenPiece(singles, end), 'right');
   await clickAt(singles.boardPoint(joined.parked[3].x, joined.parked[3].y));

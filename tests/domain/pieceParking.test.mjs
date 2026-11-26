@@ -119,7 +119,7 @@ test('rotating a parked group pivots around the clicked member, and returning it
 });
 
 test('detaching a rotated bridge moves it sideways and leaves the remaining components in place', () => {
-  const { play, puzzle, pieceAt } = givenPuzzle({ columns: 5, rows: 1, pieceRotation: true });
+  const { play, pieceAt } = givenPuzzle({ columns: 5, rows: 1, pieceRotation: true });
   const pieces = [0, 1, 2, 3, 4].map((column) => pieceAt(column, 0));
   pieces.forEach((piece, i) => {
     turnTo(play, piece, 1);
@@ -137,18 +137,18 @@ test('detaching a rotated bridge moves it sideways and leaves the remaining comp
   });
   const previous = offset(offGuide, 0, 256);
   const detached = play.positionOf(bridge);
-  assert.equal(detached.y, previous.y);
-  assert.ok(Math.abs(detached.x - previous.x) > puzzle.snapTolerance);
-  assert.ok(Math.abs(detached.x - previous.x) < 32);
+  assert.deepEqual(detached, offset(previous, 8));
   assert.equal(play.orientationOf(bridge), 1);
   assert.equal(play.breakOff(bridge), false);
   assert.equal(play.dropOnBoard(bridge, detached).kind, 'parked');
-  assert.equal(play.dropOnBoard(bridge, previous).kind, 'joined');
+  assert.equal(play.dropOnBoard(bridge, offset(detached, 1)).kind, 'parked');
+  assert.equal(play.dropOnBoard(bridge, offset(previous, 3)).kind, 'joined');
+  assert.deepEqual(play.positionOf(bridge), previous);
   assert.equal(play.parkedGroups.length, 2);
 });
 
 test('a surrounded piece still separates without moving its neighbors', () => {
-  const { play, puzzle, pieceAt } = givenPuzzle({ columns: 3, rows: 3 });
+  const { play, pieceAt } = givenPuzzle({ columns: 3, rows: 3 });
   const center = pieceAt(1, 1);
   const neighbors = [pieceAt(1, 0), pieceAt(2, 1), pieceAt(1, 2), pieceAt(0, 1)];
   play.dropOnBoard(center.id, offGuide);
@@ -159,7 +159,7 @@ test('a surrounded piece still separates without moving its neighbors', () => {
 
   assert.equal(play.breakOff(center.id), true);
   const detached = play.positionOf(center.id);
-  assert.ok(Math.hypot(detached.x - offGuide.x, detached.y - offGuide.y) > puzzle.snapTolerance);
+  assert.equal(Math.hypot(detached.x - offGuide.x, detached.y - offGuide.y), 8);
   assert.deepEqual(neighbors.map(({ id }) => play.positionOf(id)), positions);
 });
 

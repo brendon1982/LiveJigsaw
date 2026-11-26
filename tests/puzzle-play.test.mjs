@@ -314,7 +314,57 @@ scenario('the board starts fitted to the space left by the saved tray width', as
   assert.deepEqual(await pixelAt(page, screenshot, 900, 180), panelBackground, 'The artwork should fit vertically after restoring the tray');
   assert.notDeepEqual(await pixelAt(page, screenshot, 900, 250), panelBackground, 'The fitted artwork should be visible');
   assert.deepEqual(await pixelAt(page, screenshot, 900, 700), panelBackground, 'The artwork should be centered vertically');
-  assert.deepEqual(await pixelAt(page, screenshot, 1267, 113), panelBackground, 'Fit board should start hidden');
+  assert.notDeepEqual(await pixelAt(page, screenshot, 1267, 113), panelBackground, 'The 1× button should occupy the top-right slot');
+  assert.deepEqual(await pixelAt(page, screenshot, 1217, 113), panelBackground, 'Only one zoom button should be visible');
+  assert.deepEqual(errors, []);
+});
+
+scenario('the 1× board button restores native size and Fit board returns to the fitted view', async (t) => {
+  const { page, canvas, waitForText, errors, playSelection } = await openPuzzle(t, {
+    viewport: { width: 1320, height: 780 }, hasTouch: true,
+  }, '/', (page) => page.addInitScript(() => {
+    localStorage.setItem('live-jigsaw.save', JSON.stringify({
+      version: 8,
+      settings: { trayPosition: 'Left', trayFractions: { vertical: 0.4, horizontal: 0 } },
+    }));
+  }));
+  await page.touchscreen.tap(340, 180);
+  await playSelection({ size: 40, pieceShape: 'vertical-short' });
+  await waitForText('0 of 40 placed');
+
+  const panelBackground = [32, 46, 42, 255];
+  const fitted = await canvas.screenshot();
+  assert.deepEqual(await pixelAt(page, fitted, 900, 112), panelBackground);
+  assert.deepEqual(await pixelAt(page, fitted, 1199, 119), panelBackground, 'A lone button should not occupy the left slot');
+  await page.touchscreen.tap(1261, 119);
+
+  const native = await canvas.screenshot();
+  // The 624 px artwork is centered between y=84 and y=756, so it spans y=108 to y=732 at 1×.
+  for (const y of [104, 736]) assert.deepEqual(await pixelAt(page, native, 900, y), panelBackground);
+  for (const y of [112, 728]) assert.notDeepEqual(await pixelAt(page, native, 900, y), panelBackground);
+
+  const { moveFinger } = await touchController(page);
+  await moveFinger(900, 420, 900, 460);
+  const panned = await canvas.screenshot();
+  assert.deepEqual(await pixelAt(page, panned, 900, 112), panelBackground, 'The artwork should move down');
+  assert.deepEqual(await pixelAt(page, panned, 1199, 119), panelBackground, 'Panning at 1× should not show the native size button');
+  assert.notDeepEqual(await pixelAt(page, panned, 1261, 119), panelBackground, 'Fit should remain available after panning');
+
+  await page.mouse.move(900, 420);
+  await page.mouse.wheel(0, 200);
+  const zoomedOut = await canvas.screenshot();
+  assert.notDeepEqual(await pixelAt(page, zoomedOut, 1199, 119), panelBackground, '1× should move to the left slot');
+  assert.notDeepEqual(await pixelAt(page, zoomedOut, 1261, 119), panelBackground, 'Fit should stay in the right slot');
+  await page.touchscreen.tap(1199, 119);
+  const nativeAgain = await canvas.screenshot();
+  // Zooming out around y=420 and back to 1× should restore the panned top edge at y=148.
+  assert.deepEqual(await pixelAt(page, nativeAgain, 900, 144), panelBackground, '1× should preserve the pan');
+  assert.notDeepEqual(await pixelAt(page, nativeAgain, 900, 152), panelBackground, '1× should restore the panned artwork edge');
+
+  await page.touchscreen.tap(1261, 119);
+  const refitted = await canvas.screenshot();
+  assert.deepEqual(await pixelAt(page, refitted, 900, 112), panelBackground);
+  assert.deepEqual(await pixelAt(page, refitted, 1199, 119), panelBackground);
   assert.deepEqual(errors, []);
 });
 

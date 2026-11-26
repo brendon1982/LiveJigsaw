@@ -118,7 +118,7 @@ export class PannableBoard {
   }
 
   layout(bounds: Phaser.Geom.Rectangle) {
-    const keepFitted = this.usesFitZoom && !this.isViewAdjusted;
+    const keepFitted = this.usesFitZoom && this.isFitted;
     const dx = (bounds.width - this.viewport.width) / 2;
     const dy = (bounds.height - this.viewport.height) / 2;
     this.setViewport(bounds);
@@ -141,17 +141,35 @@ export class PannableBoard {
     return this.camera.zoom;
   }
 
-  get isViewAdjusted(): boolean {
-    const homeZoom = this.usesFitZoom ? this.fitZoom : 1;
-    const centered = this.centeredOffset(homeZoom);
-    return Math.abs(this.zoom - homeZoom) > 0.0001
-      || Math.abs(this.offset.x - centered.x) > 0.01
-      || Math.abs(this.offset.y - centered.y) > 0.01;
+  get isFitted(): boolean {
+    const zoom = this.fitZoom;
+    const centered = this.centeredOffset(zoom);
+    return this.isZoomAt(zoom)
+      && Math.abs(this.offset.x - centered.x) <= 0.01
+      && Math.abs(this.offset.y - centered.y) <= 0.01;
+  }
+
+  get isNativeSize(): boolean {
+    return this.isZoomAt(1);
+  }
+
+  private isZoomAt(zoom: number): boolean {
+    return Math.abs(this.zoom - zoom) <= 0.0001;
   }
 
   fit() {
     this.usesFitZoom = true;
-    this.camera.setZoom(this.fitZoom);
+    this.centerAt(this.fitZoom);
+  }
+
+  showNativeSize() {
+    this.usesFitZoom = false;
+    const center = { x: this.viewport.centerX, y: this.viewport.centerY };
+    this.setZoomAt(center, 1);
+  }
+
+  private centerAt(zoom: number) {
+    this.camera.setZoom(zoom);
     this.offset = this.centeredOffset(this.zoom);
     this.pan(0, 0);
   }
@@ -173,9 +191,14 @@ export class PannableBoard {
   }
 
   zoomAt(point: Point, scale: number, previousPoint: Point = point) {
-    const anchor = this.toLocal(previousPoint);
     const minimumZoom = Math.min(0.5, this.fitZoom);
-    this.camera.setZoom(Phaser.Math.Clamp(this.zoom * scale, minimumZoom, 2.5));
+    const zoom = Phaser.Math.Clamp(this.zoom * scale, minimumZoom, 2.5);
+    this.setZoomAt(point, zoom, previousPoint);
+  }
+
+  private setZoomAt(point: Point, zoom: number, previousPoint: Point = point) {
+    const anchor = this.toLocal(previousPoint);
+    this.camera.setZoom(zoom);
     this.offset = {
       x: point.x - this.viewport.x - anchor.x * this.zoom,
       y: point.y - this.viewport.y - anchor.y * this.zoom,

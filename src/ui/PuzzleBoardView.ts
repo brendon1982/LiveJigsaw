@@ -65,10 +65,20 @@ function drawFitBoardIcon(art: Phaser.GameObjects.Graphics, color: number) {
   art.strokePath();
 }
 
+function drawNativeSizeIcon(art: Phaser.GameObjects.Graphics, color: number) {
+  art.clear().lineStyle(2, color).beginPath();
+  art.moveTo(-9, -3).lineTo(-5, -7).lineTo(-5, 7);
+  art.moveTo(-9, 7).lineTo(-1, 7);
+  art.moveTo(2, -4).lineTo(10, 4);
+  art.moveTo(2, 4).lineTo(10, -4);
+  art.strokePath();
+}
+
 export class PuzzleBoardView {
   private readonly tray: PieceTray;
   private readonly board: PannableBoard;
   private readonly fitButton: ReturnType<typeof makeIconButton>;
+  private readonly nativeSizeButton: ReturnType<typeof makeIconButton>;
   private readonly placementEffects: PlacementEffects;
   private seedDropFeedback?: SeedDropFeedback;
   private readonly floatingPieces: Phaser.GameObjects.Layer;
@@ -111,9 +121,16 @@ export class PuzzleBoardView {
       this.cancelInteraction();
       this.fitBoard();
     }).setVisible(false);
+    this.nativeSizeButton = makeIconButton(scene, 'Native size (1×)', drawNativeSizeIcon, (pointer) => {
+      if (pointer.wasCanceled) return;
+      this.cancelInteraction();
+      this.board.showNativeSize();
+      this.updateZoomButtons();
+    }).setVisible(false);
     this.placementEffects = new PlacementEffects(scene, this.board.layer);
     this.floatingPieces = scene.add.layer();
     this.fitButton.addToLayer(this.floatingPieces);
+    this.nativeSizeButton.addToLayer(this.floatingPieces);
     const dragCamera = scene.cameras.add().setName('Board overlay');
 
     // The panel cameras clip their own layers. The overlay draws above both panels.
@@ -204,7 +221,7 @@ export class PuzzleBoardView {
 
   showCompletion() {
     this.completionStage = 'revealing';
-    this.updateFitButton();
+    this.updateZoomButtons();
     this.board.revealFinishedArtwork();
     this.tray.hide();
     this.trayBounds.setTo(0, 0, 0, 0);
@@ -237,23 +254,34 @@ export class PuzzleBoardView {
 
   private fitBoard() {
     this.board.fit();
-    this.updateFitButton();
+    this.updateZoomButtons();
   }
 
-  private updateFitButton() {
-    const visible = this.completionStage !== 'revealing' && this.board.isViewAdjusted;
-    if (this.fitButton.visible !== visible) this.fitButton.setVisible(visible);
+  private updateZoomButtons() {
+    const canZoom = this.completionStage !== 'revealing';
+    const showFit = canZoom && !this.board.isFitted;
+    const showNativeSize = canZoom && !this.board.isNativeSize;
+    if (this.fitButton.visible !== showFit) this.fitButton.setVisible(showFit);
+    if (this.nativeSizeButton.visible !== showNativeSize) this.nativeSizeButton.setVisible(showNativeSize);
+
+    const { x, y, width } = this.board.camera;
+    let right = x + width - headerControlGap;
+    for (const button of [this.fitButton, this.nativeSizeButton]) {
+      if (!button.visible) continue;
+      const left = Math.max(x, right - button.width);
+      button.setPosition(left, y + headerControlGap);
+      right = left - headerControlGap;
+    }
   }
 
   private layoutBoard(bounds: Phaser.Geom.Rectangle) {
     this.board.layout(bounds);
-    const x = Math.max(bounds.x, bounds.right - this.fitButton.width - headerControlGap);
-    this.fitButton.setPosition(x, bounds.top + headerControlGap);
-    this.updateFitButton();
+    this.updateZoomButtons();
   }
 
   private readonly startGesture = (pointer: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]) => {
     if (this.completionStage === 'revealing' || this.pinch) return;
+    if (over.includes(this.fitButton) || over.includes(this.nativeSizeButton)) return;
     if (!pointer.wasTouch) {
       const gesture = this.gesture;
       const rightClick = pointer.button === 2;
@@ -268,7 +296,7 @@ export class PuzzleBoardView {
         return;
       }
     }
-    if (!pointer.primaryDown || (!pointer.wasTouch && pointer.button !== 0) || over.includes(this.fitButton)) return;
+    if (!pointer.primaryDown || (!pointer.wasTouch && pointer.button !== 0)) return;
     if (pointer.wasTouch && this.gesture?.kind === 'piece' && this.gesture.dropOn === 'click') {
       this.cancelInteraction();
     }
@@ -355,7 +383,7 @@ export class PuzzleBoardView {
       : deltaMode === WheelEvent.DOM_DELTA_LINE ? 16 : 1;
     const previousZoom = this.board.zoom;
     this.board.zoomAt(pointer, 1.5 ** (-dy * pixelsPerUnit / 200));
-    this.updateFitButton();
+    this.updateZoomButtons();
 
     const gesture = this.gesture;
     if (gesture?.kind === 'piece' && gesture.pointerId === pointer.id) {
@@ -372,7 +400,7 @@ export class PuzzleBoardView {
       if (pinch.fingers.includes(pointer)) {
         const next = measurePinch(...pinch.fingers);
         this.board.zoomAt(next.center, next.span / pinch.span, pinch.center);
-        this.updateFitButton();
+        this.updateZoomButtons();
         Object.assign(pinch, next);
       }
       return;
@@ -388,7 +416,7 @@ export class PuzzleBoardView {
       const dy = pointer.y - gesture.previous.y;
       if (gesture.kind === 'pan') {
         this.board.pan(dx, dy);
-        this.updateFitButton();
+        this.updateZoomButtons();
       } else {
         this.tray.scrollBy(trayScrollAxis(this.side) === 'y' ? dy : dx);
       }

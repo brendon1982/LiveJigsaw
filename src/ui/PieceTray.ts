@@ -27,12 +27,13 @@ export class PieceTray {
     private readonly scene: UIScene,
     entries: PuzzlePieceView[],
     cellSize: Size,
-    targetPieceSize: number,
+    targetPieceArea: number,
     private axis: TrayScrollAxis,
     pieceRotation: boolean,
   ) {
     this.entries = entries;
-    this.pieceScale = targetPieceSize / Math.min(cellSize.width, cellSize.height);
+    const cellArea = cellSize.width * cellSize.height;
+    this.pieceScale = Math.sqrt(targetPieceArea / cellArea);
     const slotSizes = entries.map(({ frame, piece }) => {
       const { x, y } = frame.toLocal(piece.target);
       // The base-cell center can be off-center in the image when only one side has a tab.

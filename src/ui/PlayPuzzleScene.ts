@@ -21,8 +21,8 @@ export type PuzzleSelection = {
   snapshot?: PuzzleSnapshot;
 };
 
-// Target length in screen pixels for the shorter side of a tray piece's base cell.
-const trayPieceSize = 76.8;
+// Target base-cell area in screen pixels squared, matching the previous short rectangles.
+const trayPieceArea = 76.8 * 96;
 const completionPreviewDuration = 1400;
 
 export class PlayPuzzleScene extends Phaser.Scene {
@@ -106,7 +106,7 @@ export class PlayPuzzleScene extends Phaser.Scene {
       }
     };
     const { trayPosition = 'Auto', trayFractions } = gameSave.settings;
-    const board = new PuzzleBoardView(this, puzzle, capture, trayPieceSize, {
+    const board = new PuzzleBoardView(this, puzzle, capture, trayPieceArea, {
       position: trayPosition,
       fractions: trayFractions,
       onResize: (fractions) => gameSave.updateSettings({ trayFractions: fractions }),

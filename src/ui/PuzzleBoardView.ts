@@ -89,7 +89,7 @@ export class PuzzleBoardView {
     private readonly scene: UIScene,
     private readonly puzzle: Puzzle,
     capture: LivePuzzleCapture,
-    trayPieceSize: number,
+    trayPieceArea: number,
     traySettings: TraySettings,
     private readonly actions: PuzzleActions,
   ) {
@@ -103,7 +103,7 @@ export class PuzzleBoardView {
 
     this.trayPosition = traySettings.position;
     this.side = resolveTraySide(this.trayPosition, scene.scale.gameSize);
-    this.tray = new PieceTray(scene, this.pieces, puzzle.board.cellSize, trayPieceSize, trayScrollAxis(this.side), puzzle.pieceRotation);
+    this.tray = new PieceTray(scene, this.pieces, puzzle.board.cellSize, trayPieceArea, trayScrollAxis(this.side), puzzle.pieceRotation);
     this.board = new PannableBoard(scene, puzzle.board.size, capture, puzzle.hidesGuide);
     this.board.addPieces(placedPieces);
     this.fitButton = makeIconButton(scene, 'Fit board', drawFitBoardIcon, (pointer) => {

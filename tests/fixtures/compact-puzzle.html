@@ -18,8 +18,10 @@
         { width: 1024, height: 576, columns: 8, rows: 8, snapTolerance: 18 },
         { width: 1024, height: 576, columns: 16, rows: 8, snapTolerance: 16 },
       ];
-      puzzleSizePresets.splice(0, puzzleSizePresets.length,
-        ...fixedSizes.map((size) => Object.fromEntries(pieceShapeIds.map((shape) => [shape, size]))));
+      if (!new URLSearchParams(location.search).has('currentSizes')) {
+        puzzleSizePresets.splice(0, puzzleSizePresets.length,
+          ...fixedSizes.map((size) => Object.fromEntries(pieceShapeIds.map((shape) => [shape, size]))));
+      }
       for (const { scene } of puzzleSources) {
         const create = scene.prototype.create;
         scene.prototype.create = function (data) {

@@ -5,7 +5,8 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { chromium } from 'playwright-core';
 import { PNG } from 'pngjs';
 import { build, preview } from 'vite';
-import { createPuzzle } from '../src/domain/puzzleSizes.ts';
+import { createPuzzle, puzzleSizePresets } from '../src/domain/puzzleSizes.ts';
+import { saveVersion } from '../src/persistence/saveMigrations.ts';
 
 const scenarios = [];
 const scenario = (name, run) => scenarios.push({ name, run });
@@ -186,7 +187,7 @@ async function openPuzzle(t, options, path = '/', initPage) {
   return { page, canvas, waitForText, errors, clickDialog, clickSetup, playSelection };
 }
 
-async function openCompactPuzzle(t, options) {
+async function openCompactPuzzle(t, options, path = compactPuzzlePath) {
   compactPuzzleBuild ??= build({
     base: '/compact-fixture/',
     build: {
@@ -195,7 +196,7 @@ async function openCompactPuzzle(t, options) {
     },
   });
   await compactPuzzleBuild;
-  return openPuzzle(t, options, compactPuzzlePath);
+  return openPuzzle(t, options, path);
 }
 
 async function playLayout(page) {
@@ -438,6 +439,40 @@ scenario('the 420-piece tray only draws nearby piece masks', async (t) => {
   await page.mouse.move(85, 140);
   await page.mouse.wheel(0, 30000);
   await assertMaskDraws();
+  assert.deepEqual(errors, []);
+});
+
+scenario('the 420-piece Square tray renders cutouts without opposite-edge bleed', async (t) => {
+  const { page, canvas, waitForText, errors, clickDialog } = await openCompactPuzzle(t, {
+    viewport: { width: 1320, height: 780 },
+  }, `${compactPuzzlePath}?currentSizes`);
+  const setup = {
+    size: puzzleSizePresets.at(-1).square,
+    seed: 233, connectorStyle: 'classic', animationSpeed: 'Fast', challengeMode: 'none', pieceRotation: false,
+  };
+  // This piece has an inward top connector and a flat bottom edge.
+  const pieceId = 'piece-14-1';
+  const placedPieceIds = createPuzzle(setup.size, setup.connectorStyle, setup.seed).pieces
+    .map(({ id }) => id).filter((id) => id !== pieceId);
+  await page.evaluate((save) => localStorage.setItem('live-jigsaw.save', JSON.stringify(save)), {
+    version: saveVersion, progress: { Windmill: { setup, placedPieceIds, trayOrientations: {} } },
+  });
+  await page.reload();
+  await waitForText('Windmill');
+  await page.mouse.click(340, 180);
+  await waitForText('Resume');
+  await clickDialog(100, resumeActionY);
+  await waitForText('419 of 420 placed');
+
+  const { tray } = await playLayout(page);
+  const piece = tray.find(({ id }) => id === pieceId);
+  const y = Math.round(piece.y - piece.height / 2);
+  const screenshot = await canvas.screenshot();
+  const background = await pixelAt(page, screenshot, piece.x, y + 4);
+  for (const offset of [-24, 24]) {
+    assert.notDeepEqual(await pixelAt(page, screenshot, piece.x + offset, y), background, 'The first row should show both shoulders');
+  }
+  assert.deepEqual(await pixelAt(page, screenshot, piece.x, y), background, 'The top cutout must stay transparent on its outermost row');
   assert.deepEqual(errors, []);
 });
 

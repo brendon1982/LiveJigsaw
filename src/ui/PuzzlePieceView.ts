@@ -1,7 +1,24 @@
 import Phaser from 'phaser';
 import type { PuzzlePiece } from '../domain/Puzzle';
-import { Bounds, type Point } from '../domain/geometry';
+import { Bounds, type Point, type Size } from '../domain/geometry';
 import type { LivePuzzleCapture } from '../rendering/LivePuzzleCapture';
+
+function pieceRenderFrame(frame: Bounds, captureSize: Size): Bounds {
+  const { x, y, width, height } = frame;
+  if (!Phaser.Math.Pow2.IsSize(width, height)) return frame;
+
+  // Phaser repeats power-of-two filter outputs. Add a transparent texel outside the outline
+  // to make the render target non-power-of-two without changing the piece or tray slot.
+  if (width > 1 && width < captureSize.width) {
+    const left = x + width < captureSize.width ? x : x - 1;
+    return new Bounds(left, y, width + 1, height);
+  }
+  if (height > 1 && height < captureSize.height) {
+    const top = y + height < captureSize.height ? y : y - 1;
+    return new Bounds(x, top, width, height + 1);
+  }
+  return frame;
+}
 
 export class PuzzlePieceView {
   readonly mask: Phaser.Textures.CanvasTexture;
@@ -18,13 +35,13 @@ export class PuzzlePieceView {
     // Round the texture crop outward to include the full outline.
     const left = Math.floor(outlineBounds.x);
     const top = Math.floor(outlineBounds.y);
-    const width = Math.ceil(outlineBounds.x + outlineBounds.width) - left;
-    const height = Math.ceil(outlineBounds.y + outlineBounds.height) - top;
-    const frame = new Bounds(left, top, width, height);
-    this.frame = frame;
+    const right = Math.ceil(outlineBounds.x + outlineBounds.width);
+    const bottom = Math.ceil(outlineBounds.y + outlineBounds.height);
+    this.frame = new Bounds(left, top, right - left, bottom - top);
+    const frame = pieceRenderFrame(this.frame, texture);
     const localPoints = points.map((point) => frame.toLocal(point));
     const maskKey = `live-puzzle-mask-${piece.id}`;
-    const mask = scene.textures.createCanvas(maskKey, width, height);
+    const mask = scene.textures.createCanvas(maskKey, frame.width, frame.height);
     if (!mask) throw new Error(`Could not create mask for ${piece.id}`);
     this.mask = mask;
 
@@ -38,7 +55,7 @@ export class PuzzlePieceView {
     mask.refresh();
     mask.setWrap(Phaser.Textures.WrapMode.CLAMP_TO_EDGE);
 
-    texture.add(piece.id, 0, left, top, width, height);
+    texture.add(piece.id, 0, frame.x, frame.y, frame.width, frame.height);
 
     const origin = frame.toLocal(piece.target);
     this.image = scene.add.image(0, 0, texture.key, piece.id)
@@ -80,8 +97,7 @@ export class PuzzlePieceView {
 
   setScale(scale: number) {
     this.scale = scale;
-    const { width, height } = this.frame;
-    this.image.setDisplaySize(width * scale, height * scale);
+    this.image.setScale(scale);
   }
 
   addTo(layer: Phaser.GameObjects.Layer) {

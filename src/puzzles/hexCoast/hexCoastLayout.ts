@@ -1,45 +1,52 @@
+import type { Size } from '../../domain/geometry.ts';
 import { seededRandom } from '../../domain/seededRandom.ts';
 import { findRoute } from '../procgen/findRoute.ts';
 
-export const coastSize = { width: 1024, height: 576 };
 export const terraceHeight = 18;
 export const shoreHeight = 12;
 
-const columns = 17;
-const rows = 14;
+const districtSize = { width: 1024, height: 576 };
+const hexWidth = 64;
+const rowHeight = 48;
 type Random = ReturnType<typeof seededRandom>;
 type Biome = 'water' | 'sand' | 'grass' | 'autumn' | 'rock' | 'snow';
 export type CoastTile = { id: number; x: number; y: number; level: number; biome: Biome; wooded: boolean };
 type Building = { wall: string; upper: string; roof: string; floors: number };
 
-const grid = Array.from({ length: columns * rows }, (_, id) => {
-  const column = id % columns;
-  const row = Math.floor(id / columns);
-  return { id, column, row, x: column * 64 + (row % 2) * 32, y: row * 48 - 16 };
-});
+function coastGrid(columns: number, rows: number) {
+  const cells = Array.from({ length: columns * rows }, (_, id) => {
+    const column = id % columns;
+    const row = Math.floor(id / columns);
+    return { id, column, row, x: column * hexWidth + (row % 2) * hexWidth / 2, y: row * rowHeight - 16 };
+  });
 
-const neighbors = grid.map(({ column, row }) => {
-  const left = column - 1 + row % 2;
-  const right = left + 1;
-  return [[column + 1, row], [right, row + 1], [left, row + 1],
-    [column - 1, row], [left, row - 1], [right, row - 1]]
-    .flatMap(([x, y], heading) => x >= 0 && x < columns && y >= 0 && y < rows
-      ? [{ id: y * columns + x, heading }]
-      : []);
-});
+  const neighbors = cells.map(({ column, row }) => {
+    const left = column - 1 + row % 2;
+    const right = left + 1;
+    return [[column + 1, row], [right, row + 1], [left, row + 1],
+      [column - 1, row], [left, row - 1], [right, row - 1]]
+      .flatMap(([x, y], heading) => x >= 0 && x < columns && y >= 0 && y < rows
+        ? [{ id: y * columns + x, heading }]
+        : []);
+  });
 
-function distance(from: number, to: number) {
-  const start = grid[from];
-  const end = grid[to];
-  const rowDelta = start.row - end.row;
-  // Remove the stagger from the grid columns to measure along the hex axes.
-  const axialColumnDelta = start.column - Math.floor(start.row / 2) - end.column + Math.floor(end.row / 2);
-  return Math.max(Math.abs(rowDelta), Math.abs(axialColumnDelta), Math.abs(rowDelta + axialColumnDelta));
+  const width = (columns - 1) * hexWidth;
+  const height = (rows - 2) * rowHeight;
+  function distance(from: number, to: number) {
+    const start = cells[from];
+    const end = cells[to];
+    const rowDelta = start.row - end.row;
+    // Remove the stagger from the grid columns to measure along the hex axes.
+    const axialColumnDelta = start.column - Math.floor(start.row / 2) - end.column + Math.floor(end.row / 2);
+    return Math.max(Math.abs(rowDelta), Math.abs(axialColumnDelta), Math.abs(rowDelta + axialColumnDelta));
+  }
+
+  const buildable = ({ level, x, y }: CoastTile) =>
+    level === 1 && x >= 56 && x <= width - 56 && y >= 110 && y <= height - 53;
+  return { cells, neighbors, width, height, distance, buildable };
 }
 
-function buildable({ level, x, y }: CoastTile) {
-  return level === 1 && x >= 56 && x <= 968 && y >= 110 && y <= 523;
-}
+type CoastGrid = ReturnType<typeof coastGrid>;
 
 function elevation(shoreline: number, mountain: number) {
   if (shoreline < 0) return 0;
@@ -57,12 +64,12 @@ function tileBiome(level: number, shoreline: number, autumn: boolean): Biome {
   return autumn ? 'autumn' : 'grass';
 }
 
-function terrain(random: Random): CoastTile[] {
+function terrain({ cells, width, height }: CoastGrid, random: Random, separateIslands: boolean): CoastTile[] {
   const side = random() < 0.5 ? -1 : 1;
-  const main = { x: 512 + side * (118 + random() * 62), y: 240 + random() * 80 };
-  const island = { x: 512 - side * (266 + random() * 45), y: 155 + random() * 245 };
-  const coastWidth = 300 + random() * 88;
-  const coastHeight = 180 + random() * 52;
+  const main = { x: width / 2 + side * (118 + random() * 62), y: height / 2 - 48 + random() * 80 };
+  const island = { x: width / 2 - side * (width * 0.26 + random() * 45), y: height * (0.27 + random() * 0.42) };
+  const coastWidth = width * (0.29 + random() * 0.09);
+  const coastHeight = height * (0.31 + random() * 0.09);
   const islandWidth = 106 + random() * 68;
   const islandHeight = 78 + random() * 62;
   const capeX = main.x + side * (78 + random() * 88);
@@ -75,14 +82,16 @@ function terrain(random: Random): CoastTile[] {
   const autumnPhase = random() * 10;
   const coastPhase = random() * 10;
   const hill = (x: number, y: number, width: number, height: number) => 1 - (x / width) ** 2 - (y / height) ** 2;
-  return grid.map(({ id, x, y }) => {
+  return cells.map(({ id, x, y }) => {
     const coast = Math.max(
       hill(x - main.x, y - main.y, coastWidth, coastHeight),
       hill(x - capeX, y - capeY, 170, 108),
       hill(x - island.x, y - island.y, islandWidth, islandHeight),
     );
-    const shoreline = coast + Math.sin(x / 100 + y / 89 + coastPhase) * 0.15
+    const coastEdge = Math.min(x, width + hexWidth - x, y + 16, height + 80 - y);
+    const shorelineNoise = Math.sin(x / 100 + y / 89 + coastPhase) * 0.15
       + Math.cos(x / 115 - y / 65 + coastPhase) * 0.13;
+    const shoreline = separateIslands ? Math.min(coast + shorelineNoise, (coastEdge - 24) / 72) : coast + shorelineNoise;
     const mountain = hill(x - peakX, y - peakY, ridgeWidth, ridgeHeight) + Math.sin((x + y) / 63) * 0.12;
     const forest = Math.sin(x / 140 + y / 77 + forestPhase) + Math.cos(x / 118 - y / 115 + forestPhase);
     const autumn = Math.sin(x / 137 - y / 106 + autumnPhase) > 0.60;
@@ -93,7 +102,8 @@ function terrain(random: Random): CoastTile[] {
   });
 }
 
-function develop(tiles: CoastTile[], random: Random) {
+function develop(grid: CoastGrid, tiles: CoastTile[], random: Random) {
+  const { neighbors, buildable, distance } = grid;
   const availableLots = (tile: CoastTile) => neighbors[tile.id].filter(({ id }) => buildable(tiles[id])).length;
   const sites = tiles.filter((tile) => buildable(tile) && availableLots(tile) >= 3);
   const harbors = sites.filter((tile) => neighbors[tile.id].some(({ id }) => tiles[id].level === 0))
@@ -111,13 +121,16 @@ function develop(tiles: CoastTile[], random: Random) {
     for (const { tile: village } of destinations) {
       const road = findRoute(harbor.id, village.id, (id) => travel[id], distance, 0.35);
       if (!road || road.length > 19) continue;
-      const buildings = buildSettlements(tiles, road, harbor, village, random);
+      const buildings = buildSettlements(grid, tiles, road, harbor, village, random);
       if (buildings) return { road, towns: [harbor.id, village.id], buildings };
     }
   }
 }
 
-function buildSettlements(tiles: CoastTile[], road: number[], harbor: CoastTile, village: CoastTile, random: Random) {
+function buildSettlements(
+  { neighbors, buildable, distance }: CoastGrid,
+  tiles: CoastTile[], road: number[], harbor: CoastTile, village: CoastTile, random: Random,
+) {
   const occupied = new Set(road);
   const roadside = new Set(road.flatMap((id) => neighbors[id].map((neighbor) => neighbor.id)));
   const buildings = new Map<number, Building>();
@@ -146,13 +159,49 @@ function buildSettlements(tiles: CoastTile[], road: number[], harbor: CoastTile,
   return buildings;
 }
 
-export function generateHexCoast(seed: number) {
-  const random = seededRandom(seed);
+function generateDistrict(grid: CoastGrid, random: Random, separateIslands: boolean) {
   // Keep the shore intact while testing road placements. Roll new terrain only if it cannot support both towns.
   for (let attempt = 0; attempt < 32; attempt += 1) {
-    const tiles = terrain(random);
-    const settlement = develop(tiles, random);
+    const tiles = terrain(grid, random, separateIslands);
+    const settlement = develop(grid, tiles, random);
     if (settlement) return { tiles, ...settlement };
   }
   throw new Error('The coast could not find room for both settlements');
+}
+
+function districtEdges(length: number, count: number, step = 1) {
+  return Array.from({ length: count + 1 }, (_, index) =>
+    index === count ? length : Math.round(index * length / count / step) * step);
+}
+
+export function generateHexCoast(viewport: Size, seed: number) {
+  const random = seededRandom(seed);
+  // A legacy small board sees the center of a complete coast without shrinking the tiles.
+  const width = Math.max(viewport.width, districtSize.width);
+  const height = Math.max(viewport.height, districtSize.height);
+  const left = Math.floor((viewport.width - width) / 2);
+  const top = Math.floor((viewport.height - height) / 2);
+  const columns = districtEdges(Math.ceil(width / hexWidth) + 1, Math.round(width / districtSize.width));
+  // Start each district on an even row to continue the same stagger across borders.
+  const rows = districtEdges(Math.ceil(height / rowHeight) + 2, Math.round(height / districtSize.height), 2);
+  const separateIslands = columns.length > 2 || rows.length > 2;
+  const tiles: CoastTile[] = [];
+  const roads: number[][] = [];
+  const towns: number[] = [];
+  const buildings = new Map<number, Building>();
+
+  for (let row = 1; row < rows.length; row += 1) {
+    for (let column = 1; column < columns.length; column += 1) {
+      const grid = coastGrid(columns[column] - columns[column - 1], rows[row] - rows[row - 1]);
+      const district = generateDistrict(grid, random, separateIslands);
+      const x = left + columns[column - 1] * hexWidth;
+      const y = top + rows[row - 1] * rowHeight;
+      const idOffset = tiles.length;
+      for (const tile of district.tiles) tiles.push({ ...tile, id: tile.id + idOffset, x: tile.x + x, y: tile.y + y });
+      roads.push(district.road.map((id) => id + idOffset));
+      towns.push(...district.towns.map((id) => id + idOffset));
+      for (const [id, building] of district.buildings) buildings.set(id + idOffset, building);
+    }
+  }
+  return { tiles, roads, towns, buildings };
 }

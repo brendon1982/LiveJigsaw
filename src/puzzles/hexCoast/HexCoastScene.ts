@@ -10,7 +10,7 @@ import terrainImage from './assets/fullTiles.png';
 import terrainAtlas from './assets/fullTiles.xml?url';
 import treeImage from './assets/trees.png';
 import treeAtlas from './assets/trees.xml?url';
-import { coastSize, generateHexCoast, shoreHeight, terraceHeight, type CoastTile } from './hexCoastLayout';
+import { generateHexCoast, shoreHeight, terraceHeight, type CoastTile } from './hexCoastLayout';
 import { scatterHexScenery } from './hexCoastScenery';
 
 const sheets = [
@@ -35,7 +35,7 @@ type CoastArtwork = ReturnType<typeof generateHexCoast>;
 type Random = ReturnType<typeof seededRandom>;
 type AddSprite = (sheet: Sheet, frame: string, x: number, y: number, scale?: number, originY?: number) => Phaser.GameObjects.Image;
 
-function roadStrokesByRow(road: CoastTile[]) {
+function roadStrokesByRow(roads: CoastTile[][]) {
   const rows = new Map<number, RoadStroke[]>();
   const add = (from: RoadPoint, to: RoadPoint) => {
     const row = rows.get(from.y);
@@ -47,15 +47,17 @@ function roadStrokesByRow(road: CoastTile[]) {
     add(from, { x: from.x + (to.x - from.x) * 0.52, y: from.y + (to.y - from.y) * 0.52 });
   };
 
-  for (let index = 1; index < road.length; index += 1) {
-    const from = road[index - 1];
-    const to = road[index];
-    if (to.y === from.y) {
-      while (road[index + 1]?.y === from.y) index += 1;
-      add(from, road[index]);
-    } else {
-      halfStroke(from, to);
-      halfStroke(to, from);
+  for (const road of roads) {
+    for (let index = 1; index < road.length; index += 1) {
+      const from = road[index - 1];
+      const to = road[index];
+      if (to.y === from.y) {
+        while (road[index + 1]?.y === from.y) index += 1;
+        add(from, road[index]);
+      } else {
+        halfStroke(from, to);
+        halfStroke(to, from);
+      }
     }
   }
   return rows;
@@ -73,6 +75,31 @@ function landTilesByRow(tiles: CoastTile[]) {
 
 function surfaceY({ y, level }: CoastTile) {
   return y - shoreHeight - (level - 1) * terraceHeight;
+}
+
+function shoreDistances(land: CoastTile[]) {
+  const deepWaterDistance = 243;
+  const buckets = new Map<string, CoastTile[]>();
+  const bucket = (coordinate: number) => Math.floor(coordinate / deepWaterDistance);
+  for (const tile of land) {
+    const key = `${bucket(tile.x)},${bucket(tile.y)}`;
+    const tiles = buckets.get(key);
+    if (tiles) tiles.push(tile);
+    else buckets.set(key, [tile]);
+  }
+  return (x: number, y: number) => {
+    const column = bucket(x);
+    const row = bucket(y);
+    let nearest = deepWaterDistance;
+    for (let dy = -1; dy <= 1; dy += 1) {
+      for (let dx = -1; dx <= 1; dx += 1) {
+        for (const tile of buckets.get(`${column + dx},${row + dy}`) ?? []) {
+          nearest = Math.min(nearest, Math.hypot(x - tile.x, y - tile.y));
+        }
+      }
+    }
+    return nearest;
+  };
 }
 
 export class HexCoastScene extends Phaser.Scene {
@@ -96,16 +123,17 @@ export class HexCoastScene extends Phaser.Scene {
     this.elapsed = 0;
     this.animationRate = puzzleAnimationRates[animationSpeed];
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => { this.waves = []; });
-    const coast = generateHexCoast(seed);
+    const coast = generateHexCoast(viewport, seed);
     const random = seededRandom((seed ^ 0x5d3b6c17) >>> 0);
     this.drawCoast(coast, viewport, random);
     this.update(0, 0);
   }
 
-  private drawCoast({ tiles, road, towns, buildings }: CoastArtwork, viewport: Size, random: Random) {
-    const land = tiles.filter((tile) => tile.biome !== 'water');
-    const map = this.add.container().setScale(viewport.width / coastSize.width, viewport.height / coastSize.height);
-    map.add(this.add.rectangle(0, 0, coastSize.width, coastSize.height, 0x6ebacf).setOrigin(0));
+  private drawCoast({ tiles, roads, towns, buildings }: CoastArtwork, viewport: Size, random: Random) {
+    const backToFront = [...tiles].sort((a, b) => a.y - b.y || a.x - b.x);
+    const land = backToFront.filter((tile) => tile.biome !== 'water');
+    const map = this.add.container();
+    map.add(this.add.rectangle(0, 0, viewport.width, viewport.height, 0x6ebacf).setOrigin(0));
     const sprite: AddSprite = (sheet, frame, x, y, scale = 1, originY = 1) => {
       const image = this.add.image(x, y, textureKey(sheet), `${frame}.png`).setOrigin(0.5, originY).setScale(scale);
       map.add(image);
@@ -113,10 +141,10 @@ export class HexCoastScene extends Phaser.Scene {
     };
     const ground = (frame: string, x: number, y: number) => sprite('terrain', frame, x, y, 1, tileOriginY);
 
-    this.drawWater(tiles, land, sprite, random);
+    this.drawWater(backToFront, land, sprite, random);
 
-    const strokes = roadStrokesByRow(road.map((id) => tiles[id]));
-    const roadIds = new Set(road);
+    const strokes = roadStrokesByRow(roads.map((road) => road.map((id) => tiles[id])));
+    const roadIds = new Set(roads.flat());
     const townIds = new Set(towns);
     // Finish each row before drawing the next, so the foreground can cover the row behind it.
     for (const [rowY, row] of landTilesByRow(land)) {
@@ -167,8 +195,9 @@ export class HexCoastScene extends Phaser.Scene {
   }
 
   private drawWater(tiles: CoastTile[], land: CoastTile[], sprite: AddSprite, random: Random) {
+    const distanceToShore = shoreDistances(land);
     for (const { x, y, level } of tiles) {
-      const distanceToLand = level ? 0 : Math.min(...land.map((tile) => Math.hypot(x - tile.x, y - tile.y)));
+      const distanceToLand = level ? 0 : distanceToShore(x, y);
       const depth = Math.max(0, Math.min(1, (distanceToLand - 38) / 205));
       const red = 255 - Math.round(52 * depth);
       const green = 255 - Math.round(36 * depth);

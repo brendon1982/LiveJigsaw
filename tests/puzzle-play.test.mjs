@@ -32,6 +32,20 @@ function readSave(page) {
   return page.evaluate(() => JSON.parse(localStorage.getItem('live-jigsaw.save')));
 }
 
+async function saveFullHDPuzzle(page, title, seed) {
+  await page.evaluate(({ title, seed }) => localStorage.setItem('live-jigsaw.save', JSON.stringify({
+    version: 6,
+    progress: { [title]: {
+      setup: {
+        size: { width: 1920, height: 1080, columns: 8, rows: 4, snapTolerance: 28 },
+        seed, connectorStyle: 'classic', animationSpeed: 'Fast', challengeMode: 'none', pieceRotation: false,
+      },
+      placedPieceIds: ['piece-0-0'], trayOrientations: {},
+    } },
+  })), { title, seed });
+  await page.reload();
+}
+
 function paceRepeatClicks(click) {
   // RexUI ignores another click on the same button within 100 ms.
   let nextClick = 0;
@@ -690,9 +704,12 @@ scenario('the medieval village is captured during loading and animates after reo
   const loaded = page.waitForResponse((response) => atlas.test(response.url()) && response.ok());
   await openVillage();
   await loaded;
-  const board = { x: 435, y: 275, width: 590, height: 320 };
-  const artwork = await canvas.screenshot();
-  assert.notDeepEqual(await pixelAt(page, artwork, 85, 140), [23, 57, 45, 255], 'The artwork should replace the loading backdrop');
+  const board = { x: 197, y: 90, width: 1060, height: 660 };
+  for (let frame = 0; frame < 30; frame += 1) {
+    const artwork = await canvas.screenshot();
+    if (!(await pixelAt(page, artwork, 85, 140)).every((channel, index) => channel === [23, 57, 45, 255][index])) break;
+    assert.ok(frame < 29, 'The artwork should replace the loading backdrop');
+  }
   const before = await page.screenshot({ clip: board });
   await page.evaluate(async () => {
     for (let frame = 0; frame < 12; frame += 1) await new Promise(requestAnimationFrame);
@@ -703,27 +720,19 @@ scenario('the medieval village is captured during loading and animates after reo
 });
 
 scenario('Hex Coast captures continuous roads and animated water', async (t) => {
-  const { page, waitForText, errors, playSelection } = await openCompactPuzzle(t, {
+  const { page, waitForText, errors, clickDialog } = await openPuzzle(t, {
     viewport: { width: 1320, height: 780 },
   });
+  await saveFullHDPuzzle(page, 'HexCoast', 42);
+  await waitForText('Windmill');
   const atlasLoaded = (name) => page.waitForResponse((response) =>
     new RegExp(`/${name}-[^/]+\\.png$`).test(response.url()) && response.ok());
   const atlases = Promise.all([atlasLoaded('fullTiles'), atlasLoaded('buildings')]);
   await scrollPickerTo(page, 1210);
   await page.mouse.click(935, 600);
-  await waitForText('Animation speed');
-  await page.evaluate(() => {
-    // Seed the selection itself, after picker and renderer startup have finished.
-    const getRandomValues = crypto.getRandomValues.bind(crypto);
-    crypto.getRandomValues = (values) => {
-      if (!(values instanceof Uint32Array) || values.length !== 1) return getRandomValues(values);
-      crypto.getRandomValues = getRandomValues;
-      values[0] = 1_011_889;
-      return values;
-    };
-  });
-  await playSelection({ animationSpeed: 'Fast' });
-  const [[terrain]] = await Promise.all([atlases, waitForText('0 of 8 placed')]);
+  await waitForText('Resume');
+  await clickDialog(100, resumeActionY);
+  const [[terrain]] = await Promise.all([atlases, waitForText('1 of 32 placed')]);
   const atlas = readFileSync(new URL('../src/puzzles/hexCoast/assets/fullTiles.xml', import.meta.url), 'utf8');
   const unpadded = await page.evaluate(async ({ url, atlas }) => {
     const image = new Image();
@@ -754,19 +763,23 @@ scenario('Hex Coast captures continuous roads and animated water', async (t) => 
   }, { url: terrain.url(), atlas });
   assert.deepEqual(unpadded, [], 'Terrain frames should repeat their edge pixels for linear filtering');
 
-  const board = { x: 435, y: 275, width: 590, height: 320 };
+  const board = { x: 197, y: 90, width: 1060, height: 660 };
   await page.waitForFunction(() => window.paintedText.filter((text) => text === 'Hex Coast').length >= 2);
   await page.waitForTimeout(200);
   const before = await page.screenshot({ clip: board });
   const { width, data } = PNG.sync.read(before);
-  // Use the part of the fixed seed's horizontal road that is visible between foreground trees.
-  const roadY = 358 - board.y;
-  for (let screenX = 690; screenX <= 770; screenX += 1) {
-    const pixel = (roadY * width + screenX - board.x) * 4;
-    const [red, green, blue] = data.subarray(pixel, pixel + 3);
-    assert.ok(Math.abs(red - 74) <= 2 && Math.abs(green - 77) <= 2 && Math.abs(blue - 59) <= 2,
-      `Horizontal road should cover x=${screenX}, got ${red},${green},${blue}`);
+  let longestRoad = 0;
+  for (let y = 0; y < board.height; y += 1) {
+    let run = 0;
+    for (let x = 0; x < width; x += 1) {
+      const pixel = (y * width + x) * 4;
+      const red = data[pixel], green = data[pixel + 1], blue = data[pixel + 2];
+      const road = Math.abs(red - 74) <= 2 && Math.abs(green - 77) <= 2 && Math.abs(blue - 59) <= 2;
+      run = road ? run + 1 : 0;
+      longestRoad = Math.max(longestRoad, run);
+    }
   }
+  assert.ok(longestRoad >= 64, `A horizontal road should cover a full native hex, got ${longestRoad}px`);
   await page.evaluate(async () => {
     for (let frame = 0; frame < 12; frame += 1) await new Promise(requestAnimationFrame);
   });

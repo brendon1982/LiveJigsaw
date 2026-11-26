@@ -7,6 +7,8 @@ const buildingAtlas = readFileSync(new URL(
   '../../src/puzzles/hexCoast/assets/buildings.xml', import.meta.url,
 ), 'utf8');
 const buildingFrames = new Set([...buildingAtlas.matchAll(/name="([^"]+)\.png"/g)].map(([, name]) => name));
+const standard = { width: 1024, height: 576 };
+const fullHD = { width: 1920, height: 1080 };
 
 function adjacent(a, b) {
   const dx = Math.abs(a.x - b.x);
@@ -15,14 +17,14 @@ function adjacent(a, b) {
 }
 
 test('Hex Coast recreates the terrain and settlements from its seed', () => {
-  assert.deepEqual(generateHexCoast(0xffffffff), generateHexCoast(0xffffffff));
+  assert.deepEqual(generateHexCoast(fullHD, 0xffffffff), generateHexCoast(fullHD, 0xffffffff));
 });
 
 test('Hex Coast lays connected roads and two sets of roadside buildings across varied landscapes', () => {
   const shorelines = new Set();
   for (let index = 0; index < 64; index += 1) {
     const seed = Math.imul(index, 0x9e3779b9) >>> 0;
-    const { tiles, road, towns, buildings } = generateHexCoast(seed);
+    const { tiles, roads: [road], towns, buildings } = generateHexCoast(standard, seed);
     shorelines.add(tiles.map(({ level }) => level ? '1' : '0').join(''));
     assert.ok(tiles.some(({ wooded }) => wooded), `Seed ${seed} should have woodland`);
     const [harbor, village] = towns;
@@ -44,4 +46,29 @@ test('Hex Coast lays connected roads and two sets of roadside buildings across v
     }
   }
   assert.ok(shorelines.size > 48);
+});
+
+test('larger coasts fill the viewport with native hexes and more developed shorelines', () => {
+  const aboveFullHD = { width: 3100, height: 1760 };
+  for (const seed of [0, 17, 233, 1_011_889, 0xffffffff]) {
+    let previousRoads = 0;
+    let previousLand = 0;
+    for (const viewport of [standard, fullHD, aboveFullHD]) {
+      const { tiles, roads, towns, buildings } = generateHexCoast(viewport, seed);
+      assert.ok(roads.length > previousRoads);
+      assert.equal(towns.length, roads.length * 2);
+      assert.ok(buildings.size >= roads.length * 8);
+      assert.equal(new Set(tiles.map(({ x, y }) => `${x},${y}`)).size, tiles.length);
+      assert.ok(tiles.some(({ x }) => x >= viewport.width));
+      assert.ok(tiles.some(({ y }) => y >= viewport.height));
+      for (const road of roads) {
+        assert.ok(tiles.some((tile) => !tile.level && adjacent(tile, tiles[road[0]])));
+        for (let i = 1; i < road.length; i += 1) assert.ok(adjacent(tiles[road[i - 1]], tiles[road[i]]));
+      }
+      const land = tiles.filter(({ level }) => level > 0).length;
+      assert.ok(land > previousLand && land / tiles.length > 0.24);
+      previousRoads = roads.length;
+      previousLand = land;
+    }
+  }
 });

@@ -5,6 +5,7 @@
 - [ ] Add bigger puzzle size.
 - [ ] Add badges to puzzle selection cards for completing at different sizes and in different challenge modes.
 - [ ] Add unlockable effects that play when a piece is placed. Decide how players unlock them.
+- [ ] Add option to pick up piece without having to hold the left mouse button down. Maybe right or middle click.
 - [ ] Consider adding more puzzle piece shapes.
 - [ ] Consider allowing for pieces to be placed and assembled off the board. This would also have to allow for rotation when pieces are in this state.
 - [x] Vary the shape of piece connectors and where they sit along each edge.

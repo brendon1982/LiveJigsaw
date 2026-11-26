@@ -21,6 +21,7 @@ const game = new Phaser.Game({
   backgroundColor: palette.background,
   scale: { mode: Phaser.Scale.RESIZE },
   input: { activePointers: 2 },
+  disableContextMenu: true,
   plugins: { scene: [{ key: 'rexUI', plugin: RexUIPlugin, mapping: 'rexUI' }] },
   scene: [SelectPuzzleScene, PlayPuzzleScene, SettingsScene, ...puzzleSources.map(({ scene }) => scene)],
 });

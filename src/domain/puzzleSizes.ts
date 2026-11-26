@@ -30,7 +30,7 @@ export function createPuzzle(
   size: PuzzleSize,
   connectorStyle: ConnectorStyleId = 'classic',
   seed = 0,
-  challengeMode: ChallengeMode = 'standard',
+  challengeMode: ChallengeMode = 'none',
 ): Puzzle {
   const board = new Board(size, size.columns, size.rows);
   return new Puzzle(board, size.snapTolerance, connectorStyle, seed, challengeMode);

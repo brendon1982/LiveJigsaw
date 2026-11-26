@@ -46,7 +46,7 @@ export function showPuzzleOptions(
   const modeButtons = makeRadioButtons(scene, modes.map((mode) => ({
     name: mode,
     label: mode === 'sequential-window' ? challengeModes[mode].label.replace(' ', '\n') : challengeModes[mode].label,
-  })), defaults?.challengeMode ?? 'standard', (contentWidth - 4 * optionGap) / 5, '14px');
+  })), defaults?.challengeMode ?? 'none', (contentWidth - 4 * optionGap) / 5, '14px');
 
   const content = scene.rexUI.add.sizer({ orientation: 'y', width: contentWidth, space: { item: 14 } });
   const sections = [

@@ -47,7 +47,7 @@ export class Puzzle {
     snapTolerance: number,
     connectorStyle: ConnectorStyleId = 'classic',
     seed = 0,
-    challengeMode: ChallengeMode = 'standard',
+    challengeMode: ChallengeMode = 'none',
   ) {
     if (!Number.isFinite(snapTolerance) || snapTolerance < 0) {
       throw new RangeError('Snap tolerance must be finite and non-negative');

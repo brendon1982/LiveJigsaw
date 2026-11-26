@@ -148,7 +148,7 @@ async function openPuzzle(t, options, path = '/', initPage) {
       await clickSetup(-156 + 104 * index, setupY.speed);
     }
     if (challengeMode) {
-      const index = ['standard', 'sequential', 'sequential-window', 'no-guide', 'seed'].indexOf(challengeMode);
+      const index = ['none', 'sequential', 'sequential-window', 'no-guide', 'seed'].indexOf(challengeMode);
       assert.ok(index >= 0);
       await clickSetup(-169.6 + 84.8 * index, setupY.challenge);
     }
@@ -272,6 +272,50 @@ scenario('the Expert tray only draws nearby piece masks', async (t) => {
   assert.deepEqual(errors, []);
 });
 
+scenario('right-click picks up and drops pieces without opening the browser menu', async (t) => {
+  const { page, canvas, waitForText, errors, playSelection } = await openPuzzle(t, {
+    viewport: { width: 1320, height: 780 },
+  });
+  await page.mouse.click(340, 180);
+  await playSelection();
+  await waitForText('0 of 8 placed');
+  await page.evaluate(() => {
+    window.canvasContextMenus = [];
+    document.addEventListener('contextmenu', (event) => {
+      if (event.target instanceof HTMLCanvasElement) window.canvasContextMenus.push(event.defaultPrevented);
+    });
+  });
+
+  await page.mouse.move(167, 420);
+  await page.mouse.down();
+  await page.mouse.move(552, 420, { steps: 8 });
+  await page.mouse.up();
+
+  const rightClick = (x, y) => page.mouse.click(x, y, { button: 'right' });
+  const sample = async (x, y) => pixelAt(page, await canvas.screenshot(), x, y);
+  const sky = [192, 221, 219, 255];
+  assert.deepEqual(await sample(427, 140), sky);
+  await rightClick(427, 140);
+  assert.deepEqual(await page.evaluate(() => window.canvasContextMenus), [true]);
+  await page.mouse.move(735, 348);
+  assert.deepEqual(await sample(735, 348), sky, 'The piece should follow the mouse after right-button release');
+  assert.notDeepEqual(await sample(427, 140), sky, 'The piece should leave its tray slot');
+  assert.equal((await readSave(page)).progress.Windmill, undefined, 'Hovering over the target should not place the piece');
+
+  await rightClick(600, 70);
+  assert.deepEqual(await sample(427, 140), sky, 'An off-board right-click drop should return the piece');
+  assert.equal((await readSave(page)).progress.Windmill, undefined);
+
+  await rightClick(427, 140);
+  await page.mouse.move(735, 348);
+  await page.mouse.wheel(0, -200);
+  await rightClick(735, 348);
+  await waitForText('1 of 8 placed');
+  assert.deepEqual(await sample(735, 348), sky, 'The piece should snap on the zoomed board');
+  assert.equal((await readSave(page)).progress.Windmill.placedPieceIds.length, 1);
+  assert.deepEqual(errors, []);
+});
+
 scenario('live pieces scroll, reflow, and snap to the pannable board', async (t) => {
   const { page, canvas, waitForText, errors, clickDialog, playSelection } = await openPuzzle(t, { viewport: { width: 1320, height: 780 } });
   const bounds = await canvas.boundingBox();
@@ -291,7 +335,7 @@ scenario('live pieces scroll, reflow, and snap to the pannable board', async (t)
   await click(340, 180);
   await playSelection();
   await waitForText('0 of 8 placed');
-  await waitForText('· Standard');
+  await waitForText('· None');
   const header = await page.evaluate(() => window.paintedText);
   assert.ok(header.includes('All puzzles') && header.includes('Windmill'));
   assert.ok(!header.includes('Pieces') && !header.includes('Drag to pan · Scroll to zoom'));
@@ -754,7 +798,7 @@ scenario('picker Settings remembers the theme and filter on a narrow touch scree
   assert.deepEqual(errors, []);
 });
 
-scenario('version 1 and 2 saves migrate with settings, options, progress, and history intact', async (t) => {
+scenario('version 1 through 3 saves migrate with settings, options, progress, and history intact', async (t) => {
   const { page, canvas, waitForText, errors, clickDialog } = await openPuzzle(t, { viewport: { width: 1320, height: 780 } });
   const setup = {
     size: { label: 'Classic', width: 512, height: 288, columns: 4, rows: 2, snapTolerance: 28 },
@@ -769,18 +813,36 @@ scenario('version 1 and 2 saves migrate with settings, options, progress, and hi
   };
   const storeSave = (data) => page.evaluate((value) => localStorage.setItem('live-jigsaw.save', JSON.stringify(value)), data);
   const trayFractions = { vertical: 0, horizontal: 0 };
-  const standardSetup = { ...setup, challengeMode: 'standard' };
-  for (const previous of [original, { ...original, version: 2, settings: { ...original.settings, trayFractions } }]) {
+  const settings = { ...original.settings, trayFractions };
+  const sequentialCompletion = {
+    setup: { ...setup, challengeMode: 'sequential' }, completedAt: '2025-01-02T12:00:00.000Z',
+  };
+  const version3 = {
+    ...original,
+    version: 3,
+    settings,
+    recentOptions: { ...original.recentOptions, challengeMode: 'standard' },
+    progress: { Windmill: { ...original.progress.Windmill, setup: { ...setup, challengeMode: 'standard' } } },
+    history: { Lighthouse: [
+      { ...original.history.Lighthouse[0], setup: { ...setup, challengeMode: 'standard' } },
+      sequentialCompletion,
+    ] },
+  };
+  const noneSetup = { ...setup, challengeMode: 'none' };
+  for (const previous of [original, { ...original, version: 2, settings }, version3]) {
     await storeSave(previous);
     await page.reload();
     await waitForText('Completed');
     await waitForText('1 of 8 placed');
     assert.deepEqual(await readSave(page), {
-      version: 3,
-      settings: { ...original.settings, trayFractions },
-      recentOptions: { ...original.recentOptions, challengeMode: 'standard' },
-      progress: { Windmill: { ...original.progress.Windmill, setup: standardSetup } },
-      history: { Lighthouse: [{ ...original.history.Lighthouse[0], setup: standardSetup }] },
+      version: 4,
+      settings,
+      recentOptions: { ...original.recentOptions, challengeMode: 'none' },
+      progress: { Windmill: { ...original.progress.Windmill, setup: noneSetup } },
+      history: { Lighthouse: [
+        { ...original.history.Lighthouse[0], setup: noneSetup },
+        ...(previous === version3 ? [sequentialCompletion] : []),
+      ] },
     });
   }
   const hasStatusInk = (screenshot, left, top, right, bottom) => {
@@ -1101,10 +1163,10 @@ scenario('picker tag and completion filters combine and refresh after play', asy
   });
   const setup = {
     size: { label: 'Classic', width: 512, height: 288, columns: 4, rows: 2, snapTolerance: 28 },
-    seed: 42, connectorStyle: 'none', animationSpeed: 'Normal', challengeMode: 'standard',
+    seed: 42, connectorStyle: 'none', animationSpeed: 'Normal', challengeMode: 'none',
   };
   const original = {
-    version: 3,
+    version: 4,
     settings: { trayFractions: { vertical: 0, horizontal: 0 } },
     progress: {
       Lighthouse: { setup, placedPieceIds: ['piece-0-0'] },
@@ -1354,10 +1416,11 @@ scenario('the picker scrolls past two cards and clips previews', async (t) => {
     assert.ok(textBands[2] - textBands[1] >= 4, 'The title descenders should clear the tag text');
     await page.mouse.click(340, 175);
     await waitForText('Connector style');
+    await waitForText('None'); // The default challenge mode, not a connector caption.
     const paintedText = await page.evaluate(() => window.paintedText);
     assert.ok(paintedText.includes('Classic · 8'), 'Puzzle sizes should show their label and piece count');
     assert.ok(!paintedText.includes('Large · 32'));
-    for (const label of ['Classic', 'Rounded', 'Angular', 'None']) {
+    for (const label of ['Classic', 'Rounded', 'Angular']) {
       assert.ok(!paintedText.includes(label), `The ${label} connector option should not draw a caption`);
     }
     const selectedFill = [75, 108, 94, 255];
@@ -1405,7 +1468,7 @@ scenario('the picker scrolls past two cards and clips previews', async (t) => {
     await playSelection();
     await waitForText('0 of 32 placed');
     assert.deepEqual((await readSave(page)).recentOptions, {
-      sizeLabel: 'Large', connectorStyle: 'none', animationSpeed: 'Fast', challengeMode: 'standard',
+      sizeLabel: 'Large', connectorStyle: 'none', animationSpeed: 'Fast', challengeMode: 'none',
     });
 
     await page.evaluate(() => { window.paintedText = []; });
@@ -1419,7 +1482,7 @@ scenario('the picker scrolls past two cards and clips previews', async (t) => {
     await waitForText('0 of 8 placed');
     await page.waitForFunction(() => window.sourceAnimationSpeed === 'Fast');
     assert.deepEqual((await readSave(page)).recentOptions, {
-      sizeLabel: 'Classic', connectorStyle: 'none', animationSpeed: 'Fast', challengeMode: 'standard',
+      sizeLabel: 'Classic', connectorStyle: 'none', animationSpeed: 'Fast', challengeMode: 'none',
     });
     assert.deepEqual(errors, []);
   });

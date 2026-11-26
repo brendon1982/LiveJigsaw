@@ -17,6 +17,12 @@ const migrations: readonly Migration[] = [
     progress: mapSaveEntries(document.progress, withStandardSetup),
     history: mapSaveEntries(document.history, (value) => Array.isArray(value) ? value.map(withStandardSetup) : value),
   }),
+  (document) => ({
+    ...document,
+    ...(isRecord(document.recentOptions) && { recentOptions: renameStandardMode(document.recentOptions) }),
+    progress: mapSaveEntries(document.progress, renameStandardSetup),
+    history: mapSaveEntries(document.history, (value) => Array.isArray(value) ? value.map(renameStandardSetup) : value),
+  }),
 ];
 
 function withStandardMode(value: unknown): unknown {
@@ -25,6 +31,14 @@ function withStandardMode(value: unknown): unknown {
 
 function withStandardSetup(value: unknown): unknown {
   return isRecord(value) ? { ...value, setup: withStandardMode(value.setup) } : value;
+}
+
+function renameStandardMode(value: unknown): unknown {
+  return isRecord(value) && value.challengeMode === 'standard' ? { ...value, challengeMode: 'none' } : value;
+}
+
+function renameStandardSetup(value: unknown): unknown {
+  return isRecord(value) ? { ...value, setup: renameStandardMode(value.setup) } : value;
 }
 
 function mapSaveEntries(value: unknown, transform: (entry: unknown) => unknown): unknown {

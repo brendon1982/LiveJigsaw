@@ -10,7 +10,7 @@ const scenarios = [];
 const scenario = (name, run) => scenarios.push({ name, run });
 
 const settingsY = { theme: -159, firstFilter: -60, secondFilter: 2, firstTray: 98, secondTray: 160, done: 232 };
-const setupY = { size: -155, connector: -29, speed: 82, challenge: 178, action: 248 };
+const setupY = { size: -155, connector: -44, speed: 67, challenge: 163, action: 233 };
 
 async function seedNextAttempt(page, seed) {
   await page.evaluate((seed) => {
@@ -127,7 +127,7 @@ async function openPuzzle(t, options, path = '/', initPage) {
   };
   const clickSetup = async (dx, dy) => {
     const { width, height } = await canvas.boundingBox();
-    const scale = Math.min(1, (width - 24) / 448, (height - 24) / 588);
+    const scale = Math.min(1, (width - 24) / 448, (height - 24) / 558);
     await clickDialog(dx * scale, dy * scale);
   };
   const playSelection = async ({ size, connectorStyle, animationSpeed, challengeMode } = {}) => {
@@ -1354,13 +1354,18 @@ scenario('the picker scrolls past two cards and clips previews', async (t) => {
     assert.ok(textBands[2] - textBands[1] >= 4, 'The title descenders should clear the tag text');
     await page.mouse.click(340, 175);
     await waitForText('Connector style');
-    assert.equal(await page.evaluate(() => window.paintedText.includes('Large · 32')), false);
+    const paintedText = await page.evaluate(() => window.paintedText);
+    assert.ok(paintedText.includes('Classic · 8'), 'Puzzle sizes should show their label and piece count');
+    assert.ok(!paintedText.includes('Large · 32'));
+    for (const label of ['Classic', 'Rounded', 'Angular', 'None']) {
+      assert.ok(!paintedText.includes(label), `The ${label} connector option should not draw a caption`);
+    }
     const selectedFill = [75, 108, 94, 255];
     const beforeSelection = await canvas.screenshot();
     assert.deepEqual(await pixelAt(page, beforeSelection, 491, 245), selectedFill);
     const iconFill = [101, 135, 122, 255];
-    assert.deepEqual(await pixelAt(page, beforeSelection, 502, 116), iconFill, 'The size illustration should draw above the dialog and tile');
-    assert.deepEqual(await pixelAt(page, beforeSelection, 797, 238), iconFill, 'The connector illustration should draw above the dialog and tile');
+    assert.deepEqual(await pixelAt(page, beforeSelection, 502, 116), selectedFill, 'The size tile should have no illustration');
+    assert.deepEqual(await pixelAt(page, beforeSelection, 797, 235), iconFill, 'The connector illustration should draw above the dialog and tile');
     await clickSetup(-52, setupY.connector);
     const afterSelection = await canvas.screenshot();
     assert.notDeepEqual(await pixelAt(page, afterSelection, 491, 245), selectedFill);

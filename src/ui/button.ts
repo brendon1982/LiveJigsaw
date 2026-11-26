@@ -83,7 +83,7 @@ export function makeButtonLabel(
 
 type OptionTile = {
   name?: string;
-  label: string;
+  label?: string;
   width: number;
   height?: number;
   fontSize?: string;
@@ -99,8 +99,9 @@ export function makeOptionTile(scene: UIScene, {
   depth = 0, contentDepth = depth, dragThreshold, onClick,
 }: OptionTile) {
   const background = scene.rexUI.add.roundRectangle(0, 0, 1, 1, 9).setDepth(depth);
-  const text = scene.add.text(0, 0, label, { fontFamily: 'system-ui', fontSize, align: 'center' })
-    .setDepth(contentDepth);
+  const text = label === undefined ? undefined : scene.add.text(0, 0, label, {
+    fontFamily: 'system-ui', fontSize, align: 'center',
+  }).setDepth(contentDepth);
   const button = scene.rexUI.add.label({
     name, width, height, orientation: 'y', align: 'center', background, text,
     icon: drawIcon?.().setDepth(contentDepth),
@@ -111,7 +112,7 @@ export function makeOptionTile(scene: UIScene, {
   const restyle = (colors: typeof palette) => {
     background.setFillStyle(pressed ? colors.buttonPressed : selected ? colors.selectedOption : colors.background)
       .setStrokeStyle(selected ? 2 : 1, selected ? colors.primaryButton : colors.optionBorder);
-    text.setColor(colors.text);
+    text?.setColor(colors.text);
   };
   styleWithTheme(button, restyle);
   addPressFeedback(button, (value) => { pressed = value; restyle(palette); }, dragThreshold);

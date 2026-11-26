@@ -16,7 +16,7 @@ export const pickerControlDepth = depth.controls;
 
 type Option = {
   name: string;
-  label: string;
+  label?: string;
   drawIcon?: () => Phaser.GameObjects.Container;
 };
 
@@ -33,11 +33,9 @@ export function showPuzzleOptions(
   const sizeButtons = makeRadioButtons(scene, sizes.map((size) => ({
     name: size.label,
     label: `${size.label} · ${size.columns * size.rows}`,
-    drawIcon: () => drawSizeIcon(scene, size),
   })), initialSize.label);
   const styleButtons = makeRadioButtons(scene, styles.map((style) => ({
     name: style,
-    label: connectorStyles[style].label,
     drawIcon: () => drawConnectorIcon(scene, style),
   })), defaults?.connectorStyle ?? 'classic');
   const speedButtons = makeRadioButtons(scene, puzzleAnimationSpeeds.map((speed) => ({
@@ -193,23 +191,6 @@ function makeRadioButtons(
   });
   for (const { button } of tiles) button.input!.cursor = 'pointer';
   return buttons.setSelectedButtonName(selectedName);
-}
-
-function drawSizeIcon(scene: UIScene, { columns, rows }: PuzzleSize) {
-  const art = scene.add.graphics();
-  const width = 60;
-  const height = 34;
-  art.fillStyle(palette.optionIcon).fillRect(-width / 2, -height / 2, width, height);
-  art.lineStyle(1, palette.optionIconOutline).strokeRect(-width / 2, -height / 2, width, height);
-  for (let column = 1; column < columns; column += 1) {
-    const x = -width / 2 + (column * width) / columns;
-    art.lineBetween(x, -height / 2, x, height / 2);
-  }
-  for (let row = 1; row < rows; row += 1) {
-    const y = -height / 2 + (row * height) / rows;
-    art.lineBetween(-width / 2, y, width / 2, y);
-  }
-  return scene.add.container(0, 0, [art]).setSize(64, 44);
 }
 
 function drawConnectorIcon(scene: UIScene, style: ConnectorStyleId) {

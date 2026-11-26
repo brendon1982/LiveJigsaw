@@ -2,8 +2,6 @@ import type { Point } from './geometry.ts';
 import { PieceWorkspace, type ParkedGroup } from './PieceWorkspace.ts';
 import type { DropResult, Puzzle, PuzzleRestore, PuzzleSnapshot } from './Puzzle.ts';
 
-export type MissedDropMode = 'return-to-tray' | 'park-on-board';
-
 export type BoardDrop = Readonly<{
   kind: 'placed' | 'joined' | 'parked' | 'returned' | 'unchanged';
   guideResult: DropResult;
@@ -45,7 +43,7 @@ export class PuzzlePlay {
     return this.groupOf(pieceId)?.quarterTurns ?? this.puzzle.orientationOf(pieceId);
   }
 
-  dropOnBoard(grabbedPieceId: string, center: Point, missedDropMode: MissedDropMode = 'return-to-tray'): BoardDrop {
+  dropOnBoard(grabbedPieceId: string, center: Point, allowLoosePiecesOnBoard = true): BoardDrop {
     if (this.puzzle.isPlaced(grabbedPieceId)) return boardDrop('unchanged', 'already-placed');
     const lifted = this.groupOf(grabbedPieceId);
     const memberIds = lifted?.memberIds ?? [grabbedPieceId];
@@ -62,7 +60,7 @@ export class PuzzlePlay {
       return boardDrop('placed', guideResult, memberIds);
     }
 
-    const settled = this.workspace.settleDrop(group, { lifted, parkOnMiss: missedDropMode === 'park-on-board' });
+    const settled = this.workspace.settleDrop(group, { lifted, parkOnMiss: allowLoosePiecesOnBoard });
     if (!settled) return boardDrop(lifted ? 'unchanged' : 'returned', guideResult);
     if (!lifted) this.homes.takeFromTray(grabbedPieceId);
     return boardDrop(settled, guideResult);

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { migrateSave } from '../../src/persistence/saveMigrations.ts';
 
-test('version 8 adds parking defaults without changing a saved layout, progress or history', () => {
+test('version 8 keeps loose pieces disabled without changing a saved layout, progress or history', () => {
   const setup = {
     size: { width: 1792, height: 1008, columns: 28, rows: 14, snapTolerance: 16 },
     seed: 42, connectorStyle: 'classic', animationSpeed: 'Normal', challengeMode: 'none', pieceRotation: true,
@@ -18,8 +18,28 @@ test('version 8 adds parking defaults without changing a saved layout, progress 
 
   assert.deepEqual(migrateSave(original), {
     ...original,
-    version: 9,
-    settings: { ...original.settings, missedDropMode: 'return-to-tray' },
+    version: 10,
+    settings: { ...original.settings, allowLoosePiecesOnBoard: false },
     progress: { Windmill: { ...progress, parkedGroups: [] } },
   });
+});
+
+test('version 9 keeps either loose-piece preference, parked groups and completion history', () => {
+  const setup = {
+    size: { width: 512, height: 288, columns: 4, rows: 2, snapTolerance: 16 },
+    seed: 42, connectorStyle: 'classic', animationSpeed: 'Normal', challengeMode: 'none', pieceRotation: false,
+  };
+  const parkedGroups = [{
+    memberIds: ['piece-0-1'], anchorPieceId: 'piece-0-1', position: { x: -80, y: 50 }, quarterTurns: 0,
+  }];
+  const original = {
+    version: 9,
+    progress: { Windmill: { setup, placedPieceIds: ['piece-0-0'], trayOrientations: {}, parkedGroups } },
+    history: { Lighthouse: [{ setup, completedAt: '2025-01-01T12:00:00.000Z' }] },
+  };
+  for (const [missedDropMode, allowLoosePiecesOnBoard] of [['return-to-tray', false], ['park-on-board', true]]) {
+    assert.deepEqual(migrateSave({ ...original, settings: { theme: 'Slate', missedDropMode } }), {
+      ...original, version: 10, settings: { theme: 'Slate', allowLoosePiecesOnBoard },
+    });
+  }
 });

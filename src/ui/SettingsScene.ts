@@ -1,5 +1,4 @@
 import Phaser from 'phaser';
-import type { MissedDropMode } from '../domain/PuzzlePlay';
 import { gameSave } from '../persistence';
 import { trayPositions, type TrayPosition } from '../persistence/GameSave';
 import { makeButtonLabel, makeOptionTile, type UIScene } from './button';
@@ -9,12 +8,7 @@ import { activeTheme, palette, selectTheme, styleWithTheme, themes } from './the
 type SettingsCallbacks = {
   onClose?: () => void;
   onTrayPositionChange?: (position: TrayPosition) => void;
-  onMissedDropModeChange?: (mode: MissedDropMode) => void;
-};
-
-const missedDropLabels: Record<MissedDropMode, string> = {
-  'return-to-tray': 'Return to tray',
-  'park-on-board': 'Park on board',
+  onAllowLoosePiecesOnBoardChange?: (allow: boolean) => void;
 };
 
 export function openSettings(owner: UIScene, callbacks: SettingsCallbacks = {}) {
@@ -31,7 +25,7 @@ export class SettingsScene extends Phaser.Scene {
     super(SettingsScene.key);
   }
 
-  create({ owner, onClose, onTrayPositionChange, onMissedDropModeChange }: { owner: UIScene } & SettingsCallbacks) {
+  create({ owner, onClose, onTrayPositionChange, onAllowLoosePiecesOnBoardChange }: { owner: UIScene } & SettingsCallbacks) {
     const close = () => this.scene.stop();
     const cover = this.add.rectangle(0, 0, 1, 1, palette.modalBackdrop, 0.72).setOrigin(0).setInteractive();
     const background = this.rexUI.add.roundRectangle(0, 0, 1, 1, 16);
@@ -40,7 +34,7 @@ export class SettingsScene extends Phaser.Scene {
     const themeHeading = this.add.text(0, 0, 'Color theme', headingStyle);
     const filterHeading = this.add.text(0, 0, 'Puzzle filter', headingStyle);
     const trayHeading = this.add.text(0, 0, 'Puzzle tray', headingStyle);
-    const missedDropHeading = this.add.text(0, 0, 'Missed drops', headingStyle);
+    const loosePiecesHeading = this.add.text(0, 0, 'Allow loose pieces on board', headingStyle);
     const selectionUpdates: (() => void)[] = [];
     const refreshSelections = () => { for (const update of selectionUpdates) update(); };
     const choice = (label: string, width: number, select: () => void, selected: () => boolean) => {
@@ -81,12 +75,12 @@ export class SettingsScene extends Phaser.Scene {
       }
       trayChoices.add(choices, { align: 'left' });
     }
-    const missedDropChoices = row();
-    for (const mode of Object.keys(missedDropLabels) as MissedDropMode[]) {
-      missedDropChoices.add(choice(missedDropLabels[mode], 145, () => {
-        gameSave.updateSettings({ missedDropMode: mode });
-        onMissedDropModeChange?.(mode);
-      }, () => gameSave.settings.missedDropMode === mode));
+    const loosePiecesChoices = row();
+    for (const allow of [true, false]) {
+      loosePiecesChoices.add(choice(allow ? 'Yes' : 'No', 145, () => {
+        gameSave.updateSettings({ allowLoosePiecesOnBoard: allow });
+        onAllowLoosePiecesOnBoardChange?.(allow);
+      }, () => gameSave.settings.allowLoosePiecesOnBoard === allow));
     }
     const content = this.rexUI.add.sizer({ orientation: 'y', space: { item: 8 } });
     content.add(themeHeading, { align: 'left' })
@@ -95,8 +89,8 @@ export class SettingsScene extends Phaser.Scene {
       .add(filterChoices, { align: 'left', padding: { bottom: 6 } })
       .add(trayHeading, { align: 'left' })
       .add(trayChoices, { align: 'left', padding: { bottom: 6 } })
-      .add(missedDropHeading, { align: 'left' })
-      .add(missedDropChoices, { align: 'left' });
+      .add(loosePiecesHeading, { align: 'left' })
+      .add(loosePiecesChoices, { align: 'left' });
     const done = makeButtonLabel(this, 'Done', 96, 54, true);
     const dialog = this.rexUI.add.dialog({
       background, title, content, actions: [done], align: { title: 'left', actions: 'right' },
@@ -114,7 +108,7 @@ export class SettingsScene extends Phaser.Scene {
       themeHeading.setColor(colors.mutedText);
       filterHeading.setColor(colors.mutedText);
       trayHeading.setColor(colors.mutedText);
-      missedDropHeading.setColor(colors.mutedText);
+      loosePiecesHeading.setColor(colors.mutedText);
     });
 
     const fit = () => {

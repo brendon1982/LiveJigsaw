@@ -1,13 +1,13 @@
 import type { ChallengeMode } from '../domain/challengeModes';
 import type { ConnectorStyleId } from '../domain/connectorStyles';
-import type { MissedDropMode, PuzzlePlaySnapshot } from '../domain/PuzzlePlay';
+import type { PuzzlePlaySnapshot } from '../domain/PuzzlePlay';
 import type { PieceShape, PuzzleSize } from '../domain/puzzleSizes';
 import type { PuzzleAnimationSpeed } from '../puzzles/PuzzleSource';
 
 export const trayPositions = ['Left', 'Right', 'Bottom', 'Top', 'Auto'] as const;
 export type TrayPosition = typeof trayPositions[number];
 
-export const defaultMissedDropMode: MissedDropMode = 'return-to-tray';
+export const defaultAllowLoosePiecesOnBoard = true;
 
 export type TrayFractions = Readonly<{ vertical: number; horizontal: number }>;
 export const defaultTrayFractions: TrayFractions = { vertical: 0, horizontal: 0 };
@@ -17,7 +17,7 @@ export type SavedSettings = Readonly<{
   filter?: string;
   trayPosition?: TrayPosition;
   trayFractions: TrayFractions;
-  missedDropMode: MissedDropMode;
+  allowLoosePiecesOnBoard: boolean;
 }>;
 
 export type PuzzleOptions = Readonly<{

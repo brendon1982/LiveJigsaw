@@ -11,7 +11,7 @@ import { saveVersion } from '../src/persistence/saveMigrations.ts';
 const scenarios = [];
 const scenario = (name, run) => scenarios.push({ name, run });
 
-const settingsY = { theme: -207, firstFilter: -108, secondFilter: -46, firstTray: 50, secondTray: 112, missedDrops: 208, done: 280 };
+const settingsY = { theme: -207, firstFilter: -108, secondFilter: -46, firstTray: 50, secondTray: 112, loosePieces: 208, done: 280 };
 const setupY = { size: -251, shape: -155, connector: -44, speed: 67, rotation: 163, challenge: 259, action: 329 };
 const resumeActionY = 114;
 const compactPuzzlePath = '/compact-fixture/tests/fixtures/compact-puzzle.html';
@@ -150,13 +150,15 @@ async function openPuzzle(t, options, path = '/', initPage) {
     const scale = Math.min(1, (height - 24) / 654);
     await clickDialog(dx * scale, dy * scale);
   };
-  const setMissedDropMode = async (mode) => {
+  const setAllowLoosePiecesOnBoard = async (allow) => {
     const { width, height } = await canvas.boundingBox();
     await page.evaluate(() => { window.paintedText = []; });
     await clickDialog(width / 2 - 74, 43 - height / 2);
-    await waitForText('Missed drops');
-    await clickSetting(mode === 'park-on-board' ? 77 : -77, settingsY.missedDrops);
-    assert.equal((await readSave(page)).settings.missedDropMode, mode);
+    await waitForText('Allow loose pieces on board');
+    await waitForText('Yes');
+    await waitForText('No');
+    await clickSetting(allow ? -77 : 77, settingsY.loosePieces);
+    assert.equal((await readSave(page)).settings.allowLoosePiecesOnBoard, allow);
     await clickSetting(101, settingsY.done);
   };
   const clickSetup = async (dx, dy) => {
@@ -198,7 +200,7 @@ async function openPuzzle(t, options, path = '/', initPage) {
     }
     await clickSetup(158, setupY.action);
   };
-  return { page, canvas, waitForText, errors, clickDialog, clickSetting, clickSetup, playSelection, setMissedDropMode };
+  return { page, canvas, waitForText, errors, clickDialog, clickSetting, clickSetup, playSelection, setAllowLoosePiecesOnBoard };
 }
 
 async function openCompactPuzzle(t, options, path = compactPuzzlePath) {
@@ -478,12 +480,11 @@ scenario('the 420-piece tray only draws nearby piece masks', async (t) => {
 scenario('a parking-only 420-piece save resumes across tablet orientations and rejects overlapping homes', async (t) => {
   const portrait = { width: 680, height: 860 };
   const landscape = { width: 1024, height: 768 };
-  const { page, waitForText, errors, clickDialog, playSelection, setMissedDropMode } = await openCompactPuzzle(t, {
+  const { page, waitForText, errors, clickDialog, playSelection, setAllowLoosePiecesOnBoard } = await openCompactPuzzle(t, {
     viewport: portrait, hasTouch: true, isMobile: true,
   }, `${compactPuzzlePath}?currentSizes`);
   const { dispatch, moveFinger } = await touchController(page);
   const getAttempt = async () => (await readSave(page)).progress.Windmill;
-  await setMissedDropMode('park-on-board');
   await page.touchscreen.tap(350, 180);
   await playSelection({ size: 420, pieceShape: 'square' });
   await waitForText('0 of 420 placed');
@@ -514,9 +515,9 @@ scenario('a parking-only 420-piece save resumes across tablet orientations and r
   const resumed = await playLayout(page);
   assert.deepEqual(resumed.parked, parked);
   assert.deepEqual(resumed.tray.map(({ id }) => id), initial.tray.slice(1).map(({ id }) => id));
-  assert.equal((await readSave(page)).settings.missedDropMode, 'park-on-board');
+  assert.equal((await readSave(page)).settings.allowLoosePiecesOnBoard, true);
 
-  await setMissedDropMode('return-to-tray');
+  await setAllowLoosePiecesOnBoard(false);
   const center = resumed.boardPoint(parked[0].x, parked[0].y);
   const slot = resumed.tray[0];
   await moveFinger(center.x, center.y, slot.x, slot.y);
@@ -1232,13 +1233,13 @@ scenario('picker Settings remembers the theme and filter on a narrow touch scree
   await page.reload();
   await waitForText('Select a Puzzle');
   assert.deepEqual((await readSave(page)).settings, {
-    theme: 'Slate', filter: 'sepia', trayFractions: { vertical: 0, horizontal: 0 }, missedDropMode: 'return-to-tray',
+    theme: 'Slate', filter: 'sepia', trayFractions: { vertical: 0, horizontal: 0 }, allowLoosePiecesOnBoard: false,
   });
   assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 5, 105), [39, 51, 68, 255]);
   assert.deepEqual(errors, []);
 });
 
-scenario('version 1 through 8 saves migrate with settings, options, progress, and history intact', async (t) => {
+scenario('version 1 through 9 saves migrate with settings, options, progress, and history intact', async (t) => {
   const { page, canvas, waitForText, errors, clickDialog } = await openPuzzle(t, { viewport: { width: 1320, height: 780 } });
   const size = { width: 512, height: 288, columns: 4, rows: 2, snapTolerance: 28 };
   const setup = {
@@ -1255,7 +1256,7 @@ scenario('version 1 through 8 saves migrate with settings, options, progress, an
   const storeSave = (data) => page.evaluate((value) => localStorage.setItem('live-jigsaw.save', JSON.stringify(value)), data);
   const trayFractions = { vertical: 0, horizontal: 0 };
   const settings = { ...original.settings, trayFractions };
-  const migratedSettings = { ...settings, missedDropMode: 'return-to-tray' };
+  const migratedSettings = { ...settings, allowLoosePiecesOnBoard: false };
   const sequentialCompletion = {
     setup: { ...setup, challengeMode: 'sequential' }, completedAt: '2025-01-02T12:00:00.000Z',
   };
@@ -1299,7 +1300,7 @@ scenario('version 1 through 8 saves migrate with settings, options, progress, an
     await waitForText('Completed');
     await waitForText('1 of 8 placed');
     assert.deepEqual(await readSave(page), {
-      version: 9,
+      version: saveVersion,
       settings: migratedSettings,
       recentOptions: {
         pieceCount: previous.version >= 4 ? 40 : 8, connectorStyle: 'classic', animationSpeed: 'Normal',
@@ -1346,7 +1347,7 @@ scenario('version 1 through 8 saves migrate with settings, options, progress, an
   await waitForText('Completed');
   await waitForText('1 of 392 placed');
   assert.deepEqual(await readSave(page), {
-    ...version6, version: 9, settings: migratedSettings,
+    ...version6, version: saveVersion, settings: migratedSettings,
     progress: { Windmill: { ...version6.progress.Windmill, parkedGroups: [] } },
     recentOptions: { ...version6.recentOptions, pieceCount: 420, pieceShape: 'square' },
   });
@@ -1365,7 +1366,7 @@ scenario('version 1 through 8 saves migrate with settings, options, progress, an
   await waitForText('Completed');
   await waitForText('1 of 392 placed');
   assert.deepEqual(await readSave(page), {
-    ...version7, version: 9, settings: migratedSettings,
+    ...version7, version: saveVersion, settings: migratedSettings,
     progress: { Windmill: { ...version7.progress.Windmill, parkedGroups: [] } },
     recentOptions: { ...version7.recentOptions, pieceCount: 300 },
   });
@@ -1385,8 +1386,20 @@ scenario('version 1 through 8 saves migrate with settings, options, progress, an
   await waitForText('Completed');
   await waitForText('1 of 8 placed');
   assert.deepEqual(await readSave(page), {
-    ...version8, version: 9, settings: { ...version8.settings, missedDropMode: 'return-to-tray' },
+    ...version8, version: saveVersion, settings: { ...version8.settings, allowLoosePiecesOnBoard: false },
     progress: { Windmill: { ...version8.progress.Windmill, parkedGroups: [] } },
+  });
+
+  const version9 = {
+    ...version8, version: 9, settings: { ...version8.settings, missedDropMode: 'park-on-board' },
+    progress: { Windmill: { ...version8.progress.Windmill, parkedGroups: [] } },
+  };
+  await storeSave(version9);
+  await page.reload();
+  await waitForText('Completed');
+  await waitForText('1 of 8 placed');
+  assert.deepEqual(await readSave(page), {
+    ...version9, version: saveVersion, settings: { ...version8.settings, allowLoosePiecesOnBoard: true },
   });
 
   const future = { ...original, version: 99, futureField: { keep: true } };
@@ -1403,12 +1416,13 @@ scenario('version 1 through 8 saves migrate with settings, options, progress, an
 });
 
 scenario('piece rotation distinguishes clicks and taps from drag, scroll, and cancellation', async (t) => {
-  const { page, canvas, waitForText, errors, clickDialog, playSelection } = await openCompactPuzzle(t, {
+  const { page, canvas, waitForText, errors, clickDialog, playSelection, setAllowLoosePiecesOnBoard } = await openCompactPuzzle(t, {
     viewport: { width: 1320, height: 780 }, hasTouch: true, isMobile: true,
   });
   const { dispatch, moveFinger } = await touchController(page);
   const getAttempt = async () => (await readSave(page)).progress.Windmill;
   const pickWindmill = () => clickDialog(-320, -210);
+  await setAllowLoosePiecesOnBoard(false);
   await pickWindmill();
   await playSelection({ connectorStyle: 'None', pieceRotation: true });
   await waitForText('0 of 8 placed');
@@ -1486,11 +1500,10 @@ scenario('piece rotation distinguishes clicks and taps from drag, scroll, and ca
 });
 
 scenario('parking joins right-click drops, restores cancelled touch drags and returns a rotated group to the tray', async (t) => {
-  const { page, waitForText, errors, clickDialog, playSelection, setMissedDropMode } = await openCompactPuzzle(t, {
+  const { page, waitForText, errors, clickDialog, playSelection, setAllowLoosePiecesOnBoard } = await openCompactPuzzle(t, {
     viewport: { width: 1320, height: 780 }, hasTouch: true, isMobile: true,
   });
   const { dispatch, moveFinger } = await touchController(page);
-  await setMissedDropMode('park-on-board');
   await page.touchscreen.tap(340, 180);
   await playSelection({ connectorStyle: 'None', pieceRotation: true });
   await waitForText('0 of 8 placed');
@@ -1563,11 +1576,10 @@ scenario('parking joins right-click drops, restores cancelled touch drags and re
     'Panning can recover the off-guide piece beyond the guide-only pan limit');
 
   const { x, y } = pieceOnScreen(recovered, right);
-  await setMissedDropMode('return-to-tray');
+  await setAllowLoosePiecesOnBoard(false);
   assert.deepEqual((await readSave(page)).progress.Windmill, joinedSave.progress.Windmill);
-  await clickAt({ x, y }, 'right');
-  await clickAt({ x: x + 40, y: y + 100 }, 'left');
-  assert.deepEqual((await playLayout(page)).parked, recovered.parked, 'A missed drop restores the group pose in Return to tray mode');
+  await moveFinger(x, y, x + 40, y + 100);
+  assert.deepEqual((await playLayout(page)).parked, recovered.parked, 'An unmatched drop restores the group pose when loose pieces are disabled');
   await moveFinger(x, y, x + 40, y + 100, 'touchCancel');
   assert.deepEqual((await playLayout(page)).parked, recovered.parked, 'Touch cancellation restores both members');
   await dispatch('touchStart', [x, y]);
@@ -1579,7 +1591,7 @@ scenario('parking joins right-click drops, restores cancelled touch drags and re
   assert.ok(pinched.board.zoom < recovered.board.zoom, 'A second touch takes over the active piece drag to pinch');
   assert.deepEqual(pinched.parked, recovered.parked, 'Pinch does not commit the preview');
 
-  await setMissedDropMode('park-on-board');
+  await setAllowLoosePiecesOnBoard(true);
   const pivot = pieceOnScreen(pinched, right);
   const grabbed = { x: pivot.x + 20, y: pivot.y };
   const destination = { x: grabbed.x - 100, y: grabbed.y + 90 };
@@ -1628,11 +1640,10 @@ scenario('parking joins right-click drops, restores cancelled touch drags and re
 });
 
 scenario('break piece off targets the topmost member and splits a bridge on touch or mouse input', async (t) => {
-  const { page, waitForText, errors, playSelection, setMissedDropMode } = await openCompactPuzzle(t, {
+  const { page, waitForText, errors, playSelection } = await openCompactPuzzle(t, {
     viewport: { width: 1320, height: 780 }, hasTouch: true, isMobile: true,
   });
   const { dispatch, moveFinger } = await touchController(page);
-  await setMissedDropMode('park-on-board');
   await page.touchscreen.tap(340, 180);
   await playSelection({ connectorStyle: 'None', pieceRotation: true });
   await waitForText('0 of 8 placed');
@@ -1841,11 +1852,12 @@ scenario('Sequential locks tray pieces while keeping touch scrolling and saves t
 });
 
 scenario('Seed previews an on-target disconnected drop without saving it', async (t) => {
-  const { page, canvas, waitForText, errors, playSelection } = await openCompactPuzzle(t, {
+  const { page, canvas, waitForText, errors, playSelection, setAllowLoosePiecesOnBoard } = await openCompactPuzzle(t, {
     viewport: { width: 1320, height: 780 }, hasTouch: true, isMobile: true,
   });
   const { moveFinger } = await touchController(page);
   const message = 'Piece must be connected to seed group';
+  await setAllowLoosePiecesOnBoard(false);
   await page.touchscreen.tap(340, 180);
   await playSelection({ connectorStyle: 'None', challengeMode: 'seed' });
   await waitForText('0 of 8 placed');
@@ -1913,7 +1925,7 @@ scenario('No Guide progress resumes, resets, and records each completion', async
   const { page, canvas, waitForText, errors, clickDialog, clickSetup, playSelection } = await openCompactPuzzle(t, {
     viewport: { width: 1320, height: 780 },
   });
-  const pickWindmill = () => page.mouse.click(340, 180);
+  const pickWindmill = () => clickDialog(-320, -210);
   const backToPicker = async () => {
     await page.evaluate(() => { window.paintedText = []; });
     await page.mouse.click(99, 43);
@@ -2092,7 +2104,7 @@ scenario('picker tag and completion filters combine and refresh after play', asy
   };
   const original = {
     version: saveVersion,
-    settings: { trayFractions: { vertical: 0, horizontal: 0 }, missedDropMode: 'return-to-tray' },
+    settings: { trayFractions: { vertical: 0, horizontal: 0 }, allowLoosePiecesOnBoard: false },
     progress: {
       Lighthouse: { setup, placedPieceIds: ['piece-0-0'], trayOrientations: {}, parkedGroups: [] },
       Windmill: {

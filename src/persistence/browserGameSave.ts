@@ -4,7 +4,7 @@ import { PuzzlePlay } from '../domain/PuzzlePlay';
 import { createPuzzle, defaultPieceShape, getPieceCount, pieceShapeIds, puzzleSizePresets, type PuzzleSize } from '../domain/puzzleSizes';
 import { puzzleAnimationSpeeds, type PuzzleAnimationSpeed } from '../puzzles/PuzzleSource';
 import {
-  defaultMissedDropMode, defaultTrayFractions, hasProgress, trayPositions,
+  defaultAllowLoosePiecesOnBoard, defaultTrayFractions, hasProgress, trayPositions,
   type PuzzleCompletion, type PuzzleOptions, type PuzzleProgress, type PuzzleSetup, type SaveData, type SaveStorage,
 } from './GameSave';
 import { isRecord, migrateSave, saveVersion } from './saveMigrations';
@@ -13,7 +13,8 @@ const storageKey = 'live-jigsaw.save';
 const themeKey = 'live-jigsaw.theme';
 const filterKey = 'live-jigsaw.puzzle-filter';
 const emptySave: SaveData = {
-  settings: { trayFractions: defaultTrayFractions, missedDropMode: defaultMissedDropMode }, progress: {}, history: {},
+  settings: { trayFractions: defaultTrayFractions, allowLoosePiecesOnBoard: defaultAllowLoosePiecesOnBoard },
+  progress: {}, history: {},
 };
 
 export class BrowserSaveStorage implements SaveStorage {
@@ -79,13 +80,15 @@ function readJson(value: string): unknown {
 
 function readSave(data: Record<string, unknown>): SaveData {
   const settings = isRecord(data.settings) ? data.settings : {};
+  const { allowLoosePiecesOnBoard } = settings;
   const trayFractions = isRecord(settings.trayFractions) ? settings.trayFractions : {};
   return {
     settings: {
       theme: typeof settings.theme === 'string' ? settings.theme : undefined,
       filter: typeof settings.filter === 'string' ? settings.filter : undefined,
       trayPosition: trayPositions.find((position) => position === settings.trayPosition),
-      missedDropMode: settings.missedDropMode === 'park-on-board' ? settings.missedDropMode : defaultMissedDropMode,
+      allowLoosePiecesOnBoard: typeof allowLoosePiecesOnBoard === 'boolean'
+        ? allowLoosePiecesOnBoard : defaultAllowLoosePiecesOnBoard,
       trayFractions: {
         vertical: readFraction(trayFractions.vertical) ?? defaultTrayFractions.vertical,
         horizontal: readFraction(trayFractions.horizontal) ?? defaultTrayFractions.horizontal,

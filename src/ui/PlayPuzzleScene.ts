@@ -49,7 +49,7 @@ export class PlayPuzzleScene extends Phaser.Scene {
       board.cancelInteraction();
       openSettings(this, {
         onTrayPositionChange: (position) => board.setTrayPosition(position),
-        onMissedDropModeChange: (mode) => board.setMissedDropMode(mode),
+        onAllowLoosePiecesOnBoardChange: (allow) => board.setAllowLoosePiecesOnBoard(allow),
       });
     }, playHeader);
     const title = this.add.text(0, 0, source.title, {
@@ -109,13 +109,12 @@ export class PlayPuzzleScene extends Phaser.Scene {
         saveProgress();
       }
     };
-    const { trayPosition = 'Auto', trayFractions, missedDropMode } = gameSave.settings;
+    const { trayPosition = 'Auto', trayFractions, allowLoosePiecesOnBoard } = gameSave.settings;
     const board = new PuzzleBoardView(this, play, capture, trayPieceArea, {
       position: trayPosition,
       fractions: trayFractions,
       onResize: (fractions) => gameSave.updateSettings({ trayFractions: fractions }),
-    }, { onPlacement, onWorkspaceChange: saveProgress });
-    board.setMissedDropMode(missedDropMode);
+    }, { onPlacement, onWorkspaceChange: saveProgress }, allowLoosePiecesOnBoard);
     updateProgress();
     capture.start();
 

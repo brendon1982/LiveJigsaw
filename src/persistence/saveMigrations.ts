@@ -58,6 +58,14 @@ const migrations: readonly Migration[] = [
     },
     progress: mapSaveEntries(document.progress, (value) => isRecord(value) ? { ...value, parkedGroups: [] } : value),
   }),
+  (document) => {
+    if (!isRecord(document.settings)) return document;
+    const { missedDropMode, ...settings } = document.settings;
+    if (missedDropMode === 'return-to-tray' || missedDropMode === 'park-on-board') {
+      settings.allowLoosePiecesOnBoard = missedDropMode === 'park-on-board';
+    }
+    return { ...document, settings };
+  },
 ];
 
 function withRotationOff(value: unknown): unknown {

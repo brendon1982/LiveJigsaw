@@ -3,7 +3,6 @@ import { test } from 'node:test';
 import { PuzzlePlay } from '../../src/domain/PuzzlePlay.ts';
 import { givenPuzzle } from './puzzleScenario.mjs';
 
-const park = 'park-on-board';
 const offGuide = { x: -500, y: 600 };
 
 function offset(point, x, y = 0) {
@@ -15,41 +14,41 @@ function turnTo(play, piece, quarterTurns) {
   for (let i = 0; i < turns; i += 1) assert.equal(play.turnPiece(piece.id), true);
 }
 
-test('missed drops return to the tray by default or park on either side of the guide boundary', () => {
+test('loose pieces park on either side of the guide by default, unless disallowed', () => {
   const { play, pieceAt, expectProgress } = givenPuzzle();
   const first = pieceAt(0, 0);
   const second = pieceAt(1, 0);
   const overGuide = offset(first.target, 20);
 
-  assert.equal(play.dropOnBoard(first.id, overGuide).kind, 'returned');
+  assert.equal(play.dropOnBoard(first.id, overGuide, false).kind, 'returned');
   assert.ok(play.trayPieces.includes(first));
-  assert.equal(play.dropOnBoard(first.id, overGuide, park).kind, 'parked');
-  assert.equal(play.dropOnBoard(second.id, overGuide, park).kind, 'parked');
+  assert.equal(play.dropOnBoard(first.id, overGuide).kind, 'parked');
+  assert.equal(play.dropOnBoard(second.id, overGuide).kind, 'parked');
   assert.deepEqual(play.parkedGroups.map(({ anchorPieceId }) => anchorPieceId), [first.id, second.id]);
   assert.equal(play.trayPieces.includes(first), false);
   assert.deepEqual(play.positionOf(first.id), overGuide);
   assert.deepEqual(play.positionOf(second.id), overGuide);
 
   const resting = play.snapshot();
-  assert.equal(play.dropOnBoard(first.id, offGuide).kind, 'unchanged');
+  assert.equal(play.dropOnBoard(first.id, offGuide, false).kind, 'unchanged');
   assert.deepEqual(play.snapshot(), resting);
-  assert.equal(play.dropOnBoard(first.id, offGuide, park).kind, 'parked');
+  assert.equal(play.dropOnBoard(first.id, offGuide).kind, 'parked');
   assert.deepEqual(play.positionOf(first.id), offGuide);
   assert.equal(play.parkedGroups.at(-1).anchorPieceId, first.id);
   expectProgress({ placed: 0, total: 4 });
 });
 
-test('singles join in either mode, then two groups join through a member other than the grabbed member', () => {
+test('singles join with either setting, then two groups join through a member other than the grabbed member', () => {
   const { play, pieceAt } = givenPuzzle({ columns: 4, rows: 1 });
   const [a, b, c, d] = [0, 1, 2, 3].map((column) => pieceAt(column, 0));
-  play.dropOnBoard(a.id, offGuide, park);
-  assert.equal(play.dropOnBoard(b.id, offset(offGuide, 132)).kind, 'joined');
+  play.dropOnBoard(a.id, offGuide);
+  assert.equal(play.dropOnBoard(b.id, offset(offGuide, 132), false).kind, 'joined');
   assert.deepEqual(play.positionOf(b.id), offset(offGuide, 128));
 
-  play.dropOnBoard(c.id, offset(offGuide, 500), park);
+  play.dropOnBoard(c.id, offset(offGuide, 500));
   assert.equal(play.dropOnBoard(d.id, offset(offGuide, 627)).kind, 'joined');
   const resting = play.snapshot();
-  assert.equal(play.dropOnBoard(d.id, offset(offGuide, 700)).kind, 'unchanged');
+  assert.equal(play.dropOnBoard(d.id, offset(offGuide, 700), false).kind, 'unchanged');
   assert.deepEqual(play.snapshot(), resting);
 
   assert.equal(play.dropOnBoard(d.id, offset(offGuide, 387)).kind, 'joined');
@@ -63,8 +62,8 @@ test('join picks the closest matching neighbor, with a stable tie break', () => 
   for (const [attempt, winner] of [[127, 0], [132, 2], [129, 2]]) {
     const { play, pieceAt } = givenPuzzle({ columns: 3, rows: 1 });
     const [left, middle, right] = [0, 1, 2].map((column) => pieceAt(column, 0));
-    play.dropOnBoard(left.id, offGuide, park);
-    play.dropOnBoard(right.id, offset(offGuide, 258), park);
+    play.dropOnBoard(left.id, offGuide);
+    play.dropOnBoard(right.id, offset(offGuide, 258));
 
     assert.equal(play.dropOnBoard(middle.id, offset(offGuide, attempt)).kind, 'joined');
     assert.equal(play.groupOf(middle.id).anchorPieceId, pieceAt(winner, 0).id);
@@ -81,11 +80,11 @@ test('a diagonal neighbor, a wrong offset, or mismatched turns do not join', () 
   turnTo(play, a, 1);
   turnTo(play, b, 0);
   turnTo(play, diagonal, 1);
-  play.dropOnBoard(a.id, offGuide, park);
-  assert.equal(play.dropOnBoard(diagonal.id, offset(offGuide, -144, 128)).kind, 'returned');
-  assert.equal(play.dropOnBoard(b.id, offset(offGuide, 0, 128)).kind, 'returned');
+  play.dropOnBoard(a.id, offGuide);
+  assert.equal(play.dropOnBoard(diagonal.id, offset(offGuide, -144, 128), false).kind, 'returned');
+  assert.equal(play.dropOnBoard(b.id, offset(offGuide, 0, 128), false).kind, 'returned');
   turnTo(play, b, 1);
-  assert.equal(play.dropOnBoard(b.id, offset(offGuide, 128, 128)).kind, 'returned');
+  assert.equal(play.dropOnBoard(b.id, offset(offGuide, 128, 128), false).kind, 'returned');
   assert.equal(play.dropOnBoard(b.id, offset(offGuide, 4, 130)).kind, 'joined');
   assert.deepEqual(play.positionOf(b.id), offset(offGuide, 0, 128));
 });
@@ -97,7 +96,7 @@ test('rotating a parked group pivots around the clicked member, and returning it
   const originalOrder = play.trayPieces;
   turnTo(play, top, 0);
   turnTo(play, bottom, 0);
-  play.dropOnBoard(top.id, offGuide, park);
+  play.dropOnBoard(top.id, offGuide);
   play.dropOnBoard(bottom.id, offset(offGuide, 0, 144));
 
   assert.equal(play.turnPiece(bottom.id), true);
@@ -120,7 +119,7 @@ test('detaching a bridge preserves every rotated pose and keeps the remainder in
   const pieces = [0, 1, 2, 3, 4].map((column) => pieceAt(column, 0));
   pieces.forEach((piece, i) => {
     turnTo(play, piece, 1);
-    play.dropOnBoard(piece.id, offset(offGuide, 0, i * 128), park);
+    play.dropOnBoard(piece.id, offset(offGuide, 0, i * 128));
   });
   const [a, b, bridge, d, e] = pieces.map(({ id }) => id);
   assert.equal(play.parkedGroups.length, 1);
@@ -140,7 +139,7 @@ test('upright guide placement takes priority over an eligible loose join', () =>
   const { play, pieceAt, expectProgress } = givenPuzzle();
   const a = pieceAt(0, 0);
   const b = pieceAt(1, 0);
-  play.dropOnBoard(a.id, offset(a.target, 11), park);
+  play.dropOnBoard(a.id, offset(a.target, 11));
   assert.deepEqual(play.dropOnBoard(b.id, offset(b.target, 5)), {
     kind: 'placed', guideResult: 'placed', lockedPieceIds: [b.id],
   });
@@ -154,13 +153,13 @@ test('locking a group is atomic and the final group completes a No Guide puzzle'
   const b = pieceAt(1, 0);
   turnTo(play, a, 1);
   turnTo(play, b, 1);
-  play.dropOnBoard(a.id, offGuide, park);
+  play.dropOnBoard(a.id, offGuide);
   play.dropOnBoard(b.id, offset(offGuide, 0, 128));
   assert.equal(puzzle.hidesGuide, true);
 
   assert.equal(play.dropOnBoard(b.id, b.target).guideResult, 'wrong-orientation');
   turnTo(play, b, 0);
-  assert.equal(play.dropOnBoard(b.id, offset(b.target, 11)).guideResult, 'missed');
+  assert.equal(play.dropOnBoard(b.id, offset(b.target, 11), false).guideResult, 'missed');
   expectProgress({ placed: 0, total: 2 });
   assert.deepEqual(play.dropOnBoard(b.id, offset(b.target, 10)).lockedPieceIds, [a.id, b.id]);
   assert.deepEqual(play.parkedGroups, []);
@@ -173,12 +172,12 @@ for (const [challengeMode, slots] of [['sequential', 1], ['sequential-window', 4
     const { play, puzzle } = givenPuzzle({ columns: 6, rows: 1, seed: 42, challengeMode });
     const seeded = play.trayPieces;
     seeded.slice(0, slots).forEach((piece, i) => {
-      assert.equal(play.dropOnBoard(piece.id, offset(offGuide, i * 450), park).kind, 'parked');
+      assert.equal(play.dropOnBoard(piece.id, offset(offGuide, i * 450)).kind, 'parked');
     });
     const next = seeded[slots];
     assert.equal(play.trayPieces[0], next);
     assert.equal(puzzle.canDrag(next.id), false);
-    assert.equal(play.dropOnBoard(next.id, next.target, park).guideResult, 'blocked');
+    assert.equal(play.dropOnBoard(next.id, next.target).guideResult, 'blocked');
     assert.equal(play.dropOnBoard(seeded[0].id, seeded[0].target).kind, 'placed');
     assert.equal(play.dropOnBoard(next.id, next.target).kind, 'placed');
   });
@@ -191,7 +190,7 @@ test('locking a joined group opens one Sequential Window slot per member', () =>
   const left = eligible.find((piece) => eligible.some((other) => other.cell.column === piece.cell.column + 1));
   const right = eligible.find((piece) => piece.cell.column === left.cell.column + 1);
 
-  play.dropOnBoard(left.id, offGuide, park);
+  play.dropOnBoard(left.id, offGuide);
   assert.equal(play.dropOnBoard(right.id, offset(offGuide, 128)).kind, 'joined');
   assert.ok(blocked.every(({ id }) => !puzzle.canDrag(id)));
   assert.deepEqual(play.dropOnBoard(right.id, right.target).lockedPieceIds, [left.id, right.id]);
@@ -201,22 +200,22 @@ test('locking a joined group opens one Sequential Window slot per member', () =>
 test('Seed rejects a disconnected later group and accepts it once any member touches the seed', () => {
   const { play, pieceAt, expectProgress } = givenPuzzle({ columns: 5, rows: 1, challengeMode: 'seed' });
   const [a, b, bridge, d, e] = [0, 1, 2, 3, 4].map((i) => pieceAt(i, 0));
-  play.dropOnBoard(a.id, offGuide, park);
+  play.dropOnBoard(a.id, offGuide);
   play.dropOnBoard(b.id, offset(offGuide, 128));
   assert.deepEqual(play.dropOnBoard(b.id, b.target).lockedPieceIds, [a.id, b.id]);
 
-  play.dropOnBoard(d.id, offGuide, park);
+  play.dropOnBoard(d.id, offGuide);
   play.dropOnBoard(e.id, offset(offGuide, 128));
-  assert.deepEqual(play.dropOnBoard(e.id, e.target), {
+  assert.deepEqual(play.dropOnBoard(e.id, e.target, false), {
     kind: 'unchanged', guideResult: 'disconnected-from-seed', lockedPieceIds: [],
   });
   expectProgress({ placed: 2, total: 5 });
   assert.deepEqual(play.positionOf(d.id), offGuide);
-  assert.deepEqual(play.dropOnBoard(e.id, e.target, park), {
+  assert.deepEqual(play.dropOnBoard(e.id, e.target), {
     kind: 'parked', guideResult: 'disconnected-from-seed', lockedPieceIds: [],
   });
   expectProgress({ placed: 2, total: 5 });
-  play.dropOnBoard(d.id, offGuide, park);
+  play.dropOnBoard(d.id, offGuide);
   assert.equal(play.dropOnBoard(bridge.id, offset(offGuide, -128)).kind, 'joined');
   assert.deepEqual(play.dropOnBoard(e.id, e.target).lockedPieceIds, [d.id, e.id, bridge.id]);
   expectProgress({ placed: 5, total: 5, complete: true });
@@ -231,9 +230,9 @@ test('parking-only snapshots round trip with order, geometry, and separate tray 
   turnTo(play, a, 3);
   turnTo(play, b, 3);
   turnTo(play, c, 2);
-  play.dropOnBoard(a.id, offGuide, park);
+  play.dropOnBoard(a.id, offGuide);
   play.dropOnBoard(b.id, offset(offGuide, 0, -128));
-  play.dropOnBoard(c.id, c.target, park);
+  play.dropOnBoard(c.id, c.target);
   const saved = JSON.parse(JSON.stringify(play.snapshot()));
   assert.deepEqual(saved.placedPieceIds, []);
   assert.equal(saved.parkedGroups.length, 2);
@@ -251,7 +250,7 @@ test('combined restore rejects invalid groups and overlapping homes without chan
   const a = pieceAt(0, 0).id;
   const b = pieceAt(1, 0).id;
   const diagonal = pieceAt(1, 1).id;
-  play.dropOnBoard(a, offGuide, park);
+  play.dropOnBoard(a, offGuide);
   const before = play.snapshot();
   const [group] = before.parkedGroups;
   for (const invalid of [

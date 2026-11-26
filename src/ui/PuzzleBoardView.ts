@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { Bounds, type Point } from '../domain/geometry';
-import type { MissedDropMode, PuzzlePlay } from '../domain/PuzzlePlay';
+import type { PuzzlePlay } from '../domain/PuzzlePlay';
 import type { TrayFractions, TrayPosition } from '../persistence/GameSave';
 import type { LivePuzzleCapture } from '../rendering/LivePuzzleCapture';
 import { makeIconButton, type UIScene } from './button';
@@ -102,7 +102,6 @@ export class PuzzleBoardView {
   private rejectedPiece?: PuzzlePieceView;
   private readonly pieces = new Map<string, PuzzlePieceView>();
   private parkedPieces: PuzzlePieceView[] = [];
-  private missedDropMode: MissedDropMode = 'return-to-tray';
   private trayBounds = new Phaser.Geom.Rectangle();
   private trayPosition: TrayPosition;
   private side: TraySide;
@@ -120,6 +119,7 @@ export class PuzzleBoardView {
     trayPieceArea: number,
     traySettings: TraySettings,
     private readonly actions: PuzzleActions,
+    private allowLoosePiecesOnBoard: boolean,
   ) {
     const { puzzle } = play;
     const placedPieces = puzzle.pieces.filter(({ id }) => puzzle.isPlaced(id));
@@ -251,8 +251,8 @@ export class PuzzleBoardView {
     this.resize();
   }
 
-  setMissedDropMode(mode: MissedDropMode) {
-    this.missedDropMode = mode;
+  setAllowLoosePiecesOnBoard(allow: boolean) {
+    this.allowLoosePiecesOnBoard = allow;
   }
 
   showCompletion() {
@@ -613,7 +613,7 @@ export class PuzzleBoardView {
     }
 
     const center = this.dropCenter(pointer, offset);
-    const result = this.play.dropOnBoard(entry.piece.id, center, this.missedDropMode);
+    const result = this.play.dropOnBoard(entry.piece.id, center, this.allowLoosePiecesOnBoard);
     if (result.kind === 'placed') {
       const locked = result.lockedPieceIds.map((id) => this.pieces.get(id)!);
       const pieces = locked.map((view) => view.piece);

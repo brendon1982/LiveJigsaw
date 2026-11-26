@@ -36,6 +36,7 @@ export class PuzzlePieceView {
     context.fillStyle = '#fff';
     context.fill();
     mask.refresh();
+    mask.setWrap(Phaser.Textures.WrapMode.CLAMP_TO_EDGE);
 
     texture.add(piece.id, 0, left, top, width, height);
 

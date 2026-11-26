@@ -311,6 +311,7 @@ function trackPieceMaskDraws(page) {
     const maskPrograms = new WeakSet();
     const activeMasks = new WeakMap();
     let maskDraws = 0;
+    let repeatingMasks = 0;
     for (const { prototype } of [WebGLRenderingContext, WebGL2RenderingContext]) {
       const { getUniformLocation, useProgram } = prototype;
       prototype.getUniformLocation = function (program, name) {
@@ -324,14 +325,22 @@ function trackPieceMaskDraws(page) {
       for (const method of ['drawArrays', 'drawElements']) {
         const draw = prototype[method];
         prototype[method] = function (...args) {
-          if (activeMasks.get(this)) maskDraws++;
+          if (activeMasks.get(this)) {
+            maskDraws++;
+            const activeUnit = this.getParameter(this.ACTIVE_TEXTURE);
+            this.activeTexture(this.TEXTURE1); // Phaser binds the mask on unit 1.
+            const wrapS = this.getTexParameter(this.TEXTURE_2D, this.TEXTURE_WRAP_S);
+            const wrapT = this.getTexParameter(this.TEXTURE_2D, this.TEXTURE_WRAP_T);
+            this.activeTexture(activeUnit);
+            if (wrapS !== this.CLAMP_TO_EDGE || wrapT !== this.CLAMP_TO_EDGE) repeatingMasks++;
+          }
           return draw.apply(this, args);
         };
       }
     }
-    window.countPieceMaskDraws = () => new Promise((resolve) => requestAnimationFrame(() => {
-      maskDraws = 0;
-      requestAnimationFrame(() => resolve(maskDraws));
+    window.inspectPieceMaskDraws = () => new Promise((resolve) => requestAnimationFrame(() => {
+      maskDraws = repeatingMasks = 0;
+      requestAnimationFrame(() => resolve({ maskDraws, repeatingMasks }));
     }));
   });
 }
@@ -417,12 +426,13 @@ scenario('the 420-piece tray only draws nearby piece masks', async (t) => {
   await page.mouse.click(340, 180);
   for (const count of ['40', '72', '144', '300', '420']) await waitForText(count);
   assert.ok(!(await page.evaluate(() => window.paintedText)).includes('8'));
-  await playSelection({ size: 420 });
+  await playSelection({ size: 420, pieceShape: 'square', connectorStyle: 'Classic' });
   await waitForText('0 of 420 placed');
 
   const assertMaskDraws = async () => {
-    const draws = await page.evaluate(() => window.countPieceMaskDraws());
-    assert.ok(draws > 1 && draws < 16, `Expected only visible tray masks, got ${draws} draws`);
+    const { maskDraws, repeatingMasks } = await page.evaluate(() => window.inspectPieceMaskDraws());
+    assert.ok(maskDraws > 1 && maskDraws < 16, `Expected only visible tray masks, got ${maskDraws} draws`);
+    assert.equal(repeatingMasks, 0, 'Piece cutouts should not sample the opposite edge of their masks');
   };
   await assertMaskDraws();
   await page.mouse.move(85, 140);

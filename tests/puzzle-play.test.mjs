@@ -658,6 +658,71 @@ scenario('the landscape scenes animate on the board', async (t) => {
   assert.deepEqual(errors, []);
 });
 
+scenario('source artwork fills the capture without stretching or enlarging raster layers', async (t) => {
+  const { page, waitForText, errors, clickDialog } = await openCompactPuzzle(t, { viewport: { width: 1320, height: 780 } });
+  const setups = {
+    Windmill: { width: 1456, height: 416, columns: 8, rows: 4 },
+    Lighthouse: { width: 832, height: 728, columns: 8, rows: 4 },
+    CanyonDrift: { width: 1848, height: 990, columns: 8, rows: 4 },
+  };
+  await page.evaluate((setups) => {
+    const progress = Object.fromEntries(Object.entries(setups).map(([key, size]) => [key, {
+      setup: {
+        size: { ...size, snapTolerance: 16 }, seed: 233, connectorStyle: 'classic',
+        animationSpeed: 'Normal', challengeMode: 'none', pieceRotation: false,
+      },
+      placedPieceIds: ['piece-0-0'], trayOrientations: {},
+    }]));
+    localStorage.setItem('live-jigsaw.save', JSON.stringify({ version: 6, progress }));
+  }, setups);
+  await page.reload();
+  await waitForText('Windmill');
+
+  const resume = async (key, x, y) => {
+    await page.evaluate(() => { window.paintedText = []; });
+    await page.mouse.click(x, y);
+    await waitForText('Resume');
+    await clickDialog(100, resumeActionY);
+    await page.waitForFunction((key) => window.puzzleArtworkScene?.sys.settings.key === key, key);
+  };
+  const backToPicker = async () => {
+    await page.evaluate(() => { window.paintedText = []; });
+    await page.mouse.click(99, 43);
+    await waitForText('Windmill');
+  };
+
+  for (const [key, x] of [['Windmill', 340], ['Lighthouse', 935]]) {
+    await resume(key, x, 180);
+    const transform = await page.evaluate(() => {
+      const [artwork] = window.puzzleArtworkScene.children.list;
+      return [artwork.x, artwork.y, artwork.scaleX, artwork.scaleY];
+    });
+    const { width, height } = setups[key];
+    const scale = Math.max(width / 512, height / 288);
+    assert.deepEqual(transform, [(width - 512 * scale) / 2, (height - 288 * scale) / 2, scale, scale], key);
+    await backToPicker();
+  }
+
+  await scrollPickerTo(page, 1700);
+  await resume('CanyonDrift', 340, 600);
+  const { native, groundEdges } = await page.evaluate(() => {
+    const scene = window.puzzleArtworkScene;
+    const native = scene.children.list.every((image) => image.scaleX === 1 && image.scaleY === 1);
+    const ground = scene.children.list.find((image) => image.texture.key.endsWith('-ground'));
+    const [pan] = scene.tweens.getTweens();
+    const groundEdges = [0, 3499].map((time) => {
+      pan.seek(time, 16.6, true);
+      return [ground.x - ground.displayOriginX, ground.x - ground.displayOriginX + ground.displayWidth];
+    });
+    return { native, groundEdges };
+  });
+  assert.ok(native, 'Every parallax layer should use the PNG dimensions');
+  const [[start], [left, right]] = groundEdges;
+  assert.ok(left < start, 'Ground should still drift when there is room to move');
+  assert.ok(left <= 0 && right >= setups.CanyonDrift.width, 'Ground should not expose a hard edge at full drift');
+  assert.deepEqual(errors, []);
+});
+
 scenario('parallax seeds place both foreground and background artwork', async (t) => {
   const { page, waitForText, errors, playSelection } = await openCompactPuzzle(t, { viewport: { width: 1320, height: 780 } });
 
@@ -702,7 +767,7 @@ scenario('parallax seeds place both foreground and background artwork', async (t
       matches: (red, green, blue) => green > red + 10 && green > blue + 5,
     },
     {
-      name: 'sun', cardX: 935, scroll: 2300, rowY: 331,
+      name: 'sun', cardX: 935, scroll: 2300, rowY: 300,
       matches: (red, green) => red >= 75 && green >= 75,
     },
   ];
@@ -1528,7 +1593,12 @@ scenario('the picker preserves an active filter and its scroll offset until relo
   await page.evaluate(() => { window.paintedText = []; });
   await page.mouse.click(99, 43);
   await waitForText('Filters (1)');
-  assert.ok(scrolled.equals(await canvas.screenshot()), 'The filtered list should return at the same offset');
+  let restored;
+  for (const deadline = Date.now() + 4000; Date.now() < deadline;) {
+    restored = await canvas.screenshot();
+    if (scrolled.equals(restored)) break;
+  }
+  assert.ok(scrolled.equals(restored), 'The filtered list should return at the same offset');
   await page.reload();
   await waitForText('Windmill');
   await page.mouse.click(340, 180);

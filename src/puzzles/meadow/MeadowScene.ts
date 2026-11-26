@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import type { Size } from '../../domain/geometry';
+import { frameIllustration } from '../frameIllustration';
 import { puzzleAnimationRates, type PuzzleSourceSceneData } from '../PuzzleSource';
 
 const artworkSize = { width: 512, height: 288 };
@@ -23,7 +24,6 @@ export class MeadowScene extends Phaser.Scene {
 }
 
 export function drawMeadow(scene: Phaser.Scene, viewport: Size) {
-  const { width, height } = artworkSize;
   const field = drawField(scene);
 
   const butterflies = [
@@ -41,8 +41,7 @@ export function drawMeadow(scene: Phaser.Scene, viewport: Size) {
     return { butterfly, wings, x, y, phase };
   });
 
-  const artwork = scene.add.container(0, 0, [field, ...butterflies.map(({ butterfly }) => butterfly)])
-    .setScale(viewport.width / width, viewport.height / height);
+  const artwork = frameIllustration(scene, viewport, artworkSize, [field, ...butterflies.map(({ butterfly }) => butterfly)]);
   let elapsed = 0;
   return {
     objects: [artwork],

@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import type { Size } from '../../domain/geometry';
+import { frameIllustration } from '../frameIllustration';
 import { puzzleAnimationRates, type PuzzleSourceSceneData } from '../PuzzleSource';
 
 const artworkSize = { width: 512, height: 288 };
@@ -13,8 +14,7 @@ export class WindmillScene extends Phaser.Scene {
   }
 
   create({ animationSpeed, ...viewport }: PuzzleSourceSceneData) {
-    const { objects, animate } = drawWindmill(this, artworkSize);
-    this.add.container(0, 0, objects).setScale(viewport.width / artworkSize.width, viewport.height / artworkSize.height);
+    const { animate } = drawWindmill(this, viewport);
     this.animate = (delta) => animate(delta * puzzleAnimationRates[animationSpeed]);
   }
 
@@ -24,7 +24,7 @@ export class WindmillScene extends Phaser.Scene {
 }
 
 export function drawWindmill(scene: Phaser.Scene, viewport: Size) {
-  const landscape = drawLandscape(scene, viewport);
+  const landscape = drawLandscape(scene, artworkSize);
 
   const sails = scene.add.graphics({ x: 256, y: 151 });
   for (let turn = 0; turn < 4; turn += 1) {
@@ -36,8 +36,9 @@ export function drawWindmill(scene: Phaser.Scene, viewport: Size) {
   }
   sails.fillStyle(0x755344).fillCircle(0, 0, 5);
 
+  const artwork = frameIllustration(scene, viewport, artworkSize, [landscape, sails]);
   return {
-    objects: [landscape, sails],
+    objects: [artwork],
     animate(delta: number) {
       sails.rotation += delta * 0.00035;
     },

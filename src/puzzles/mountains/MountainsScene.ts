@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import type { Size } from '../../domain/geometry';
+import { frameIllustration } from '../frameIllustration';
 import { puzzleAnimationRates, type PuzzleSourceSceneData } from '../PuzzleSource';
 
 const artworkSize = { width: 512, height: 288 };
@@ -42,8 +43,7 @@ export function drawMountains(scene: Phaser.Scene, viewport: Size) {
 
   const valley = drawValley(scene, width);
 
-  const artwork = scene.add.container(0, 0, [sky, ...clouds.map(({ cloud }) => cloud), valley])
-    .setScale(viewport.width / width, viewport.height / height);
+  const artwork = frameIllustration(scene, viewport, artworkSize, [sky, ...clouds.map(({ cloud }) => cloud), valley]);
   let elapsed = 0;
   const cloudMargin = 56;
   return {

@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import type { Size } from '../../domain/geometry';
+import { frameIllustration } from '../frameIllustration';
 import { puzzleAnimationRates, type PuzzleSourceSceneData } from '../PuzzleSource';
 
 const artworkSize = { width: 512, height: 288 };
@@ -13,8 +14,7 @@ export class LighthouseScene extends Phaser.Scene {
   }
 
   create({ animationSpeed, ...viewport }: PuzzleSourceSceneData) {
-    const { objects, animate } = drawLighthouse(this, artworkSize);
-    this.add.container(0, 0, objects).setScale(viewport.width / artworkSize.width, viewport.height / artworkSize.height);
+    const { animate } = drawLighthouse(this, viewport);
     this.animate = (delta) => animate(delta * puzzleAnimationRates[animationSpeed]);
   }
 
@@ -24,7 +24,7 @@ export class LighthouseScene extends Phaser.Scene {
 }
 
 export function drawLighthouse(scene: Phaser.Scene, viewport: Size) {
-  const coast = drawCoast(scene, viewport);
+  const coast = drawCoast(scene, artworkSize);
 
   const waves = scene.add.graphics();
   waves.lineStyle(2, 0x83a7b1, 0.7);
@@ -40,9 +40,10 @@ export function drawLighthouse(scene: Phaser.Scene, viewport: Size) {
   lantern.fillStyle(0x152835).fillTriangle(330, 91, 354, 73, 379, 91);
   lantern.fillStyle(0x152835).fillRect(334, 113, 40, 5);
 
+  const artwork = frameIllustration(scene, viewport, artworkSize, [coast, waves, beam, lantern]);
   let elapsed = 0;
   return {
-    objects: [coast, waves, beam, lantern],
+    objects: [artwork],
     animate(delta: number) {
       elapsed += delta;
       beam.rotation = Math.sin(elapsed / 2400) * 0.13;

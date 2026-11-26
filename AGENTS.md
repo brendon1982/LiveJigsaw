@@ -39,6 +39,7 @@ Keep extensions small. Add board layouts and cut rules to the domain when a conc
 ## Rendering details
 
 - Keep board geometry, capture textures, and piece frames at the same logical pixel scale. Use linear filtering when sampling the live texture.
+- Preserve artwork proportions when framing puzzle scenes. Crop rather than stretch to fill a different aspect ratio. Render raster artwork in source scenes at native size or downsample it; never upsample it to fill a viewport or make room for animation. This does not limit player-controlled board zoom.
 - Use named texture frames. Phaser treats numeric frame `0` as an omitted frame and falls back to the first registered frame.
 - Capture after scene updates. The board guide and pieces share the same live texture. The UI cameras clip the tray and board to their panels. Convert board drops to logical coordinates after accounting for pan.
 

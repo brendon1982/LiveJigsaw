@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import type { Size } from '../../domain/geometry';
+import { frameIllustration } from '../frameIllustration';
 import { puzzleAnimationRates, type PuzzleSourceSceneData } from '../PuzzleSource';
 
 const artworkSize = { width: 512, height: 288 };
@@ -59,8 +60,7 @@ export function drawDesert(scene: Phaser.Scene, viewport: Size) {
 
   const nightShade = scene.add.rectangle(0, 0, width, height, 0x23304e).setOrigin(0);
 
-  const artwork = scene.add.container(0, 0, [nightSky, sunset, daySky, orbit, dunes, nightShade])
-    .setScale(viewport.width / width, viewport.height / height);
+  const artwork = frameIllustration(scene, viewport, artworkSize, [nightSky, sunset, daySky, orbit, dunes, nightShade]);
   let phase = Math.PI / 3;
   const lightSky = () => {
     const sunHeight = Math.sin(phase);

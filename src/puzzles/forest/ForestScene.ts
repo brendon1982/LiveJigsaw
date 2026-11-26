@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import type { Size } from '../../domain/geometry';
+import { frameIllustration } from '../frameIllustration';
 import { puzzleAnimationRates, type PuzzleSourceSceneData } from '../PuzzleSource';
 
 const artworkSize = { width: 512, height: 288 };
@@ -23,7 +24,6 @@ export class ForestScene extends Phaser.Scene {
 }
 
 export function drawForest(scene: Phaser.Scene, viewport: Size) {
-  const { width, height } = artworkSize;
   const clearing = drawClearing(scene);
 
   const trees = [
@@ -49,8 +49,7 @@ export function drawForest(scene: Phaser.Scene, viewport: Size) {
   undergrowth.fillStyle(0x719571).fillEllipse(62, 274, 41, 13).fillEllipse(447, 271, 36, 10);
   undergrowth.fillStyle(0xd9c783).fillCircle(135, 271, 3).fillCircle(149, 278, 2.5).fillCircle(387, 261, 3);
 
-  const artwork = scene.add.container(0, 0, [clearing, ...trees.map(({ tree }) => tree), undergrowth])
-    .setScale(viewport.width / width, viewport.height / height);
+  const artwork = frameIllustration(scene, viewport, artworkSize, [clearing, ...trees.map(({ tree }) => tree), undergrowth]);
   let elapsed = 0;
   return {
     objects: [artwork],

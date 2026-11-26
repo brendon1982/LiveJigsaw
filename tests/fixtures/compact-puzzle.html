@@ -9,6 +9,7 @@
     <main id="game"></main>
     <script type="module">
       import { pieceShapeIds, puzzleSizePresets } from '../../src/domain/puzzleSizes';
+      import { puzzleSources } from '../../src/puzzles/catalog';
 
       // Keep the compact board for fixed-coordinate interaction scenarios only.
       const fixedSizes = [
@@ -19,6 +20,13 @@
       ];
       puzzleSizePresets.splice(0, puzzleSizePresets.length,
         ...fixedSizes.map((size) => Object.fromEntries(pieceShapeIds.map((shape) => [shape, size]))));
+      for (const { scene } of puzzleSources) {
+        const create = scene.prototype.create;
+        scene.prototype.create = function (data) {
+          create.call(this, data);
+          window.puzzleArtworkScene = this;
+        };
+      }
       await import('../../src/main');
     </script>
   </body>

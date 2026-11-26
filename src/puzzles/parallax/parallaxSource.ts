@@ -10,8 +10,9 @@ type ParallaxLayer = Readonly<{
   url: string;
   /** Maximum horizontal displacement as a fraction of the viewport width. */
   travel: number;
-  /** Vertical point to keep in frame when enlarging the artwork. Defaults to the bottom. */
+  /** Vertical alignment when cropping to the viewport. Defaults to the bottom. */
   anchorY?: number;
+  /** Seeded placement for layers with transparent side edges that can drift freely. */
   seededX?: Readonly<{
     /** Horizontal anchor in the source image, as a fraction of its width. */
     origin: number;
@@ -42,8 +43,6 @@ export function parallaxSource({
   key, title, theme, preview, artworkSize = standardArtworkSize, layers,
 }: ParallaxArtwork): PuzzleSource {
   const textureKey = (name: string) => `parallax-${key}-${name}`;
-  // Reserve the maximum layer travel on both sides, plus a margin for filtering.
-  const overscan = 1 + 2 * Math.max(...layers.map(({ travel }) => travel)) + 0.02;
 
   class ParallaxScene extends Phaser.Scene {
     static readonly key = key;
@@ -66,9 +65,6 @@ export function parallaxSource({
     }
 
     create({ width, height, seed, animationSpeed }: PuzzleSourceSceneData) {
-      const scale = Math.max(width / artworkSize.width, height / artworkSize.height) * overscan;
-      const displayWidth = artworkSize.width * scale;
-      const displayHeight = artworkSize.height * scale;
       const random = seededRandom(seed);
       // Assign positions front to back so new background placements preserve the foreground's seed.
       const restXFractions = [...layers].reverse().map(({ seededX }) => {
@@ -79,9 +75,10 @@ export function parallaxSource({
       const movingLayers = layers.map(({ name, travel, anchorY = 1, seededX }, index) => {
         const restX = width * restXFractions[index];
         const image = this.add.image(restX, height * anchorY, textureKey(name))
-          .setOrigin(seededX?.origin ?? 0.5, anchorY)
-          .setDisplaySize(displayWidth, displayHeight);
-        return { image, restX, travel: width * travel };
+          .setOrigin(seededX?.origin ?? 0.5, anchorY);
+        const requestedTravel = width * travel;
+        const cropRoom = Math.max(0, (image.width - width) / 2);
+        return { image, restX, travel: seededX ? requestedTravel : Math.min(requestedTravel, cropRoom) };
       });
 
       const drift = { angle: 0 };

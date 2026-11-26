@@ -11,6 +11,7 @@ const scenario = (name, run) => scenarios.push({ name, run });
 
 const settingsY = { theme: -159, firstFilter: -60, secondFilter: 2, firstTray: 98, secondTray: 160, done: 232 };
 const setupY = { size: -155, connector: -44, speed: 67, challenge: 163, action: 233 };
+const resumeActionY = 100;
 
 async function seedNextAttempt(page, seed) {
   await page.evaluate((seed) => {
@@ -511,7 +512,7 @@ scenario('live pieces scroll, reflow, and snap to the pannable board', async (t)
   await waitForText('Windmill');
   await click(460, 180);
   await waitForText('Resume');
-  await clickDialog(-6, 44);
+  await clickDialog(-6, resumeActionY);
   await seedNextAttempt(page, 1);
   await playSelection({ size: 'Classic · 8' });
   await waitForText('0 of 8 placed');
@@ -863,7 +864,8 @@ scenario('version 1 through 3 saves migrate with settings, options, progress, an
   await page.waitForFunction(() => document.querySelector('canvas').width === 1320);
   await canvas.screenshot();
   await page.mouse.click(340, 180);
-  await waitForText('1 of 8 pieces placed');
+  await waitForText('Resume');
+  await waitForText('Challenge mode: None');
 
   const future = { ...original, version: 99, futureField: { keep: true } };
   await storeSave(future);
@@ -922,7 +924,7 @@ scenario('Sequential locks tray pieces while keeping touch scrolling and saves t
   await waitForText('Windmill');
   await page.touchscreen.tap(340, 180);
   await waitForText('Resume');
-  await clickDialog(100, 44);
+  await clickDialog(100, resumeActionY);
   assert.deepEqual(await firstSlot(), nextColor);
   await moveFinger(75, 136, 1118, 348);
   await waitForText('2 of 8 placed');
@@ -1066,8 +1068,14 @@ scenario('No Guide progress resumes, resets, and records each completion', async
   await page.reload();
   await waitForText('Select a Puzzle');
   await pickWindmill();
-  await waitForText('1 of 8 pieces placed');
-  await clickDialog(-6, 44);
+  await waitForText('Resume');
+  const resumeText = await page.evaluate(() => window.paintedText);
+  for (const line of ['1 of 8 placed', 'Puzzle size: Classic', 'Connector style: None',
+    'Animation speed: Fast', 'Challenge mode: No Guide']) {
+    assert.ok(resumeText.includes(line), `The resume dialog should show ${line}`);
+  }
+  assert.ok(!resumeText.includes('1 of 8 pieces placed'));
+  await clickDialog(-6, resumeActionY);
   await waitForText('Puzzle size');
   await clickSetup(-52, setupY.size);
   await page.keyboard.press('Escape');
@@ -1080,7 +1088,7 @@ scenario('No Guide progress resumes, resets, and records each completion', async
   await pickWindmill();
   await waitForText('Resume');
   await page.evaluate(() => { window.paintedText = []; });
-  await clickDialog(100, 44);
+  await clickDialog(100, resumeActionY);
   await waitForText('1 of 8 placed');
   await waitForText('· No Guide');
   await widenTray();
@@ -1127,7 +1135,7 @@ scenario('No Guide progress resumes, resets, and records each completion', async
     'A saved attempt should take priority over completion history');
   await pickWindmill();
   await waitForText('Resume');
-  await clickDialog(-6, 44);
+  await clickDialog(-6, resumeActionY);
   await playSelection();
   await waitForText('0 of 8 placed');
   assert.equal(await getAttempt(), undefined);
@@ -1212,7 +1220,7 @@ scenario('picker tag and completion filters combine and refresh after play', asy
   assert.deepEqual(await readSave(page), original);
   await pickFirst(660);
   await waitForText('Lighthouse');
-  await waitForText('1 of 8 pieces placed');
+  await waitForText('Resume');
   await page.keyboard.press('Escape');
 
   await openFilters();
@@ -1264,9 +1272,9 @@ scenario('picker tag and completion filters combine and refresh after play', asy
   await scrollPickerTo(page, 200);
   assert.ok(!topOfResults.equals(await canvas.screenshot()), 'Three results should scroll across two rows');
   await pickFirst();
-  await waitForText('7 of 8 pieces placed');
+  await waitForText('Resume');
   await page.evaluate(() => { window.paintedText = []; });
-  await clickDialog(100, 44); // Resume the unfinished first attempt.
+  await clickDialog(100, resumeActionY); // Resume the unfinished first attempt.
   await waitForText('7 of 8 placed');
   await drag(146, 420, 552, 420);
   await drag(75, 136, 734, 348);
@@ -1591,14 +1599,14 @@ scenario('tablet touch scrolls, resizes, zooms, cancels, and places pieces', asy
   await page.touchscreen.tap(395, 180);
   await waitForText('Resume');
   await page.evaluate(() => { window.paintedText = []; });
-  await clickDialog(100, 44);
+  await clickDialog(100, resumeActionY);
   await waitForText('1 of 8 placed');
   await page.evaluate(() => { window.paintedText = []; });
   await page.touchscreen.tap(99, 43);
   await waitForText('Windmill');
   await page.touchscreen.tap(395, 180);
   await waitForText('Resume');
-  await clickDialog(-6, 44);
+  await clickDialog(-6, resumeActionY);
   await playSelection({ size: 'Expert · 128', connectorStyle: 'Rounded' });
   await waitForText('0 of 128 placed');
   const expertTray = await canvas.screenshot();
@@ -1754,7 +1762,7 @@ scenario('tray settings move the live tray and rotate touch gestures with it', a
   await page.touchscreen.tap(522, 180);
   await waitForText('Resume');
   await page.evaluate(() => { window.paintedText = []; });
-  await clickDialog(100, 44);
+  await clickDialog(100, resumeActionY);
   await waitForText('1 of 8 placed');
   await assertSide('Right');
   assert.deepEqual(await sample(725, 86), trayColor, 'The saved tray width should return after reopening the puzzle');

@@ -77,9 +77,8 @@ export class SelectPuzzleScene extends Phaser.Scene {
         return;
       }
 
-      const { columns, rows } = progress.setup.size;
       openDialog();
-      showResumePuzzle(this, source, progress.placedPieceIds.length, columns * rows, (choice) => {
+      showResumePuzzle(this, source, progress, (choice) => {
         closeDialog();
         if (choice === 'resume') play({ source, ...progress });
         if (choice === 'reset') openSetup(source);

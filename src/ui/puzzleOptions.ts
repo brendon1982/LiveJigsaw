@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { challengeModes, type ChallengeMode } from '../domain/challengeModes';
 import { connectorStyles, type ConnectorStyleId } from '../domain/connectorStyles';
 import { availablePuzzleSizes, type PuzzleSize } from '../domain/puzzleSizes';
-import type { PuzzleOptions } from '../persistence/GameSave';
+import type { PuzzleOptions, PuzzleProgress } from '../persistence/GameSave';
 import { puzzleAnimationSpeeds, type PuzzleSource } from '../puzzles/PuzzleSource';
 import { makeButtonLabel, makeOptionTile, type UIScene } from './button';
 import { palette } from './theme';
@@ -85,14 +85,24 @@ export function showPuzzleOptions(
 export function showResumePuzzle(
   scene: UIScene,
   source: PuzzleSource,
-  placedCount: number,
-  pieceCount: number,
+  progress: PuzzleProgress,
   onClose: (choice: 'resume' | 'reset' | 'cancel') => void,
 ) {
-  const content = scene.rexUI.add.sizer({ orientation: 'y' });
-  content.add(scene.add.text(0, 0, `${placedCount} of ${pieceCount} pieces placed`, {
-    fontFamily: 'system-ui', fontSize: '17px', color: palette.mutedText,
-  }).setDepth(depth.controls), { align: 'left' });
+  const { size, connectorStyle, animationSpeed, challengeMode } = progress.setup;
+  const pieceCount = size.columns * size.rows;
+  const lines = [
+    `${progress.placedPieceIds.length} of ${pieceCount} placed`,
+    `Puzzle size: ${size.label}`,
+    `Connector style: ${connectorStyles[connectorStyle].label}`,
+    `Animation speed: ${animationSpeed}`,
+    `Challenge mode: ${challengeModes[challengeMode].label}`,
+  ];
+  const content = scene.rexUI.add.sizer({ orientation: 'y', space: { item: 4 } });
+  for (const line of lines) {
+    content.add(scene.add.text(0, 0, line, {
+      fontFamily: 'system-ui', fontSize: '17px', color: palette.mutedText,
+    }).setFixedSize(0, 24).setDepth(depth.controls), { align: 'left' });
+  }
   const actions = [
     makeButtonLabel(scene, 'Cancel', 92, 52),
     makeButtonLabel(scene, 'Reset', 92, 52),

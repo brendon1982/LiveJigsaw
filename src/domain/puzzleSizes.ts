@@ -11,14 +11,15 @@ export type PuzzleSize = Size & Readonly<{
 }>;
 
 export const pieceShapes = {
-  square: { width: 1, height: 1 },
-  'vertical-long': { width: 4, height: 7 },
-  'horizontal-long': { width: 7, height: 4 },
   'vertical-short': { width: 4, height: 5 },
   'horizontal-short': { width: 5, height: 4 },
+  'vertical-long': { width: 4, height: 7 },
+  'horizontal-long': { width: 7, height: 4 },
+  square: { width: 1, height: 1 },
 } as const satisfies Record<string, Size>;
 export type PieceShape = keyof typeof pieceShapes;
 export const pieceShapeIds = Object.keys(pieceShapes) as PieceShape[];
+export const defaultPieceShape: PieceShape = 'vertical-short';
 
 type PieceGrid = readonly [columns: number, rows: number, cellScale: number];
 type PuzzleSizePreset = Readonly<Record<PieceShape, PuzzleSize>>;

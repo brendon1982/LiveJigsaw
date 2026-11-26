@@ -161,7 +161,7 @@ async function openPuzzle(t, options, path = '/', initPage) {
       await clickSetup(x, setupY.size);
     }
     if (pieceShape) {
-      const index = ['square', 'vertical-long', 'horizontal-long', 'vertical-short', 'horizontal-short'].indexOf(pieceShape);
+      const index = ['vertical-short', 'horizontal-short', 'vertical-long', 'horizontal-long', 'square'].indexOf(pieceShape);
       assert.ok(index >= 0);
       await clickSetup(-169.6 + 84.8 * index, setupY.shape);
     }
@@ -306,6 +306,7 @@ scenario('the board starts fitted to the space left by the saved tray width', as
   await page.mouse.click(340, 180);
   await playSelection({ size: 420 });
   await waitForText('0 of 420 placed');
+  assert.equal((await readSave(page)).recentOptions.pieceShape, 'vertical-short');
 
   const screenshot = await canvas.screenshot();
   const panelBackground = [32, 46, 42, 255];
@@ -1364,7 +1365,7 @@ scenario('No Guide progress resumes, resets, and records each completion', async
   await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   assert.deepEqual(await getAttempt(), firstSave);
   assert.deepEqual((await readSave(page)).recentOptions, {
-    pieceCount: 8, pieceShape: 'square', connectorStyle: 'none', animationSpeed: 'Fast', challengeMode: 'no-guide', pieceRotation: false,
+    pieceCount: 8, pieceShape: 'vertical-short', connectorStyle: 'none', animationSpeed: 'Fast', challengeMode: 'no-guide', pieceRotation: false,
   });
   await page.evaluate(() => { window.paintedText = []; });
   await pickWindmill();
@@ -1732,7 +1733,7 @@ scenario('the picker scrolls past two cards and clips previews', async (t) => {
     assert.deepEqual(await setupPixel(beforeSelection, -182, setupY.connector + 20), selectedFill);
     const iconFill = [101, 135, 122, 255];
     assert.deepEqual(await setupPixel(beforeSelection, -169.6, setupY.size - 12), selectedFill, 'The count tile should have no illustration');
-    assert.deepEqual(await setupPixel(beforeSelection, -169.6, setupY.shape), iconFill, 'The square illustration should draw above its tile');
+    assert.deepEqual(await setupPixel(beforeSelection, -169.6, setupY.shape), iconFill, 'The first shape illustration should draw above its tile');
     assert.deepEqual(await setupPixel(beforeSelection, 156, setupY.connector + 5), iconFill, 'The connector illustration should draw above its tile');
     await clickSetup(-52, setupY.connector);
     const afterSelection = await canvas.screenshot();
@@ -1773,7 +1774,7 @@ scenario('the picker scrolls past two cards and clips previews', async (t) => {
     await playSelection();
     await waitForText('0 of 64 placed');
     assert.deepEqual((await readSave(page)).recentOptions, {
-      pieceCount: 64, pieceShape: 'square', connectorStyle: 'none', animationSpeed: 'Fast', challengeMode: 'none', pieceRotation: false,
+      pieceCount: 64, pieceShape: 'vertical-short', connectorStyle: 'none', animationSpeed: 'Fast', challengeMode: 'none', pieceRotation: false,
     });
 
     await page.evaluate(() => { window.paintedText = []; });
@@ -1787,7 +1788,7 @@ scenario('the picker scrolls past two cards and clips previews', async (t) => {
     await waitForText('0 of 64 placed');
     await page.waitForFunction(() => window.sourceAnimationSpeed === 'Fast');
     assert.deepEqual((await readSave(page)).recentOptions, {
-      pieceCount: 64, pieceShape: 'square', connectorStyle: 'none', animationSpeed: 'Fast', challengeMode: 'none', pieceRotation: false,
+      pieceCount: 64, pieceShape: 'vertical-short', connectorStyle: 'none', animationSpeed: 'Fast', challengeMode: 'none', pieceRotation: false,
     });
     assert.deepEqual(errors, []);
   });

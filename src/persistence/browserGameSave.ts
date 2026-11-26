@@ -1,6 +1,6 @@
 import { challengeModes, type ChallengeMode } from '../domain/challengeModes';
 import { connectorStyles, type ConnectorStyleId } from '../domain/connectorStyles';
-import { createPuzzle, getPieceCount, pieceShapeIds, puzzleSizePresets, type PuzzleSize } from '../domain/puzzleSizes';
+import { createPuzzle, defaultPieceShape, getPieceCount, pieceShapeIds, puzzleSizePresets, type PuzzleSize } from '../domain/puzzleSizes';
 import { puzzleAnimationSpeeds, type PuzzleAnimationSpeed } from '../puzzles/PuzzleSource';
 import {
   defaultTrayFractions, trayPositions,
@@ -125,7 +125,7 @@ function isChallengeMode(value: unknown): value is ChallengeMode {
 function readOptions(value: unknown): PuzzleOptions | undefined {
   if (!isRecord(value)) return;
   const { pieceCount, connectorStyle, animationSpeed, challengeMode, pieceRotation } = value;
-  const pieceShape = pieceShapeIds.find((shape) => shape === value.pieceShape) ?? 'square';
+  const pieceShape = pieceShapeIds.find((shape) => shape === value.pieceShape) ?? defaultPieceShape;
   if (isConnectorStyle(connectorStyle) && isAnimationSpeed(animationSpeed) && isChallengeMode(challengeMode)
     && typeof pieceRotation === 'boolean') {
     return {

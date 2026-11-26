@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { challengeModes, type ChallengeMode } from '../domain/challengeModes';
 import { connectorStyles, type ConnectorStyleId } from '../domain/connectorStyles';
 import {
-  availablePuzzleSizes, getPieceCount, pieceShapeIds, pieceShapes, type PieceShape, type PuzzleSize,
+  availablePuzzleSizes, defaultPieceShape, getPieceCount, pieceShapeIds, pieceShapes, type PieceShape, type PuzzleSize,
 } from '../domain/puzzleSizes';
 import type { PuzzleOptions, PuzzleProgress } from '../persistence/GameSave';
 import { puzzleAnimationSpeeds, type PuzzleSource } from '../puzzles/PuzzleSource';
@@ -45,7 +45,7 @@ export function showPuzzleOptions(
     name: shape,
     height: 52,
     drawIcon: () => drawPieceShapeIcon(scene, shape),
-  })), defaults?.pieceShape ?? 'square', fiveOptionWidth);
+  })), defaults?.pieceShape ?? defaultPieceShape, fiveOptionWidth);
   const styleButtons = makeRadioButtons(scene, styles.map((style) => ({
     name: style,
     drawIcon: () => drawConnectorIcon(scene, style),

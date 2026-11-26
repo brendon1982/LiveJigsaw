@@ -28,6 +28,19 @@ Run `pnpm atlas:prepare input.png input.xml path/to/output.xml` to prepare a Pha
 
 Check in the prepared PNG and XML alongside the puzzle that uses them. You can run the tool on an already prepared sheet because it reads each frame from the rectangles in the XML.
 
+### Deploying from Windows to Linux
+
+Install `rsync` in a WSL Linux distribution and on the server (on Ubuntu or Debian, `sudo apt install rsync`). From that WSL distribution, connect with `ssh paperriver@your-server` once and verify the server's host-key fingerprint before accepting it. The script uses WSL's SSH config and known hosts, not Windows' OpenSSH settings. For a custom port, configure a host alias in WSL's `~/.ssh/config` and pass that alias as `-SshTarget`. Use `-Distribution Ubuntu` if Ubuntu isn't your default WSL distribution.
+
+The script defaults to account `paperriver` and directory `/home/www/livejigsaw`. Make sure this **dedicated game directory** is writable by the account, replace `your-server` with the hostname or IP address, and run from an interactive PowerShell window:
+
+```powershell
+.\scripts\deploy.ps1 -SshTarget your-server
+.\scripts\deploy.ps1 -SshTarget your-server -Apply
+```
+
+Both commands build the site locally, then SSH prompts for your password if the server allows password authentication. The script does not store the password. The first command previews changes without writing to the server; `*deleting` lines show which remote entries would be removed. The second checks again, uploads new or changed files by checksum, and removes entries that aren't in `dist`. To override the defaults, pass `-SshTarget user@host` or `-RemoteDirectory /path/to/game`. **Don't target a shared web root or keep server-only files in this directory.** Serve the game at the URL root of its site.
+
 ## Reading the code
 
 - [Domain](src/domain/Puzzle.ts) owns the board, piece outlines, drop rules, and completion.

@@ -51,6 +51,16 @@ const pieceDragSlope = Math.tan(70 * Math.PI / 180);
 const trayScrollThreshold = 20;
 const traySlideDuration = 560;
 const boardDirection: Record<TraySide, number> = { Left: 1, Right: -1, Top: 1, Bottom: -1 };
+const scissors = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
+  <defs><g id="scissors">
+    <path d="M4 4l12 12M20 4 8 16"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="18" r="3"/>
+  </g></defs>
+  <g fill="none" stroke-linecap="round">
+    <use href="#scissors" stroke="white" stroke-width="4"/>
+    <use href="#scissors" stroke="#202628" stroke-width="2"/>
+  </g>
+</svg>`;
+const breakCursor = `url("data:image/svg+xml,${encodeURIComponent(scissors)}") 12 12, crosshair`;
 
 function measurePinch(a: Point, b: Point) {
   return {
@@ -294,12 +304,20 @@ export class PuzzleBoardView {
     this.clearLiftShadows();
     this.gesture = undefined;
     this.pinch = undefined;
-    this.scene.input.setDefaultCursor('default');
+    this.updateIdleCursor();
   }
 
   private setBreakArmed(armed: boolean) {
+    if (this.breakArmed === armed) return;
     this.breakArmed = armed;
     this.breakButton.setData('primary', armed);
+    this.updateIdleCursor();
+  }
+
+  private updateIdleCursor(pointer = this.scene.input.mousePointer) {
+    const { input } = this.scene;
+    const cursor = this.breakArmed && this.board.contains(pointer) ? breakCursor : 'default';
+    if (input.manager.defaultCursor !== cursor) input.setDefaultCursor(cursor);
   }
 
   private updateBreakButton() {
@@ -496,6 +514,10 @@ export class PuzzleBoardView {
   };
 
   private readonly moveGesture = (pointer: Phaser.Input.Pointer) => {
+    const gesture = this.gesture;
+    if (this.breakArmed && !pointer.wasTouch && (!gesture || gesture.kind === 'break-press')) {
+      this.updateIdleCursor(pointer);
+    }
     const pinch = this.pinch;
     if (pinch) {
       if (pinch.fingers.includes(pointer)) {
@@ -506,7 +528,6 @@ export class PuzzleBoardView {
       }
       return;
     }
-    const gesture = this.gesture;
     if (!gesture || gesture.pointer !== pointer) return;
     if (gesture.kind === 'piece-press') {
       this.movePiecePress(pointer, gesture);
@@ -568,7 +589,7 @@ export class PuzzleBoardView {
   private finishGesture(pointer: Phaser.Input.Pointer, gesture: Gesture) {
     if (gesture.kind === 'pan' || gesture.kind === 'scroll') this.moveGesture(pointer);
     this.gesture = undefined;
-    this.scene.input.setDefaultCursor('default');
+    this.updateIdleCursor();
     if (gesture.kind === 'piece-press' || gesture.kind === 'break-press') {
       const tapped = gesture.canTap && Math.hypot(pointer.x - gesture.start.x, pointer.y - gesture.start.y) < tapSlop
         && this.pieceContactAt(pointer)?.entry === gesture.entry;

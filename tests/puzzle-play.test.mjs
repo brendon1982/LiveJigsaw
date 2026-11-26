@@ -511,7 +511,11 @@ scenario('a parking-only 420-piece save resumes across tablet orientations and r
   await waitForText('0 of 420 placed');
   await page.touchscreen.tap(522, 180);
   await waitForText('Resume');
+  await page.evaluate(() => { window.paintedText = []; });
   await clickDialog(100, resumeActionY);
+  await waitForText('0 of 420 placed');
+  const header = await page.evaluate(() => window.paintedText);
+  assert.ok(!header.includes('· None'), 'The resumed play header should hide the None challenge label');
   const resumed = await playLayout(page);
   assert.deepEqual(resumed.parked, parked);
   assert.deepEqual(resumed.tray.map(({ id }) => id), initial.tray.slice(1).map(({ id }) => id));
@@ -1640,7 +1644,7 @@ scenario('parking joins right-click drops, restores cancelled touch drags and re
 });
 
 scenario('break piece off targets the topmost member and splits a bridge on touch or mouse input', async (t) => {
-  const { page, waitForText, errors, playSelection } = await openCompactPuzzle(t, {
+  const { page, canvas, waitForText, errors, playSelection } = await openCompactPuzzle(t, {
     viewport: { width: 1320, height: 780 }, hasTouch: true, isMobile: true,
   });
   const { dispatch, moveFinger } = await touchController(page);
@@ -1689,6 +1693,7 @@ scenario('break piece off targets the topmost member and splits a bridge on touc
   assert.equal(joined.breakButton.y - joined.board.y, joined.breakButton.x - joined.board.x);
   const button = buttonCenter(joined.breakButton);
   const bridgePoint = screenPiece(joined, bridge);
+  const cursor = () => canvas.evaluate((element) => getComputedStyle(element).cursor);
 
   await clickAt(await trayEntry(cover), 'right');
   await clickAt(bridgePoint);
@@ -1696,12 +1701,26 @@ scenario('break piece off targets the topmost member and splits a bridge on touc
   assert.equal(overlapped.parked.at(-1).id, cover);
   await clickAt(button);
   assert.equal((await layout()).breakButton.armed, true);
+  const expectedScissors = /^url\("data:image\/svg\+xml,.*\) 12 12, crosshair$/;
+  const blankBoard = { x: joined.board.x + joined.board.width - 10, y: joined.board.y + joined.board.height - 10 };
+  await page.mouse.move(blankBoard.x, blankBoard.y);
+  assert.match(await cursor(), expectedScissors, 'The armed tool shows scissors even over empty board space');
+  await page.mouse.down();
+  assert.equal(await cursor(), 'grabbing');
+  await page.mouse.up();
+  assert.match(await cursor(), expectedScissors, 'Releasing a pan restores scissors');
+  await page.mouse.move(joined.divider.x, joined.divider.y);
+  assert.equal(await cursor(), 'ew-resize');
+  await page.mouse.move(joined.tray[0].x, joined.tray[0].y);
+  assert.equal(await cursor(), 'default');
   await clickAt(bridgePoint);
   const masked = await layout();
   assert.deepEqual(masked.parked, overlapped.parked, 'A topmost singleton blocks the joined member beneath');
   assert.equal(masked.breakButton.armed, true);
   await clickAt(button);
   assert.equal((await layout()).breakButton.armed, false);
+  await page.mouse.move(blankBoard.x, blankBoard.y);
+  assert.equal(await cursor(), 'default');
 
   const pivot = screenPiece(joined, left);
   await clickAt(pivot);
@@ -1780,6 +1799,7 @@ scenario('break piece off targets the topmost member and splits a bridge on touc
   await clickAt(endPoint);
   const singles = await waitForDetachedPiece(end);
   assert.equal(singles.breakButton.visible, false);
+  assert.equal(await cursor(), 'default', 'Detaching a piece clears the scissors cursor');
   assert.deepEqual(singles.parked.slice(0, -1), split.parked.slice(0, 2));
   const detachedEnd = singles.parked.at(-1);
   assert.deepEqual(detachedEnd, { ...joined.parked[3], x: detachedEnd.x }, 'A mouse click detaches without rotating');

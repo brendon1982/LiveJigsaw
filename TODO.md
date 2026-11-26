@@ -28,7 +28,7 @@
 
 - [x] **High:** Skip rendering tray pieces fully outside the tray viewport. Camera clipping alone still runs each piece's WebGL mask filter, even with up to 128 pieces in the tray. Keep partially visible and lifted pieces visible.
 - [ ] **Medium:** Skip live texture captures when the source has not changed, such as during parallax pauses. If Hex Coast remains costly, cache static scenery without changing draw order.
-- [ ] **Medium:** Reuse tray slots or compute their positions directly instead of destroying and recreating all slot zones after a placement or when the tray crosses a row or column threshold.
+- [x] **Medium:** Compute tray slot positions directly instead of destroying and recreating slot zones after a placement or when the tray crosses a row or column threshold.
 - [ ] **Medium:** Update only dirty regions of the board mask if full-canvas rasterization and upload cause drop latency. Preserve seamless joins between adjacent pieces.
 - [ ] **Low:** Keep unrelated completion history off the synchronous progress-save path without delaying durable saves of placements.
 - [ ] **Low:** Cache inline header measurements so stacked labels do not resize and rerasterize twice after each placement.

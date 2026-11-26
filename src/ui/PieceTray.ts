@@ -1,5 +1,4 @@
 import Phaser from 'phaser';
-import type GridSizer from 'phaser4-rex-plugins/templates/ui/gridsizer/GridSizer.js';
 import type ScrollablePanel from 'phaser4-rex-plugins/templates/ui/scrollablepanel/ScrollablePanel.js';
 import type { Point, Size } from '../domain/geometry';
 import type { UIScene } from './button';
@@ -13,12 +12,11 @@ export class PieceTray {
   readonly layer: Phaser.GameObjects.Layer;
   readonly pieceScale: number;
   readonly camera: Phaser.Cameras.Scene2D.Camera;
-  private grid: GridSizer;
+  private content: Phaser.GameObjects.Zone;
   private panel: ScrollablePanel;
   private readonly cellWidth: number;
   private readonly cellHeight: number;
-  private readonly slots: Phaser.GameObjects.Zone[] = [];
-  private crossAxisSlots = 0;
+  private crossAxisSlots = 1;
   private clip = new Phaser.Geom.Rectangle();
   private entries: PuzzlePieceView[];
   private lifted?: PuzzlePieceView;
@@ -47,8 +45,11 @@ export class PieceTray {
     this.camera = scene.cameras.add().setName('Piece tray');
     this.camera.inputEnabled = false;
 
-    ({ grid: this.grid, panel: this.panel } = this.createPanel());
-    for (const entry of entries) this.returnPiece(entry);
+    ({ content: this.content, panel: this.panel } = this.createPanel());
+    for (const entry of entries) {
+      entry.addTo(this.layer);
+      entry.setScale(this.pieceScale);
+    }
     scene.events.on(Phaser.Scenes.Events.POST_UPDATE, this.syncScroll);
   }
 
@@ -60,19 +61,18 @@ export class PieceTray {
     if (axis === this.axis) return;
     this.panel.destroy();
     this.axis = axis;
-    this.crossAxisSlots = 0;
-    ({ grid: this.grid, panel: this.panel } = this.createPanel());
+    ({ content: this.content, panel: this.panel } = this.createPanel());
   }
 
   private createPanel() {
     const { scene } = this;
     const vertical = this.axis === 'y';
-    const grid = scene.rexUI.add.gridSizer({ column: 1, row: 1 });
+    const content = scene.add.zone(0, 0, 0, 0).setOrigin(0);
     const track = scene.rexUI.add.roundRectangle(0, 0, vertical ? 6 : 10, vertical ? 10 : 6, 3);
     const thumb = scene.rexUI.add.roundRectangle(0, 0, vertical ? 8 : 36, vertical ? 36 : 8, 4);
     const panel = scene.rexUI.add.scrollablePanel({
       scrollMode: this.axis,
-      panel: { child: grid, mask: false },
+      panel: { child: content, mask: false },
       scroller: false,
       clampChildOY: true,
       slider: {
@@ -88,15 +88,19 @@ export class PieceTray {
       thumb.setFillStyle(colors.scrollbarThumb);
     });
 
-    return { grid, panel };
+    return { content, panel };
   }
 
   layout(bounds: Phaser.Geom.Rectangle) {
     const vertical = this.axis === 'y';
     const crossAxisSize = vertical ? bounds.width : bounds.height;
     const slotSize = vertical ? this.cellWidth : this.cellHeight;
-    const crossAxisSlots = Math.max(1, Math.floor((crossAxisSize - scrollbarSpace) / slotSize));
-    if (crossAxisSlots !== this.crossAxisSlots) this.rebuildGrid(crossAxisSlots);
+    this.crossAxisSlots = Math.max(1, Math.floor((crossAxisSize - scrollbarSpace) / slotSize));
+    const occupiedCrossSlots = Math.min(this.crossAxisSlots, this.entries.length);
+    const scrollAxisSlots = Math.ceil(this.entries.length / this.crossAxisSlots);
+    const columns = vertical ? occupiedCrossSlots : scrollAxisSlots;
+    const rows = vertical ? scrollAxisSlots : occupiedCrossSlots;
+    this.content.setSize(columns * this.cellWidth, rows * this.cellHeight);
 
     // RexUI uses childOY for the active axis in either single-axis mode.
     const offset = this.panel.childOY;
@@ -138,7 +142,6 @@ export class PieceTray {
   remove(entry: PuzzlePieceView, bounds: Phaser.Geom.Rectangle) {
     this.lifted = undefined;
     this.entries = this.entries.filter((candidate) => candidate !== entry);
-    this.rebuildGrid(this.crossAxisSlots);
     this.layout(bounds);
   }
 
@@ -152,33 +155,21 @@ export class PieceTray {
     this.scene.events.off(Phaser.Scenes.Events.POST_UPDATE, this.syncScroll);
   }
 
-  private rebuildGrid(crossAxisSlots: number) {
-    this.crossAxisSlots = crossAxisSlots;
-    const vertical = this.axis === 'y';
-    const scrollAxisSlots = Math.max(1, Math.ceil(this.entries.length / crossAxisSlots));
-    const columns = vertical ? crossAxisSlots : scrollAxisSlots;
-    const rows = vertical ? scrollAxisSlots : crossAxisSlots;
-    this.grid.removeAll(true).resetGrid(columns, rows);
-    this.slots.length = 0;
-    for (const [index] of this.entries.entries()) {
-      const slot = this.scene.add.zone(0, 0, this.cellWidth, this.cellHeight);
-      this.slots.push(slot);
-      const crossIndex = index % crossAxisSlots;
-      const scrollIndex = Math.floor(index / crossAxisSlots);
-      this.grid.add(slot, vertical ? crossIndex : scrollIndex, vertical ? scrollIndex : crossIndex);
-    }
-  }
-
   private readonly syncScroll = () => {
     if (this.panel.childOY !== this.lastOffset) this.syncPositions();
   };
 
   private syncPositions() {
     this.lastOffset = this.panel.childOY;
-    for (const [index, slot] of this.slots.entries()) {
-      const entry = this.entries[index];
+    const vertical = this.axis === 'y';
+    const { x: left, y: top } = this.content;
+    for (const [index, entry] of this.entries.entries()) {
       if (entry === this.lifted) continue;
-      entry.moveTo(slot.x, slot.y);
+      const crossIndex = index % this.crossAxisSlots;
+      const scrollIndex = Math.floor(index / this.crossAxisSlots);
+      const column = vertical ? crossIndex : scrollIndex;
+      const row = vertical ? scrollIndex : crossIndex;
+      entry.moveTo(left + (column + 0.5) * this.cellWidth, top + (row + 0.5) * this.cellHeight);
       entry.setVisible(entry.intersects(this.clip));
     }
   }

@@ -4,27 +4,30 @@ import { availablePuzzleSizes, createPuzzle, getPieceCount, puzzleSizePresets } 
 
 test('all five counts offer all five shapes at the shared catalog limit', () => {
   const presets = availablePuzzleSizes({ width: 1920, height: 1020 });
-  assert.deepEqual(presets.map(({ square }) => getPieceCount(square)), [32, 64, 128, 288, 420]);
-  const proportions = {
-    square: [1, 1], 'vertical-long': [4, 7], 'horizontal-long': [7, 4],
-    'vertical-short': [4, 5], 'horizontal-short': [5, 4],
+  assert.deepEqual(presets.map(({ square }) => getPieceCount(square)), [40, 72, 144, 300, 420]);
+  const aspectRanges = {
+    square: [1, 1], 'vertical-long': [1 / 1.9, 1 / 1.6], 'horizontal-long': [1.6, 1.9],
+    'vertical-short': [1 / 1.35, 1 / 1.15], 'horizontal-short': [1.15, 1.35],
   };
+  const areaTargets = { 40: 18500, 72: 9100, 144: 4550, 300: 4550, 420: 4150 };
   for (const preset of presets) {
-    assert.deepEqual(Object.keys(preset).sort(), Object.keys(proportions).sort());
-    for (const [shape, [widthRatio, heightRatio]] of Object.entries(proportions)) {
+    const count = getPieceCount(preset.square);
+    assert.deepEqual(Object.keys(preset).sort(), Object.keys(aspectRanges).sort());
+    for (const [shape, [minimum, maximum]] of Object.entries(aspectRanges)) {
       const puzzle = createPuzzle(preset[shape]);
       const { width, height } = puzzle.board.cellSize;
-      assert.equal(puzzle.pieces.length, getPieceCount(preset.square));
-      assert.equal(width * heightRatio, height * widthRatio);
+      assert.equal(puzzle.pieces.length, count);
       assert.ok(Number.isInteger(width) && Number.isInteger(height));
+      assert.ok(width / height >= minimum && width / height <= maximum, `${count} ${shape} proportions`);
+      assert.ok(Math.abs(width * height / areaTargets[count] - 1) <= 0.04, `${count} ${shape} area`);
     }
   }
 });
 
 test('a count is offered only when all shapes fit both viewport limits', () => {
-  assert.deepEqual(availablePuzzleSizes({ width: 1848, height: 1008 }), puzzleSizePresets);
-  assert.deepEqual(availablePuzzleSizes({ width: 1847, height: 1008 }), puzzleSizePresets.slice(0, 4));
-  assert.deepEqual(availablePuzzleSizes({ width: 1848, height: 1007 }), puzzleSizePresets.slice(0, 4));
+  assert.deepEqual(availablePuzzleSizes({ width: 1904, height: 966 }), puzzleSizePresets);
+  assert.deepEqual(availablePuzzleSizes({ width: 1903, height: 966 }), puzzleSizePresets.slice(0, 4));
+  assert.deepEqual(availablePuzzleSizes({ width: 1904, height: 965 }), puzzleSizePresets.slice(0, 4));
   assert.deepEqual(availablePuzzleSizes({ width: 1024, height: 288 }), []);
 });
 

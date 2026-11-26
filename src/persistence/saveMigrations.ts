@@ -1,6 +1,8 @@
 type DocumentFields = Record<string, unknown>;
 type Migration = (document: DocumentFields) => DocumentFields;
 
+const version7PieceCounts = new Map([[32, 40], [64, 72], [128, 144], [288, 300]]);
+
 const migrations: readonly Migration[] = [
   // Version 0 represents the original standalone browser settings.
   ({ theme, filter }) => ({ settings: { theme, filter }, progress: {}, history: {} }),
@@ -41,6 +43,12 @@ const migrations: readonly Migration[] = [
     if (!isRecord(document.recentOptions)) return document;
     const { pieceCount, ...options } = document.recentOptions;
     return { ...document, recentOptions: { ...options, pieceCount: pieceCount === 392 ? 420 : pieceCount, pieceShape: 'square' } };
+  },
+  (document) => {
+    const { recentOptions } = document;
+    if (!isRecord(recentOptions) || typeof recentOptions.pieceCount !== 'number') return document;
+    const pieceCount = version7PieceCounts.get(recentOptions.pieceCount);
+    return pieceCount === undefined ? document : { ...document, recentOptions: { ...recentOptions, pieceCount } };
   },
 ];
 

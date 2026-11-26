@@ -21,38 +21,40 @@ export type PieceShape = keyof typeof pieceShapes;
 export const pieceShapeIds = Object.keys(pieceShapes) as PieceShape[];
 export const defaultPieceShape: PieceShape = 'vertical-short';
 
-type PieceGrid = readonly [columns: number, rows: number, cellScale: number];
+type PieceGrid = readonly [columns: number, rows: number, cellWidth: number, cellHeight: number];
 type PuzzleSizePreset = Readonly<Record<PieceShape, PuzzleSize>>;
 
 export const puzzleSizePresets: readonly PuzzleSizePreset[] = [
   definePreset(28, {
-    square: [8, 4, 136], 'vertical-long': [8, 4, 26], 'horizontal-long': [8, 4, 26],
-    'vertical-short': [8, 4, 30], 'horizontal-short': [8, 4, 30],
+    'vertical-short': [10, 4, 117, 156], 'horizontal-short': [8, 5, 150, 128],
+    'vertical-long': [10, 4, 108, 173], 'horizontal-long': [8, 5, 173, 108],
+    square: [8, 5, 136, 136],
   }),
   definePreset(18, {
-    square: [8, 8, 96], 'vertical-long': [16, 4, 18], 'horizontal-long': [8, 8, 18],
-    'vertical-short': [16, 4, 21], 'horizontal-short': [8, 8, 21],
+    'vertical-short': [12, 6, 90, 104], 'horizontal-short': [12, 6, 104, 90],
+    'vertical-long': [18, 4, 70, 133], 'horizontal-long': [9, 8, 125, 75],
+    square: [12, 6, 95, 95],
   }),
   definePreset(16, {
-    square: [16, 8, 68], 'vertical-long': [16, 8, 13], 'horizontal-long': [16, 8, 13],
-    'vertical-short': [16, 8, 15], 'horizontal-short': [16, 8, 15],
+    'vertical-short': [18, 8, 61, 73], 'horizontal-short': [16, 9, 73, 63],
+    'vertical-long': [24, 6, 49, 93], 'horizontal-long': [12, 12, 92, 49],
+    square: [16, 9, 67, 67],
   }),
   definePreset(16, {
-    square: [24, 12, 68], 'vertical-long': [32, 9, 13], 'horizontal-long': [18, 16, 13],
-    'vertical-short': [24, 12, 15], 'horizontal-short': [18, 16, 15],
+    'vertical-short': [25, 12, 63, 73], 'horizontal-short': [20, 15, 78, 58],
+    'vertical-long': [30, 10, 53, 85], 'horizontal-long': [20, 15, 85, 53],
+    square: [25, 12, 67, 67],
   }),
   definePreset(16, {
-    square: [28, 15, 66], 'vertical-long': [35, 12, 12], 'horizontal-long': [21, 20, 12],
-    'vertical-short': [30, 14, 14], 'horizontal-short': [28, 15, 13],
+    'vertical-short': [30, 14, 60, 69], 'horizontal-short': [28, 15, 68, 59],
+    'vertical-long': [35, 12, 50, 80], 'horizontal-long': [21, 20, 86, 48],
+    square: [28, 15, 64, 64],
   }),
 ];
 
 function definePreset(snapTolerance: number, grids: Record<PieceShape, PieceGrid>): PuzzleSizePreset {
   return Object.fromEntries(pieceShapeIds.map((shape) => {
-    const [columns, rows, cellScale] = grids[shape];
-    const proportions = pieceShapes[shape];
-    const cellWidth = proportions.width * cellScale;
-    const cellHeight = proportions.height * cellScale;
+    const [columns, rows, cellWidth, cellHeight] = grids[shape];
     return [shape, { width: columns * cellWidth, height: rows * cellHeight, columns, rows, snapTolerance }];
   })) as PuzzleSizePreset;
 }

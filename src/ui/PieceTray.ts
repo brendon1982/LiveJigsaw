@@ -125,6 +125,7 @@ export class PieceTray {
 
   lift(entry: PuzzlePieceView) {
     this.lifted = entry;
+    entry.setVisible(true);
   }
 
   returnPiece(entry: PuzzlePieceView) {
@@ -176,7 +177,9 @@ export class PieceTray {
     this.lastOffset = this.panel.childOY;
     for (const [index, slot] of this.slots.entries()) {
       const entry = this.entries[index];
-      if (entry !== this.lifted) entry.moveTo(slot.x, slot.y);
+      if (entry === this.lifted) continue;
+      entry.moveTo(slot.x, slot.y);
+      entry.setVisible(entry.intersects(this.clip));
     }
   }
 }

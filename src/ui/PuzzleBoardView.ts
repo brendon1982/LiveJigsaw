@@ -394,7 +394,7 @@ export class PuzzleBoardView {
     }
 
     this.board.addPieces([piece]);
-    entry.hide();
+    entry.setVisible(false);
     this.tray.remove(entry, this.trayBounds);
     this.updateTrayAvailability();
     this.onPlacement();

@@ -113,8 +113,9 @@ async function openGamePage(t, options) {
   return { page, canvas, waitForText, errors, origin: `http://127.0.0.1:${port}` };
 }
 
-async function openPuzzle(t, options, path = '/') {
+async function openPuzzle(t, options, path = '/', initPage) {
   const { page, canvas, waitForText, errors, origin } = await openGamePage(t, options);
+  await initPage?.(page);
   await page.goto(`${origin}${path}`);
   await waitForText('Windmill');
   const clickDialog = async (dx, dy) => {
@@ -219,6 +220,56 @@ scenario('the picker renders before requesting offscreen previews', async (t) =>
     scriptGate.resolve();
     previewGate.resolve();
   }
+});
+
+function trackPieceMaskDraws(page) {
+  return page.addInitScript(() => {
+    // Count actual mask draws, which camera clipping alone does not prevent.
+    const maskPrograms = new WeakSet();
+    const activeMasks = new WeakMap();
+    let maskDraws = 0;
+    for (const { prototype } of [WebGLRenderingContext, WebGL2RenderingContext]) {
+      const { getUniformLocation, useProgram } = prototype;
+      prototype.getUniformLocation = function (program, name) {
+        if (name === 'uMaskSampler') maskPrograms.add(program);
+        return getUniformLocation.call(this, program, name);
+      };
+      prototype.useProgram = function (program) {
+        activeMasks.set(this, maskPrograms.has(program));
+        return useProgram.call(this, program);
+      };
+      for (const method of ['drawArrays', 'drawElements']) {
+        const draw = prototype[method];
+        prototype[method] = function (...args) {
+          if (activeMasks.get(this)) maskDraws++;
+          return draw.apply(this, args);
+        };
+      }
+    }
+    window.countPieceMaskDraws = () => new Promise((resolve) => requestAnimationFrame(() => {
+      maskDraws = 0;
+      requestAnimationFrame(() => resolve(maskDraws));
+    }));
+  });
+}
+
+scenario('the Expert tray only draws nearby piece masks', async (t) => {
+  const { page, waitForText, errors, playSelection } = await openPuzzle(t, {
+    viewport: { width: 1320, height: 780 },
+  }, '/', trackPieceMaskDraws);
+  await page.mouse.click(340, 180);
+  await playSelection({ size: 'Expert · 128' });
+  await waitForText('0 of 128 placed');
+
+  const assertMaskDraws = async () => {
+    const draws = await page.evaluate(() => window.countPieceMaskDraws());
+    assert.ok(draws > 1 && draws < 16, `Expected only visible tray masks, got ${draws} draws`);
+  };
+  await assertMaskDraws();
+  await page.mouse.move(85, 140);
+  await page.mouse.wheel(0, 30000);
+  await assertMaskDraws();
+  assert.deepEqual(errors, []);
 });
 
 scenario('live pieces scroll, reflow, and snap to the pannable board', async (t) => {

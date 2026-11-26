@@ -58,6 +58,14 @@ export class PuzzlePieceView {
     return Phaser.Geom.Polygon.Contains(this.hitArea, (point.x - x) / this.scale, (point.y - y) / this.scale);
   }
 
+  intersects(bounds: Phaser.Geom.Rectangle): boolean {
+    const { x, y, displayWidth, displayHeight, originX, originY } = this.image;
+    const left = x - originX * displayWidth;
+    const top = y - originY * displayHeight;
+    return left < bounds.right && left + displayWidth > bounds.left
+      && top < bounds.bottom && top + displayHeight > bounds.top;
+  }
+
   moveTo(x: number, y: number) {
     this.image.setPosition(x, y);
   }
@@ -72,8 +80,8 @@ export class PuzzlePieceView {
     layer.add(this.image);
   }
 
-  hide() {
-    this.image.setVisible(false);
+  setVisible(visible: boolean) {
+    this.image.setVisible(visible);
   }
 
   setGrayscale(enabled: boolean) {

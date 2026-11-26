@@ -272,7 +272,7 @@ scenario('the Expert tray only draws nearby piece masks', async (t) => {
   assert.deepEqual(errors, []);
 });
 
-scenario('right-click picks up and drops pieces without opening the browser menu', async (t) => {
+scenario('right-click picks up pieces that either mouse button can drop without opening the browser menu', async (t) => {
   const { page, canvas, waitForText, errors, playSelection } = await openPuzzle(t, {
     viewport: { width: 1320, height: 780 },
   });
@@ -309,9 +309,9 @@ scenario('right-click picks up and drops pieces without opening the browser menu
   await rightClick(427, 140);
   await page.mouse.move(735, 348);
   await page.mouse.wheel(0, -200);
-  await rightClick(735, 348);
+  await page.mouse.click(735, 348);
   await waitForText('1 of 8 placed');
-  assert.deepEqual(await sample(735, 348), sky, 'The piece should snap on the zoomed board');
+  assert.deepEqual(await sample(735, 348), sky, 'A left-click drop should snap the piece on the zoomed board');
   assert.equal((await readSave(page)).progress.Windmill.placedPieceIds.length, 1);
   assert.deepEqual(errors, []);
 });

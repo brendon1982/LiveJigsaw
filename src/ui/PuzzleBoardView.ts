@@ -14,7 +14,7 @@ import { PuzzlePanels } from './PuzzlePanels';
 import { PuzzlePieceView } from './PuzzlePieceView';
 import { SeedDropFeedback } from './SeedDropFeedback';
 
-type DropTrigger = 'release' | 'right-click';
+type DropTrigger = 'release' | 'click';
 
 type Gesture = { pointerId: number } & (
   | { kind: 'tray-touch'; entry: PuzzlePieceView; start: Point }
@@ -242,12 +242,22 @@ export class PuzzleBoardView {
 
   private readonly startGesture = (pointer: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]) => {
     if (this.completionStage === 'revealing' || this.pinch) return;
-    if (!pointer.wasTouch && pointer.button === 2) {
-      this.handleRightClick(pointer);
-      return;
+    if (!pointer.wasTouch) {
+      const gesture = this.gesture;
+      const rightClick = pointer.button === 2;
+      const leftClick = pointer.button === 0;
+      if (gesture?.kind === 'piece' && gesture.pointerId === pointer.id
+        && (rightClick || (leftClick && gesture.dropOn === 'click'))) {
+        this.finishGesture(pointer, gesture);
+        return;
+      }
+      if (rightClick) {
+        this.pickUpOnRightClick(pointer);
+        return;
+      }
     }
     if (!pointer.primaryDown || (!pointer.wasTouch && pointer.button !== 0) || over.includes(this.fitButton)) return;
-    if (pointer.wasTouch && this.gesture?.kind === 'piece' && this.gesture.dropOn === 'right-click') {
+    if (pointer.wasTouch && this.gesture?.kind === 'piece' && this.gesture.dropOn === 'click') {
       this.cancelInteraction();
     }
     const current = this.gesture;
@@ -274,15 +284,11 @@ export class PuzzleBoardView {
     if (this.gesture && !pointer.wasTouch) this.scene.input.setDefaultCursor('grabbing');
   };
 
-  private handleRightClick(pointer: Phaser.Input.Pointer) {
-    const gesture = this.gesture;
-    if (gesture) {
-      if (gesture.kind === 'piece' && gesture.pointerId === pointer.id) this.finishGesture(pointer, gesture);
-      return;
-    }
+  private pickUpOnRightClick(pointer: Phaser.Input.Pointer) {
+    if (this.gesture) return;
     const entry = this.tray.pieceAt(pointer);
     if (!entry || !this.puzzle.canDrag(entry.piece.id)) return;
-    this.startPieceDrag(pointer, entry, pointer, 'right-click');
+    this.startPieceDrag(pointer, entry, pointer, 'click');
     this.scene.input.setDefaultCursor('grabbing');
   }
 
@@ -463,7 +469,7 @@ export class PuzzleBoardView {
 
   private ignoresRelease(pointer: Phaser.Input.Pointer): boolean {
     const gesture = this.gesture;
-    return !pointer.wasTouch && (pointer.button !== 0 || (gesture?.kind === 'piece' && gesture.dropOn === 'right-click'));
+    return !pointer.wasTouch && (pointer.button !== 0 || (gesture?.kind === 'piece' && gesture.dropOn === 'click'));
   }
 
   private endPinch(pointer: Phaser.Input.Pointer): boolean {

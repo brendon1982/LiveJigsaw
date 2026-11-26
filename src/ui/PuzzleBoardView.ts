@@ -98,7 +98,7 @@ export class PuzzleBoardView {
   private readonly placementEffects: PlacementEffects;
   private seedDropFeedback?: SeedDropFeedback;
   private readonly floatingPieces: Phaser.GameObjects.Layer;
-  private liftShadow?: Phaser.GameObjects.Image;
+  private readonly liftShadows = new Map<PuzzlePieceView, Phaser.GameObjects.Image>();
   private rejectedPiece?: PuzzlePieceView;
   private readonly pieces = new Map<string, PuzzlePieceView>();
   private parkedPieces: PuzzlePieceView[] = [];
@@ -238,7 +238,7 @@ export class PuzzleBoardView {
     this.scene.input.setDefaultCursor('default');
     this.traySlide?.remove();
     this.tray.destroy();
-    this.clearLiftShadow();
+    this.clearLiftShadows();
     this.seedDropFeedback?.destroy();
     this.placementEffects.destroy();
     this.board.destroy();
@@ -289,7 +289,7 @@ export class PuzzleBoardView {
     const gesture = this.gesture;
     if (gesture?.kind === 'piece') this.restoreLift(gesture);
     this.returnRejectedPiece();
-    this.clearLiftShadow();
+    this.clearLiftShadows();
     this.gesture = undefined;
     this.pinch = undefined;
     this.scene.input.setDefaultCursor('default');
@@ -427,8 +427,14 @@ export class PuzzleBoardView {
     const lifted = { kind: 'piece', pointer, entry, source, offset, members, dropOn } as const;
     this.gesture = lifted;
     if (source === 'tray') this.tray.lift(entry);
+    for (const member of members) this.addLiftShadow(member.entry);
+    for (const member of members) member.entry.addTo(this.floatingPieces);
+    this.moveDraggedPiece(pointer, lifted);
+  }
+
+  private addLiftShadow(entry: PuzzlePieceView) {
     const { target, outline } = entry.piece;
-    this.liftShadow = drawEffectImage(this.scene, outline.frame, 10, target, (context) => {
+    const shadow = drawEffectImage(this.scene, outline.frame, 10, target, (context) => {
       context.beginPath();
       traceEffectPath(context, outline.points);
       context.closePath();
@@ -436,10 +442,9 @@ export class PuzzleBoardView {
       context.shadowColor = '#10171a';
       context.shadowBlur = 5 * effectImageResolution;
       context.fill();
-    }).setAlpha(0.3).setRotation(entry.rotation);
-    this.floatingPieces.add(this.liftShadow);
-    for (const member of members) member.entry.addTo(this.floatingPieces);
-    this.moveDraggedPiece(pointer, lifted);
+    }).setAlpha(0.3).setRotation(entry.rotation).setName('Lift shadow');
+    this.liftShadows.set(entry, shadow);
+    this.floatingPieces.add(shadow);
   }
 
   private moveDraggedPiece(pointer: Point, gesture: Extract<Gesture, { kind: 'piece' }>) {
@@ -448,9 +453,9 @@ export class PuzzleBoardView {
       const screen = this.board.toScreen({ x: center.x + offset.x, y: center.y + offset.y });
       entry.setScale(this.board.zoom);
       entry.moveTo(screen.x, screen.y);
+      this.liftShadows.get(entry)?.setPosition(screen.x + 2, screen.y + 4)
+        .setScale(this.board.zoom / effectImageResolution);
     }
-    const screen = this.board.toScreen(center);
-    this.liftShadow?.setPosition(screen.x + 2, screen.y + 4).setScale(this.board.zoom / effectImageResolution);
   }
 
   private dropCenter(pointer: Point, offset: Point): Point {
@@ -463,9 +468,9 @@ export class PuzzleBoardView {
     else this.syncParkedPieces();
   }
 
-  private clearLiftShadow() {
-    this.liftShadow?.destroy();
-    this.liftShadow = undefined;
+  private clearLiftShadows() {
+    for (const shadow of this.liftShadows.values()) shadow.destroy();
+    this.liftShadows.clear();
   }
 
   private readonly handleWheel = (pointer: Phaser.Input.Pointer, _over: Phaser.GameObjects.GameObject[], dx: number, dy: number) => {
@@ -572,7 +577,7 @@ export class PuzzleBoardView {
     }
     if (gesture.kind !== 'piece') return;
 
-    this.clearLiftShadow();
+    this.clearLiftShadows();
     this.dropPiece(pointer, gesture);
   }
 
@@ -612,11 +617,15 @@ export class PuzzleBoardView {
     if (result.kind === 'placed') {
       const locked = result.lockedPieceIds.map((id) => this.pieces.get(id)!);
       const pieces = locked.map((view) => view.piece);
-      for (const view of locked) view.setVisible(false);
+      for (const view of locked) {
+        view.setParked(false);
+        view.setVisible(false);
+      }
       this.board.addPieces(pieces);
       this.reconcileWorkspace();
       this.actions.onPlacement();
-      for (const piece of pieces) this.placementEffects.play(piece, this.play.puzzle.joinedSeams(piece));
+      if (pieces.length > 1) this.placementEffects.playGroup(pieces);
+      else this.placementEffects.play(entry.piece, this.play.puzzle.joinedSeams(entry.piece));
     } else if (result.kind === 'parked' || result.kind === 'joined') {
       this.reconcileWorkspace();
       this.actions.onWorkspaceChange();
@@ -652,6 +661,7 @@ export class PuzzleBoardView {
   private trayEntries() {
     return this.play.trayPieces.map(({ id }) => {
       const entry = this.pieces.get(id)!;
+      entry.setParked(false);
       entry.setOrientation(this.play.orientationOf(id));
       entry.setGrayscale(!this.play.puzzle.canDrag(id));
       return entry;
@@ -670,6 +680,7 @@ export class PuzzleBoardView {
     this.parkedPieces = this.play.parkedGroups.flatMap((group) => group.memberIds.map((id) => {
       const entry = this.pieces.get(id)!;
       const { x, y } = this.play.positionOf(id)!;
+      entry.setParked(true);
       entry.addTo(this.board.layer);
       entry.setOrientation(group.quarterTurns);
       entry.setScale(1);

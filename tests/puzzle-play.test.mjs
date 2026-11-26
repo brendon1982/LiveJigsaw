@@ -242,6 +242,11 @@ async function playLayout(page) {
       traySize: { width: tray.width, height: tray.height },
       parked: boardLayer.list.filter(({ frame, visible }) => visible && frame?.name.startsWith('piece-'))
         .map(({ frame, x, y, angle }) => ({ id: frame.name, x, y, angle })),
+      parkedBorders: boardLayer.list.filter(({ name }) => name === 'Parked piece border')
+        .map(({ x, y, angle, tint }) => ({ x, y, angle, tint })),
+      liftedBorders: overlayLayer.list.filter(({ name }) => name === 'Parked piece border').length,
+      liftShadows: overlayLayer.list.filter(({ name }) => name === 'Lift shadow')
+        .map(({ x, y, angle }) => ({ x, y, angle })),
       tray: trayLayer.list.map(({ frame, x, y, displayWidth, displayHeight }) => ({
         id: frame.name, x, y, width: displayWidth, height: displayHeight,
       })),
@@ -1509,6 +1514,9 @@ scenario('parking joins right-click drops, restores cancelled touch drags and re
   await clickAt(initial.boardPoint(32, 72), 'left');
   const joined = await playLayout(page);
   assert.equal(joined.parked.length, 2);
+  assert.deepEqual(joined.parkedBorders, joined.parked.map(({ x, y, angle }) => ({
+    x, y, angle, tint: 0x71897e,
+  })), 'Each member of the parked group has a Forest-themed border');
   const parked = (layout, id) => layout.parked.find((entry) => entry.id === id);
   assert.equal(parked(joined, right).x - parked(joined, left).x, 128, 'The over-guide drop joins at the exact offset');
   assert.ok(joined.parked.every(({ angle }) => angle === 0), 'Neither drop button rotates the group');
@@ -1578,9 +1586,16 @@ scenario('parking joins right-click drops, restores cancelled touch drags and re
   await page.mouse.move(grabbed.x, grabbed.y);
   await page.mouse.down();
   await page.mouse.move(destination.x, destination.y, { steps: 8 });
+  const lifted = await playLayout(page);
+  assert.equal(lifted.parkedBorders.length, 0);
+  assert.equal(lifted.liftedBorders, 2, 'Both borders travel with the group');
+  assert.equal(lifted.liftShadows.length, 2, 'Every lifted member casts a shadow');
+  assert.ok(Math.abs(lifted.liftShadows[1].x - lifted.liftShadows[0].x - 128 * lifted.board.zoom) < 1,
+    'The shadows follow the distance between members at the current zoom');
   assert.deepEqual((await readSave(page)).progress.Windmill, joinedSave.progress.Windmill, 'A drag preview does not save');
   await page.mouse.up();
   const moved = await playLayout(page);
+  assert.deepEqual(moved.liftShadows, [], 'Shadows disappear when the group is parked again');
   const movedPivot = pieceOnScreen(moved, right);
   assert.ok(Math.abs(movedPivot.x - (destination.x - 20)) < 2 && Math.abs(movedPivot.y - destination.y) < 2,
     'The zoomed drop preserves the grab point on the group');
@@ -1601,6 +1616,8 @@ scenario('parking joins right-click drops, restores cancelled touch drags and re
   await moveFinger(grab.x, grab.y, slot.x, slot.y);
   const returned = await playLayout(page);
   assert.deepEqual(returned.parked, []);
+  assert.deepEqual(returned.parkedBorders, []);
+  assert.equal(returned.liftedBorders, 0, 'Returning the group removes its parked borders');
   assert.deepEqual(returned.tray.map(({ id }) => id), seededOrder);
   const progress = (await readSave(page)).progress.Windmill;
   assert.equal(progress.trayOrientations[left], 1);
@@ -1736,10 +1753,30 @@ scenario('break piece off targets the topmost member and splits a bridge on touc
   await clickAt(endPoint);
   assert.equal((await layout()).breakButton.visible, true, 'A later drop can rejoin the pieces');
   await clickAt(endPoint, 'right');
+  await page.evaluate(() => {
+    const scene = window.puzzleArtworkScene.sys.game.scene.getScene('PlayPuzzle');
+    const camera = scene.cameras.getCamera('Puzzle board');
+    const layer = scene.children.list.find((object) => object.type === 'Layer' && !(object.cameraFilter & camera.id));
+    scene.input.once('pointerdown', () => {
+      const highlight = layer.list.find(({ name }) => name === 'Placement edge highlight');
+      const points = [[256, 72], [384, 72], [512, 72], [320, 0], [448, 0], [320, 144], [448, 144]];
+      window.groupPlacementEdgeAlpha = highlight ? points.map(([x, y]) => {
+        const column = Math.floor((x - highlight.x) / highlight.scaleX + highlight.displayOriginX);
+        const row = Math.floor((y - highlight.y) / highlight.scaleY + highlight.displayOriginY);
+        return highlight.texture.context.getImageData(column, row, 1, 1).data[3];
+      }) : [];
+    });
+  });
   await clickAt(pieceTarget(await layout(), end));
   await waitForText('2 of 8 placed');
-  assert.deepEqual((await layout()).parked.map(({ id }) => id), [left]);
-  assert.equal((await layout()).breakButton.visible, false);
+  const edgeAlpha = await page.evaluate(() => window.groupPlacementEdgeAlpha);
+  assert.equal(edgeAlpha.length, 7);
+  assert.ok(edgeAlpha.every((alpha) => alpha > 128), `The outer edges and shared seam all light up: ${edgeAlpha}`);
+  const placed = await layout();
+  assert.deepEqual(placed.parked.map(({ id }) => id), [left]);
+  assert.equal(placed.parkedBorders.length, 1, 'Only the remaining parked piece keeps its border');
+  assert.equal(placed.liftedBorders, 0);
+  assert.equal(placed.breakButton.visible, false);
   assert.deepEqual((await readSave(page)).progress.Windmill.placedPieceIds, [inner, end]);
   assert.deepEqual(errors, []);
 });

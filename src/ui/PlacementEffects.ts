@@ -10,7 +10,12 @@ export class PlacementEffects {
 
   play(piece: PuzzlePiece, joinedSeams: readonly (readonly Point[])[]) {
     this.playSettle(piece);
-    if (joinedSeams.length > 0) this.playSeamFade(joinedSeams);
+    if (joinedSeams.length > 0) this.playEdgeFade(joinedSeams);
+  }
+
+  playGroup(pieces: readonly PuzzlePiece[]) {
+    for (const piece of pieces) this.playSettle(piece);
+    this.playEdgeFade(pieces.map(({ outline }) => outline.points), true);
   }
 
   destroy() {
@@ -28,18 +33,21 @@ export class PlacementEffects {
     this.animate({ targets: pulse, scale: settledScale, alpha: 0, duration: 280, ease: 'Cubic.Out' });
   }
 
-  private playSeamFade(seams: readonly (readonly Point[])[]) {
-    const bounds = Bounds.around(seams.flat());
+  private playEdgeFade(paths: readonly (readonly Point[])[], closed = false) {
+    const bounds = Bounds.around(paths.flat());
     const highlight = drawEffectImage(this.scene, bounds, 3, bounds.center, (context) => {
       context.beginPath();
-      for (const seam of seams) traceEffectPath(context, seam);
+      for (const points of paths) {
+        traceEffectPath(context, points);
+        if (closed) context.closePath();
+      }
       context.lineWidth = 4;
       context.strokeStyle = 'rgba(215, 241, 255, 0.22)';
       context.stroke();
       context.lineWidth = 1.5;
       context.strokeStyle = 'rgba(245, 250, 255, 0.68)';
       context.stroke();
-    });
+    }).setName('Placement edge highlight');
     this.animate({ targets: highlight, alpha: 0, duration: 300, ease: 'Quad.Out' });
   }
 

@@ -2,6 +2,8 @@ import Phaser from 'phaser';
 import type { PuzzlePiece } from '../domain/Puzzle';
 import { Bounds, type Point, type Size } from '../domain/geometry';
 import type { LivePuzzleCapture } from '../rendering/LivePuzzleCapture';
+import { drawEffectImage, effectImageResolution, traceEffectPath } from './effectImage';
+import { styleWithTheme } from './theme';
 
 function pieceRenderFrame(frame: Bounds, captureSize: Size): Bounds {
   const { x, y, width, height } = frame;
@@ -27,6 +29,7 @@ export class PuzzlePieceView {
   private readonly hitArea: Phaser.Geom.Polygon;
   private readonly visibleBounds = new Phaser.Geom.Rectangle();
   private grayscale?: Phaser.Filters.ColorMatrix;
+  private parkedBorder?: Phaser.GameObjects.Image;
   private scale = 1;
 
   constructor(scene: Phaser.Scene, capture: LivePuzzleCapture, readonly piece: PuzzlePiece) {
@@ -93,15 +96,18 @@ export class PuzzlePieceView {
 
   setOrientation(quarterTurns: number) {
     this.image.setAngle(quarterTurns * 90);
+    this.parkedBorder?.setAngle(this.image.angle);
   }
 
   moveTo(x: number, y: number) {
     this.image.setPosition(x, y);
+    this.parkedBorder?.setPosition(x, y);
   }
 
   setScale(scale: number) {
     this.scale = scale;
     this.image.setScale(scale);
+    this.parkedBorder?.setScale(scale / effectImageResolution);
   }
 
   addTo(layer: Phaser.GameObjects.Layer, index?: number) {
@@ -109,10 +115,34 @@ export class PuzzlePieceView {
       layer.add(this.image);
       layer.bringToTop(this.image);
     } else layer.addAt(this.image, index);
+    if (this.parkedBorder) {
+      layer.add(this.parkedBorder);
+      layer.bringToTop(this.parkedBorder);
+    }
   }
 
   setVisible(visible: boolean) {
     this.image.setVisible(visible);
+    this.parkedBorder?.setVisible(visible);
+  }
+
+  setParked(parked: boolean) {
+    if (!parked) {
+      this.parkedBorder?.destroy();
+      this.parkedBorder = undefined;
+    } else if (!this.parkedBorder) {
+      const { outline, target } = this.piece;
+      const border = drawEffectImage(this.image.scene, outline.frame, 2, target, (context) => {
+        context.beginPath();
+        traceEffectPath(context, outline.points);
+        context.closePath();
+        context.lineWidth = 1;
+        context.strokeStyle = '#fff';
+        context.stroke();
+      }).setName('Parked piece border');
+      styleWithTheme(border, (colors) => border.setTint(colors.border));
+      this.parkedBorder = border;
+    }
   }
 
   setGrayscale(enabled: boolean) {

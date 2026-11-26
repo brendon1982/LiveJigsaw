@@ -14,7 +14,6 @@ export class PannableBoard {
   private readonly placedImage: Phaser.GameObjects.Image;
   private readonly placedPath = new Path2D();
   private viewport = new Phaser.Geom.Rectangle();
-  private parkedBounds?: Bounds;
   private offset: Point;
   private usesFitZoom = false;
   private showingFinishedArtwork = false;
@@ -123,8 +122,12 @@ export class PannableBoard {
     const dx = (bounds.width - this.viewport.width) / 2;
     const dy = (bounds.height - this.viewport.height) / 2;
     this.setViewport(bounds);
-    if (keepFitted) this.fit();
-    else this.pan(dx, dy);
+    if (keepFitted) {
+      this.fit();
+    } else {
+      this.offset = { x: this.offset.x + dx, y: this.offset.y + dy };
+      this.zoomAt({ x: bounds.centerX, y: bounds.centerY }, 1);
+    }
   }
 
   contains(point: Point): boolean {
@@ -143,11 +146,6 @@ export class PannableBoard {
       x: this.viewport.x + this.offset.x + point.x * this.zoom,
       y: this.viewport.y + this.offset.y + point.y * this.zoom,
     };
-  }
-
-  setParkedBounds(bounds?: Bounds) {
-    this.parkedBounds = bounds;
-    this.pan(0, 0);
   }
 
   get zoom(): number {
@@ -204,8 +202,7 @@ export class PannableBoard {
   }
 
   zoomAt(point: Point, scale: number, previousPoint: Point = point) {
-    const minimumZoom = Math.min(0.5, this.fitZoom);
-    const zoom = Phaser.Math.Clamp(this.zoom * scale, minimumZoom, 2.5);
+    const zoom = Phaser.Math.Clamp(this.zoom * scale, this.minimumZoom, 2.5);
     this.setZoomAt(point, zoom, previousPoint);
   }
 
@@ -220,20 +217,19 @@ export class PannableBoard {
   }
 
   pan(dx: number, dy: number) {
-    const parked = this.parkedBounds;
-    const left = parked ? Math.min(0, parked.x) : 0;
-    const top = parked ? Math.min(0, parked.y) : 0;
-    const right = parked ? Math.max(this.size.width, parked.x + parked.width) : this.size.width;
-    const bottom = parked ? Math.max(this.size.height, parked.y + parked.height) : this.size.height;
     this.offset = {
-      x: this.limitOffset(this.offset.x + dx, this.viewport.width, left, right),
-      y: this.limitOffset(this.offset.y + dy, this.viewport.height, top, bottom),
+      x: this.limitOffset(this.offset.x + dx, this.viewport.width, this.size.width),
+      y: this.limitOffset(this.offset.y + dy, this.viewport.height, this.size.height),
     };
     this.camera.setScroll(-this.offset.x / this.zoom, -this.offset.y / this.zoom);
   }
 
   private get fitZoom(): number {
     return this.zoomToFit(this.viewport);
+  }
+
+  private get minimumZoom(): number {
+    return Math.min(0.5, this.fitZoom);
   }
 
   private zoomToFit({ width, height }: Size): number {
@@ -252,8 +248,10 @@ export class PannableBoard {
     };
   }
 
-  private limitOffset(offset: number, viewport: number, start: number, end: number): number {
-    const center = viewport / 2;
-    return Phaser.Math.Clamp(offset, center - end * this.zoom, center - start * this.zoom);
+  private limitOffset(offset: number, viewportLength: number, guideLength: number): number {
+    const boardMargin = viewportLength / (2 * this.minimumZoom);
+    const screenMargin = boardMargin * this.zoom;
+    const minOffset = viewportLength - guideLength * this.zoom - screenMargin;
+    return Phaser.Math.Clamp(offset, minOffset, screenMargin);
   }
 }

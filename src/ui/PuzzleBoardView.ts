@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { Bounds, type Point } from '../domain/geometry';
+import type { Bounds, Point } from '../domain/geometry';
 import type { PuzzlePlay } from '../domain/PuzzlePlay';
 import type { TrayFractions, TrayPosition } from '../persistence/GameSave';
 import type { LivePuzzleCapture } from '../rendering/LivePuzzleCapture';
@@ -730,7 +730,6 @@ export class PuzzleBoardView {
 
   private syncParkedPieces() {
     this.stopBreakSlide();
-    const corners: Point[] = [];
     this.parkedPieces = this.play.parkedGroups.flatMap((group) => group.memberIds.map((id) => {
       const entry = this.pieces.get(id)!;
       const { x, y } = this.play.positionOf(id)!;
@@ -740,11 +739,8 @@ export class PuzzleBoardView {
       entry.setScale(1);
       entry.moveTo(x, y);
       entry.setVisible(true);
-      const bounds = entry.bounds;
-      corners.push({ x: bounds.left, y: bounds.top }, { x: bounds.right, y: bounds.bottom });
       return entry;
     }));
-    this.board.setParkedBounds(corners.length ? Bounds.around(corners) : undefined);
   }
 
   private readonly cancelGesture = (pointer: Phaser.Input.Pointer) => {

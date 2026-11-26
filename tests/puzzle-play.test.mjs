@@ -307,6 +307,65 @@ scenario('the play workspace fills the viewport beneath the padded header', asyn
   assert.deepEqual(errors, []);
 });
 
+scenario('the board keeps fixed pan bounds through zoom with a parked piece', async (t) => {
+  const { page, waitForText, errors, playSelection } = await openCompactPuzzle(t, {
+    viewport: { width: 1320, height: 780 }, hasTouch: true,
+  });
+  await page.touchscreen.tap(340, 180);
+  await playSelection({ pieceRotation: false, challengeMode: 'none' });
+  await waitForText('0 of 8 placed');
+
+  const { moveFinger } = await touchController(page);
+  const fitted = await playLayout(page);
+  const { x, y, width, height } = fitted.board;
+  const center = { x: x + width / 2, y: y + height / 2 };
+  const piece = fitted.tray[0];
+  await moveFinger(piece.x, piece.y, x + 75, piece.y);
+  const parked = (await playLayout(page)).parked;
+  assert.equal(parked.length, 1);
+  assert.ok(parked[0].x < 0, 'The piece should be parked outside the guide');
+
+  await page.mouse.move(center.x, center.y);
+  await page.mouse.wheel(0, 2000);
+  const zoomedOut = await playLayout(page);
+  assert.equal(zoomedOut.board.zoom, 0.5);
+  const { width: guideWidth, height: guideHeight } = compactSize;
+  const assertNear = (actual, expected, label) => {
+    assert.ok(Math.abs(actual - expected) < 1, `${label}: expected ${expected}, got ${actual}`);
+  };
+  const pan = (horizontal, vertical) => moveFinger(
+    center.x - horizontal * (width / 2 - 30), center.y - vertical * (height / 2 - 50),
+    center.x + horizontal * (width / 2 - 30), center.y + vertical * (height / 2 - 50),
+  );
+  for (const [dx, dy, cornerX, cornerY] of [
+    [1, 1, 0, 0], [-1, 0, guideWidth, 0], [1, -1, 0, guideHeight], [-1, 0, guideWidth, guideHeight],
+  ]) {
+    await pan(dx, dy);
+    const corner = (await playLayout(page)).boardPoint(cornerX, cornerY);
+    assertNear(corner.x, center.x, 'Corner x at minimum zoom');
+    assertNear(corner.y, center.y, 'Corner y at minimum zoom');
+  }
+
+  await page.mouse.move(center.x, center.y);
+  await page.mouse.wheel(0, -2000);
+  for (let i = 0; i < 3; i++) await pan(-1, -1);
+  const panned = await playLayout(page);
+  assert.equal(panned.board.zoom, 2.5);
+  const corner = panned.boardPoint(guideWidth, guideHeight);
+  assertNear(x + width - corner.x, width * panned.board.zoom / (2 * zoomedOut.board.zoom), 'Fixed right boundary');
+  assertNear(y + height - corner.y, height * panned.board.zoom / (2 * zoomedOut.board.zoom), 'Fixed bottom boundary');
+  assert.ok(corner.x < x && corner.y < y, 'The guide should be fully outside the viewport');
+
+  const fit = panned.fitButton;
+  assert.equal(fit.visible, true);
+  await page.touchscreen.tap(fit.x + fit.width / 2, fit.y + fit.height / 2);
+  const restored = await playLayout(page);
+  assert.deepEqual(restored.board, fitted.board);
+  assert.deepEqual(restored.artwork, fitted.artwork);
+  assert.deepEqual(restored.parked, parked);
+  assert.deepEqual(errors, []);
+});
+
 scenario('the picker renders before requesting offscreen previews', async (t) => {
   const { page, canvas, waitForText, errors, origin } = await openGamePage(t, {
     viewport: { width: 768, height: 1024 },
@@ -835,22 +894,6 @@ scenario('live pieces scroll, reflow, and snap to the pannable board', async (t)
     assert.deepEqual(color, sky, 'The live guide should not show through joined pieces');
   }
   assert.deepEqual(await selectFilter(88, settingsY.secondFilter, null), originalGuide, 'Clearing the filter should restore the original guide');
-
-  const assertCornerAtCenter = async (horizontal, vertical) => {
-    const screenshot = await canvas.screenshot();
-    const centerX = wideLayout.board.x + wideLayout.board.width / 2;
-    const centerY = wideLayout.board.y + wideLayout.board.height / 2;
-    assert.notDeepEqual(await pixelAt(page, screenshot, centerX + 14 * horizontal, centerY + 14 * vertical), panelBackground);
-    assert.deepEqual(await pixelAt(page, screenshot, centerX - 14 * horizontal, centerY - 14 * vertical), panelBackground);
-  };
-  await drag(610, 180, 1240, 700);
-  await assertCornerAtCenter(1, 1);
-  await drag(1240, 300, 610, 300);
-  await assertCornerAtCenter(-1, 1);
-  await drag(1000, 700, 1000, 180);
-  await assertCornerAtCenter(-1, -1);
-  await drag(610, 300, 1240, 300);
-  await assertCornerAtCenter(1, -1);
 
   await page.setViewportSize({ width: 1500, height: 850 });
   await page.waitForFunction(() => document.querySelector('canvas').height === 850);

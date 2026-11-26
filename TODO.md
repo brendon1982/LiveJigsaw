@@ -15,6 +15,8 @@
 - [x] Add an animation speed setting with **Slow**, **Normal**, and **Fast** as part of the puzzle source contract. Each puzzle source must define how those speeds affect its animation.
 - [x] Challenge modes e.g. pieces must be placed in a particular sequence, limited pool of placeable pieces.
 - [x] Filters on puzzle selection screen e.g. never completed, type based ... etc
+- [ ] Phaser resizing bug.
+- [ ] Artist attribution.
 
 ## UI polish
 

@@ -5,9 +5,8 @@ import { planWalk, type VillagePoint, type Villager } from './villageWalks.ts';
 
 export const cellSize = 32;
 export const bladePadding = 2;
-const columns = 16;
-const rows = 9;
-export const villageSize = { width: columns * cellSize, height: rows * cellSize };
+const districtColumns = 16;
+const districtRows = 9;
 
 type Cell = { column: number; row: number };
 type Prop = VillagePoint & {
@@ -24,8 +23,6 @@ const directions = [
   { column: 0, row: 1 },
   { column: -1, row: 0 },
 ];
-const cellId = ({ column, row }: Cell) => row * columns + column;
-const roadInterior = ({ column, row }: Cell) => column > 0 && column < columns - 1 && row > 0 && row < rows - 1;
 const distance = (a: Cell, b: Cell) => Math.abs(a.column - b.column) + Math.abs(a.row - b.row);
 const point = ({ column, row }: Cell, dx = 0.5, dy = 0.5): VillagePoint => ({
   x: (column + dx) * cellSize,
@@ -58,32 +55,28 @@ type Lot = { entrance: number; position: VillagePoint; cells: number[] };
 type RoadNetwork = Map<number, number>;
 type BladeReach = { hub: number; radius: number };
 
-const cells = Array.from({ length: columns * rows }, (_, id) => cellAt(id));
 const houseFrames = [9, 16, 17, 18, 19, 20, 21];
-const fieldPlots = cells.filter(({ column, row }) => column < columns - 1 && row < rows - 1)
-  .map((cell) => {
-    const id = cellId(cell);
-    return [id, id + 1, id + columns, id + columns + 1];
-  });
 
-function cellAt(id: number): Cell {
-  return { column: id % columns, row: Math.floor(id / columns) };
+function villageGrid(columns: number, rows: number) {
+  const cellId = ({ column, row }: Cell) => row * columns + column;
+  const cellAt = (id: number): Cell => ({ column: id % columns, row: Math.floor(id / columns) });
+  const inside = ({ column, row }: Cell) => column >= 0 && column < columns && row >= 0 && row < rows;
+  const roadInterior = ({ column, row }: Cell) => column > 0 && column < columns - 1 && row > 0 && row < rows - 1;
+  const neighbors = (cell: Cell) => directions.map((direction) => offset(cell, direction)).filter(inside);
+  const outwardHeading = (cell: Cell) => directions.findIndex((direction) => !inside(offset(cell, direction)));
+  const cells = Array.from({ length: columns * rows }, (_, id) => cellAt(id));
+  const fieldPlots = cells.filter(({ column, row }) => column < columns - 1 && row < rows - 1)
+    .map((cell) => {
+      const id = cellId(cell);
+      return [id, id + 1, id + columns, id + columns + 1];
+    });
+  return { columns, rows, cellId, cellAt, inside, roadInterior, neighbors, outwardHeading, cells, fieldPlots };
 }
+
+type VillageGrid = ReturnType<typeof villageGrid>;
 
 function offset(cell: Cell, delta: Cell): Cell {
   return { column: cell.column + delta.column, row: cell.row + delta.row };
-}
-
-function inside({ column, row }: Cell) {
-  return column >= 0 && column < columns && row >= 0 && row < rows;
-}
-
-function neighbors(cell: Cell) {
-  return directions.map((direction) => offset(cell, direction)).filter(inside);
-}
-
-function outwardHeading(cell: Cell) {
-  return directions.findIndex((direction) => !inside(offset(cell, direction)));
 }
 
 function between(random: Random, min: number, max: number) {
@@ -94,7 +87,7 @@ function choose<T>(random: Random, options: readonly T[]) {
   return options[between(random, 0, options.length - 1)];
 }
 
-function generateTerrain(random: Random): Terrain[] {
+function generateTerrain({ cells }: VillageGrid, random: Random): Terrain[] {
   const main = choose(random, cells);
   const grove = choose(random, cells.filter((cell) => distance(main, cell) >= 7));
   const mainType = random() < 0.5 ? 'broadleaf' : 'pine';
@@ -114,13 +107,8 @@ function generateTerrain(random: Random): Terrain[] {
   });
 }
 
-const approaches = cells.filter(({ column, row }) =>
-  (column === 0 || column === columns - 1) !== (row === 0 || row === rows - 1));
-const approachPairs = approaches.flatMap((start, index) => approaches.slice(index + 1)
-  .filter((end) => distance(start, end) >= 11 && outwardHeading(start) !== outwardHeading(end))
-  .map((end) => ({ start, end })));
-
-function buildRoads(start: Cell, end: Cell, terrain: Terrain[], roadCosts: number[], random: Random): RoadNetwork {
+function buildRoads(grid: VillageGrid, start: Cell, end: Cell, terrain: Terrain[], roadCosts: number[], random: Random): RoadNetwork {
+  const { cells, cellId, columns, roadInterior, outwardHeading } = grid;
   const roads: RoadNetwork = new Map();
   const connect = (path: Cell[]) => {
     for (let index = 1; index < path.length; index += 1) {
@@ -132,7 +120,7 @@ function buildRoads(start: Cell, end: Cell, terrain: Terrain[], roadCosts: numbe
       roads.set(to, (roads.get(to) ?? 0) | (1 << reverseHeading));
     }
   };
-  const main = routeRoad(start, end, roadCosts)!;
+  const main = routeRoad(grid, start, end, roadCosts)!;
   connect(main);
   for (const cell of [start, end]) {
     const id = cellId(cell);
@@ -147,15 +135,15 @@ function buildRoads(start: Cell, end: Cell, terrain: Terrain[], roadCosts: numbe
       return length >= 2 && length <= 4 && roadInterior(cell) && !roads.has(id) && terrain[id] === 'meadow';
     });
     if (spurSites.length) {
-      const spur = routeRoad(root, choose(random, spurSites), roadCosts, roads);
+      const spur = routeRoad(grid, root, choose(random, spurSites), roadCosts, roads);
       if (spur && spur.length <= 6) connect(spur);
     }
   }
   return roads;
 }
 
-function cellsUnder({ left, right, top, bottom }: Bounds) {
-  if (left < 0 || top < 0 || right > villageSize.width || bottom > villageSize.height) return;
+function cellsUnder({ columns, rows, cellId }: VillageGrid, { left, right, top, bottom }: Bounds) {
+  if (left < 0 || top < 0 || right > columns * cellSize || bottom > rows * cellSize) return;
   const result: number[] = [];
   for (let row = Math.floor(top / cellSize); row < Math.ceil(bottom / cellSize); row += 1) {
     for (let column = Math.floor(left / cellSize); column < Math.ceil(right / cellSize); column += 1) {
@@ -176,11 +164,12 @@ function buildingReach(building: Building, structureSize: (frame: number) => Siz
   };
 }
 
-function lotBoundary(lot: Lot) {
+function lotBoundary({ neighbors, cellAt, cellId }: VillageGrid, lot: Lot) {
   return new Set(lot.cells.flatMap((id) => neighbors(cellAt(id)).map(cellId)));
 }
 
-function developVillage(roads: RoadNetwork, terrain: Terrain[], structureSize: (frame: number) => Size, random: Random) {
+function developVillage(grid: VillageGrid, roads: RoadNetwork, terrain: Terrain[], structureSize: (frame: number) => Size, random: Random) {
+  const { inside, cellAt, cellId, fieldPlots, neighbors } = grid;
   const developed = new Set<number>();
   const fields = new Set<number>();
   const props: Prop[] = [];
@@ -199,7 +188,7 @@ function developVillage(roads: RoadNetwork, terrain: Terrain[], structureSize: (
         if (direction.row === 1) position.y = Math.max(position.y, cell.row * cellSize + above + 2);
         if (direction.column === 1) position.x = Math.max(position.x, cell.column * cellSize + side + 2);
         if (direction.column === -1) position.x = Math.min(position.x, (cell.column + 1) * cellSize - side - 2);
-        const footprint = cellsUnder({
+        const footprint = cellsUnder(grid, {
           left: position.x - side, right: position.x + side,
           top: position.y - above, bottom: position.y + below,
         });
@@ -237,7 +226,7 @@ function developVillage(roads: RoadNetwork, terrain: Terrain[], structureSize: (
   const availableFields = fieldPlots.filter((plot) => plot.every(free));
   const farmSites = millOptions.flatMap((building, preference) =>
     lots(building, { hub: building.hub, radius }).flatMap((lot) => {
-      const boundary = lotBoundary(lot);
+      const boundary = lotBoundary(grid, lot);
       return availableFields
         .filter((plot) => plot.some((id) => boundary.has(id)) && plot.every((id) => !lot.cells.includes(id)))
         .map((plot) => ({ building, lot, plot, preference }));
@@ -254,7 +243,7 @@ function developVillage(roads: RoadNetwork, terrain: Terrain[], structureSize: (
 
   const stall = { frames: choose(random, [[22], [7, 3]]), scale: 0.3 };
   const marketSites = lots(stall).filter((lot) => lot.entrance !== farm.lot.entrance).flatMap((lot) => {
-    const boundary = lotBoundary(lot);
+    const boundary = lotBoundary(grid, lot);
     return [...boundary]
       .filter((yard) => free(yard) && !lot.cells.includes(yard)
         && neighbors(cellAt(yard)).some((cell) => roads.has(cellId(cell))))
@@ -288,7 +277,8 @@ function developVillage(roads: RoadNetwork, terrain: Terrain[], structureSize: (
   return { developed, fields, props, mill, destinations: [...destinations] };
 }
 
-function paintVillage(terrain: Terrain[], roads: RoadNetwork, development: NonNullable<ReturnType<typeof developVillage>>, random: Random) {
+function paintVillage(grid: VillageGrid, terrain: Terrain[], roads: RoadNetwork, development: NonNullable<ReturnType<typeof developVillage>>, random: Random) {
+  const { cells, inside, neighbors, cellId } = grid;
   const { developed, fields, props } = development;
   const woodland = terrain.map((type, id) => roads.has(id) || developed.has(id) ? 'meadow' : type);
   const cropOffset = between(random, 0, 1);
@@ -328,29 +318,113 @@ function paintVillage(terrain: Terrain[], roads: RoadNetwork, development: NonNu
   });
 }
 
-export function generateVillage(seed: number, structureSize: (frame: number) => Size) {
-  const random = seededRandom(seed);
-  const terrain = generateTerrain(random);
-  const roadCosts = terrain.map((type) => (type === 'meadow' ? 1 : 2.8) + random() * 0.45);
-  const remainingApproaches = [...approachPairs];
+function districtApproaches({ cells, columns, rows }: VillageGrid) {
+  return cells.filter(({ column, row }) =>
+    (column === 0 || column === columns - 1) !== (row === 0 || row === rows - 1));
+}
 
-  // Try a different pair of approaches if the road leaves too little room for a settlement.
-  while (remainingApproaches.length) {
-    const index = between(random, 0, remainingApproaches.length - 1);
-    const [{ start, end }] = remainingApproaches.splice(index, 1);
-    const roads = buildRoads(start, end, terrain, roadCosts, random);
-    const development = developVillage(roads, terrain, structureSize, random);
+function generateDistrict(
+  grid: VillageGrid, crossings: Cell[], approaches: Cell[], structureSize: (frame: number) => Size, random: Random,
+) {
+
+  // Keep district crossings fixed while retrying terrain and local roads.
+  for (let attempt = 0; attempt < 48; attempt += 1) {
+    const start = crossings[0] ?? choose(random, approaches);
+    const end = crossings[1] ?? choose(random, approaches.filter((cell) =>
+      distance(start, cell) >= 11 && grid.outwardHeading(start) !== grid.outwardHeading(cell)));
+    const terrain = generateTerrain(grid, random);
+    const roadCosts = terrain.map((type) => (type === 'meadow' ? 1 : 2.8) + random() * 0.45);
+    const roads = buildRoads(grid, start, end, terrain, roadCosts, random);
+    const development = developVillage(grid, roads, terrain, structureSize, random);
     if (!development) continue;
 
-    const ground = paintVillage(terrain, roads, development, random);
+    const ground = paintVillage(grid, terrain, roads, development, random);
     const { props, mill, destinations } = development;
-    const walks = planVillageWalks(destinations, roads, random);
+    const walks = planVillageWalks(grid, destinations, roads, random);
     return { ground, props, mill, walks };
   }
   throw new Error('No village road leaves enough room for a settlement');
 }
 
-function planVillageWalks(destinations: number[], roads: RoadNetwork, random: Random) {
+function districtEdges(cells: number, minimum: number) {
+  const districts = Math.floor(cells / minimum);
+  return Array.from({ length: districts + 1 }, (_, index) => Math.round(index * cells / districts));
+}
+
+function villageDistricts(columns: number, rows: number, random: Random) {
+  const columnEdges = districtEdges(columns, districtColumns);
+  const rowEdges = districtEdges(rows, districtRows);
+  const districts = [];
+  for (let row = 0; row < rowEdges.length - 1; row += 1) {
+    for (let index = 0; index < columnEdges.length - 1; index += 1) {
+      // Reverse every other row so the road can turn into the next row of districts.
+      const column = row % 2 === 0 ? index : columnEdges.length - 2 - index;
+      districts.push({
+        column: columnEdges[column], row: rowEdges[row],
+        columns: columnEdges[column + 1] - columnEdges[column],
+        rows: rowEdges[row + 1] - rowEdges[row],
+        crossings: [] as Cell[],
+      });
+    }
+  }
+  for (let index = 1; index < districts.length; index += 1) {
+    const before = districts[index - 1];
+    const after = districts[index];
+    if (before.row === after.row) {
+      const row = Math.floor(before.rows / 2) + between(random, -1, 1);
+      const east = before.column < after.column;
+      before.crossings.push({ column: east ? before.columns - 1 : 0, row });
+      after.crossings.push({ column: east ? 0 : after.columns - 1, row });
+    } else {
+      const column = Math.floor(before.columns / 2) + between(random, -1, 1);
+      before.crossings.push({ column, row: before.rows - 1 });
+      after.crossings.push({ column, row: 0 });
+    }
+  }
+  return districts;
+}
+
+export function generateVillage(viewport: Size, seed: number, structureSize: (frame: number) => Size) {
+  const random = seededRandom(seed);
+  const columns = Math.max(districtColumns, Math.ceil(viewport.width / cellSize));
+  const rows = Math.max(districtRows, Math.ceil(viewport.height / cellSize));
+  const origin = {
+    x: Math.min(0, Math.floor((viewport.width - districtColumns * cellSize) / 2)),
+    y: Math.min(0, Math.floor((viewport.height - districtRows * cellSize) / 2)),
+  };
+  const ground = new Array<GroundTile>(columns * rows);
+  const props: Prop[] = [];
+  const mills: ReturnType<typeof generateDistrict>['mill'][] = [];
+  const walks: ReturnType<typeof planWalk>[] = [];
+
+  for (const district of villageDistricts(columns, rows, random)) {
+    const grid = villageGrid(district.columns, district.rows);
+    const approaches = districtApproaches(grid).filter(({ column, row }) => {
+      const x = district.column + column;
+      const y = district.row + row;
+      return x === 0 || x === columns - 1 || y === 0 || y === rows - 1;
+    });
+    const layout = generateDistrict(grid, district.crossings, approaches, structureSize, random);
+    const villageId = (id: number) => {
+      const { column, row } = grid.cellAt(id);
+      return (district.row + row) * columns + district.column + column;
+    };
+    const left = origin.x + district.column * cellSize;
+    const top = origin.y + district.row * cellSize;
+    const translate = ({ x, y }: VillagePoint) => ({ x: left + x, y: top + y });
+    layout.ground.forEach((tile, id) => { ground[villageId(id)] = tile; });
+    for (const prop of layout.props) props.push({ ...prop, ...translate(prop) });
+    mills.push({ ...layout.mill, ...translate(layout.mill) });
+    for (const walk of layout.walks) walks.push({
+      ...walk,
+      stops: walk.stops.map(villageId),
+      steps: walk.steps.map((step) => ({ ...step, from: translate(step.from), to: translate(step.to) })),
+    });
+  }
+  return { columns, origin, ground, props, mills, walks };
+}
+
+function planVillageWalks(grid: VillageGrid, destinations: number[], roads: RoadNetwork, random: Random) {
   const count = between(random, 5, 7);
   return Array.from({ length: count }, (_, index) => {
     const firstStop = destinations[index % destinations.length];
@@ -366,11 +440,11 @@ function planVillageWalks(destinations: number[], roads: RoadNetwork, random: Ra
       lane: 1.4 + random() * 1.4,
       speed: between(random, 12, 22) / 1000,
     };
-    return planWalk(villager, (from, to) => followRoad(from, to, roads), () => between(random, 550, 1650));
+    return planWalk(villager, (from, to) => followRoad(grid, from, to, roads), () => between(random, 550, 1650));
   });
 }
 
-function followRoad(from: number, to: number, roads: RoadNetwork): VillagePoint[] {
+function followRoad({ cellAt, cellId, inside }: VillageGrid, from: number, to: number, roads: RoadNetwork): VillagePoint[] {
   const queue = [from];
   const previous = new Map<number, number>([[from, from]]);
   for (let index = 0; index < queue.length; index += 1) {
@@ -395,7 +469,7 @@ function followRoad(from: number, to: number, roads: RoadNetwork): VillagePoint[
   throw new Error('Village destinations must be on the same road network');
 }
 
-function routeRoad(from: Cell, to: Cell, costs: number[], blocked?: RoadNetwork): Cell[] | undefined {
+function routeRoad({ cellAt, cellId, roadInterior }: VillageGrid, from: Cell, to: Cell, costs: number[], blocked?: RoadNetwork): Cell[] | undefined {
   const path = findRoute(cellId(from), cellId(to), (current) =>
     directions.flatMap((direction, heading) => {
       const cell = offset(cellAt(current), direction);

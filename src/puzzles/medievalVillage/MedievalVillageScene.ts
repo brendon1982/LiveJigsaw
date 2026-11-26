@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { puzzleAnimationRates, type PuzzleSourceSceneData } from '../PuzzleSource';
 import atlasImage from './assets/medievalRTS_spritesheet@2.png';
 import atlasData from './assets/medievalRTS_spritesheet@2.xml?url';
-import { bladePadding, cellSize, generateVillage, villageSize } from './villageLayout';
+import { bladePadding, cellSize, generateVillage } from './villageLayout';
 import { walkPose } from './villageWalks';
 
 const atlasKey = 'medieval-village-artwork';
@@ -69,12 +69,11 @@ export class MedievalVillageScene extends Phaser.Scene {
     const { width, height } = data;
     const centerX = width / 2;
     const centerY = height / 2;
-    const unit = Math.min(width / villageSize.width, height / villageSize.height);
     const backdrop = this.add.rectangle(0, 0, width, height, 0x17392d).setOrigin(0);
-    const label = this.add.text(centerX, centerY - 13 * unit, 'Loading village…', {
-      fontFamily: 'system-ui', fontSize: `${22 * unit}px`, color: '#f9e6af',
+    const label = this.add.text(centerX, centerY - 26, 'Loading village…', {
+      fontFamily: 'system-ui', fontSize: '44px', color: '#f9e6af',
     }).setOrigin(0.5);
-    const track = this.add.rectangle(centerX, centerY + 16 * unit, 150 * unit, 5 * unit, 0x355c48);
+    const track = this.add.rectangle(centerX, centerY + 32, 300, 10, 0x355c48);
     const bar = this.add.rectangle(track.x - track.width / 2, track.y, track.width, track.height, 0xdca352)
       .setOrigin(0, 0.5).setScale(0, 1);
     const showProgress = (progress: number) => bar.setScale(progress, 1);
@@ -102,20 +101,19 @@ export class MedievalVillageScene extends Phaser.Scene {
   }
 
   private drawVillage({ width, height, seed, animationSpeed }: PuzzleSourceSceneData) {
-    const village = this.add.container().setScale(width / villageSize.width, height / villageSize.height);
+    const village = this.add.container();
     const atlas = this.textures.get(atlasKey);
-    const { ground, props, mill, walks } = generateVillage(seed, (id) => {
+    const { columns, origin, ground, props, mills, walks } = generateVillage({ width, height }, seed, (id) => {
       const frame = atlas.get(frameName('Structure', id));
       return { width: frame.realWidth, height: frame.realHeight };
     });
     const sprite = (x: number, y: number, kind: string, frame: number, scale: number) =>
       this.add.image(x, y, atlasKey, frameName(kind, frame)).setScale(scale);
-    const columns = villageSize.width / cellSize;
     const tileScale = cellSize / 128;
     // Each road overlay follows its tile. The depth-sorted scenery goes above the entire ground.
     ground.forEach(({ frame, road }, index) => {
-      const x = (index % columns) * cellSize;
-      const y = Math.floor(index / columns) * cellSize;
+      const x = origin.x + (index % columns) * cellSize;
+      const y = origin.y + Math.floor(index / columns) * cellSize;
       village.add(sprite(x, y, 'Tile', frame, tileScale).setOrigin(0));
       if (road) {
         const roadX = x + road.x * tileScale;
@@ -131,10 +129,13 @@ export class MedievalVillageScene extends Phaser.Scene {
         : this.add.image(x, y, assembledBuilding(this.textures, frames)).setScale(scale);
       scenery.add(image.setOrigin(0.5, 1).setDepth(y));
     }
-    const bladeTexture = windmillBlades(this.textures, mill.blades);
-    const blades = this.add.image(mill.x, mill.y - mill.hub, bladeTexture)
-      .setScale(mill.bladeScale).setDepth(mill.y + 0.01);
-    scenery.add(blades);
+    const blades = mills.map((mill) => {
+      const texture = windmillBlades(this.textures, mill.blades);
+      const image = this.add.image(mill.x, mill.y - mill.hub, texture)
+        .setScale(mill.bladeScale).setDepth(mill.y + 0.01);
+      scenery.add(image);
+      return image;
+    });
     const villagers = walks.map((walk) => {
       const image = sprite(0, 0, 'Unit', walk.front, 0.28).setOrigin(0.5, 1);
       scenery.add(image);
@@ -144,7 +145,7 @@ export class MedievalVillageScene extends Phaser.Scene {
     let elapsed = 0;
     this.animate = (delta) => {
       elapsed += delta * puzzleAnimationRates[animationSpeed];
-      blades.rotation = elapsed * 0.00085;
+      for (const rotor of blades) rotor.rotation = elapsed * 0.00085;
       for (const { walk, image } of villagers) {
         const { x, y, bob, frame, flip } = walkPose(walk, elapsed);
         const name = frameName('Unit', frame);

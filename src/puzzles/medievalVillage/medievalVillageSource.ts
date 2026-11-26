@@ -6,7 +6,7 @@ import previewImage from './assets/preview.png';
 export const medievalVillageSource: PuzzleSource = {
   title: 'Medieval Village',
   tags: { theme: 'Medieval', type: 'Procedural' },
-  maxViewport: { width: 1024, height: 576 },
+  maxViewport: { width: 1920, height: 1080 },
   scene: MedievalVillageScene,
   ...imagePreview('medieval-village-preview', previewImage),
 };

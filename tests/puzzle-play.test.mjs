@@ -667,10 +667,12 @@ scenario('parallax seeds place both foreground and background artwork', async (t
   assert.deepEqual(errors, []);
 });
 
-scenario('the medieval village is captured during loading and animates after reopening', async (t) => {
-  const { page, canvas, waitForText, errors, playSelection } = await openPuzzle(t, {
+scenario('the full-HD medieval village is captured during loading and animates after reopening', async (t) => {
+  const { page, canvas, waitForText, errors, clickDialog } = await openPuzzle(t, {
     viewport: { width: 1320, height: 780 },
   });
+  await saveFullHDPuzzle(page, 'MedievalVillage', 233);
+  await waitForText('Windmill');
   const atlas = /medievalRTS_spritesheet[^/]*\.png(?:\?|$)/;
   const loading = Promise.withResolvers();
   const release = Promise.withResolvers();
@@ -685,9 +687,10 @@ scenario('the medieval village is captured during loading and animates after reo
     await page.evaluate(() => { window.paintedText = []; });
     await scrollPickerTo(page, 1210);
     await page.mouse.click(340, 600);
-    await playSelection({ animationSpeed: 'Fast' });
+    await waitForText('Resume');
+    await clickDialog(100, resumeActionY);
     await waitForText('Medieval Village');
-    await waitForText('0 of 32 placed');
+    await waitForText('1 of 32 placed');
   };
   await openVillage();
   await loading.promise;

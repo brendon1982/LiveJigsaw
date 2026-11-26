@@ -31,14 +31,31 @@ export function translateFootprint(footprint: Bounds, center: Point): Bounds {
 export function planTrayParking(
   tray: readonly TrayPiece[], area: Bounds, guide: Bounds, occupied: readonly Bounds[], random: () => number,
 ): readonly ParkedSingle[] {
-  if (!isReachableArea(area)) return [];
+  return planParking(tray, ({ piece, quarterTurns }) => ({
+    centers: [{ x: 0, y: 0 }], footprints: [pieceFootprint(piece, quarterTurns)],
+  }), area, guide, occupied, random).map(({ item: { piece, quarterTurns }, position }) => ({
+    pieceId: piece.id, position, quarterTurns,
+  }));
+}
 
+export function planParkedShuffle(
+  groups: readonly GroupLayout[], area: Bounds, guide: Bounds, placed: readonly Bounds[], random: () => number,
+): ReadonlyMap<ParkedGroup, Point> {
+  return new Map(planParking(groups, (group) => group, area, guide, placed, random)
+    .map(({ item, position }) => [item.group, position]));
+}
+
+function planParking<T>(
+  items: readonly T[], layoutOf: (item: T) => Layout, area: Bounds, guide: Bounds,
+  occupied: readonly Bounds[], random: () => number,
+) {
+  if (!isReachableArea(area)) return [];
   const obstacles = [...occupied];
-  return shuffled(tray, random).map(({ piece, quarterTurns }) => {
-    const footprint = pieceFootprint(piece, quarterTurns);
-    const position = findParkingSlot(footprint, area, guide, obstacles);
-    obstacles.push(translateFootprint(footprint, position));
-    return { pieceId: piece.id, position, quarterTurns };
+  return shuffled(items, random).map((item) => {
+    const layout = layoutOf(item);
+    const position = findParkingSlot(layout, area, guide, obstacles);
+    obstacles.push(...layout.footprints.map((footprint) => translateFootprint(footprint, position)));
+    return { item, position };
   });
 }
 
@@ -181,9 +198,14 @@ function shuffled<T>(items: readonly T[], random: () => number): T[] {
   return order;
 }
 
-function findParkingSlot(footprint: Bounds, area: Bounds, guide: Bounds, obstacles: readonly Bounds[]): Point {
-  const columns = scanAxis(area.x, area.width, footprint.x, footprint.width, guide.x, guide.width);
-  const rows = scanAxis(area.y, area.height, footprint.y, footprint.height, guide.y, guide.height);
+function findParkingSlot(layout: Layout, area: Bounds, guide: Bounds, obstacles: readonly Bounds[]): Point {
+  const { footprints } = layout;
+  const envelope = footprints.length === 1 ? footprints[0] : enclosingBounds(footprints);
+  const centers = footprints.length === 1 ? envelope : Bounds.around(layout.centers);
+  const fitsX = envelope.width <= area.width ? envelope : centers;
+  const fitsY = envelope.height <= area.height ? envelope : centers;
+  const columns = scanAxis(area.x, area.width, fitsX.x, fitsX.width, guide.x, guide.width);
+  const rows = scanAxis(area.y, area.height, fitsY.y, fitsY.height, guide.y, guide.height);
   const guideCenter = guide.center;
   let bestPosition = { x: columns[0], y: rows[0] };
   let bestOverlap = Infinity;
@@ -191,22 +213,29 @@ function findParkingSlot(footprint: Bounds, area: Bounds, guide: Bounds, obstacl
   let bestDistance = Infinity;
 
   for (const y of rows) {
-    const top = y + footprint.y;
-    const bottom = top + footprint.height;
+    const top = y + envelope.y;
+    const bottom = top + envelope.height;
     const rowObstacles = obstacles.filter((obstacle) => top < obstacle.y + obstacle.height && bottom > obstacle.y);
-    const guideHeight = overlapLength(top, footprint.height, guide.y, guide.height);
+    const frames = footprints.map(({ x, y: offsetY, width, height }) => {
+      const top = y + offsetY;
+      return { x, top, width, height, guideHeight: overlapLength(top, height, guide.y, guide.height) };
+    });
 
     for (const x of columns) {
-      const left = x + footprint.x;
-      const guideOverlap = guideHeight * overlapLength(left, footprint.width, guide.x, guide.width);
+      let guideOverlap = 0;
+      for (const frame of frames) {
+        guideOverlap += frame.guideHeight * overlapLength(x + frame.x, frame.width, guide.x, guide.width);
+      }
       const distance = (x - guideCenter.x) ** 2 + (y - guideCenter.y) ** 2;
       const preferred = guideOverlap < bestGuideOverlap || (guideOverlap === bestGuideOverlap && distance < bestDistance);
       if (bestOverlap === 0 && !preferred) continue;
 
       let overlap = 0;
       for (const obstacle of rowObstacles) {
-        const width = overlapLength(left, footprint.width, obstacle.x, obstacle.width);
-        if (width > 0) overlap += width * overlapLength(top, footprint.height, obstacle.y, obstacle.height);
+        for (const frame of frames) {
+          const width = overlapLength(x + frame.x, frame.width, obstacle.x, obstacle.width);
+          if (width > 0) overlap += width * overlapLength(frame.top, frame.height, obstacle.y, obstacle.height);
+        }
         if (overlap > bestOverlap || (overlap === bestOverlap && !preferred)) break;
       }
       if (overlap < bestOverlap || (overlap === bestOverlap && preferred)) {

@@ -79,6 +79,10 @@ export class PuzzlePanels {
 
     if (this.stacked) this.split.setMinTopPanelHeight(firstMinimum).setMinBottomPanelHeight(secondMinimum);
     else this.split.setMinLeftPanelWidth(firstMinimum).setMinRightPanelWidth(secondMinimum);
+    // RexUI measures the split's rectangles by display size, so discard the previous layout's sizes.
+    this.tray.setDisplaySize(1, 1);
+    this.board.setDisplaySize(1, 1);
+    this.divider.setDisplaySize(this.stacked ? 1 : dividerThickness, this.stacked ? dividerThickness : 1);
     this.split.setSplitRatio(this.trayFirst ? fraction : 1 - fraction).setPosition(x, y).setMinSize(width, height).layout();
     this.layoutPanels();
   }

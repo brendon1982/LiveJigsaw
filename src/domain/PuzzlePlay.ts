@@ -1,5 +1,5 @@
 import { Bounds, type Point } from './geometry.ts';
-import { planEdgeSorting, planTrayParking } from './parkedPieceLayout.ts';
+import { planEdgeSorting, planParkedShuffle, planTrayParking } from './parkedPieceLayout.ts';
 import { PieceWorkspace, type ParkedGroup } from './PieceWorkspace.ts';
 import type { DropResult, Puzzle, PuzzleRestore, PuzzleSnapshot } from './Puzzle.ts';
 
@@ -67,7 +67,7 @@ export class PuzzlePlay {
     const guideResult = this.homes.placeGroup(members, group.quarterTurns);
     if (guideResult === 'placed') {
       if (lifted) this.workspace.remove(lifted);
-      if (restrictedParking) this.clearLoosePieces();
+      if (restrictedParking) this.returnAllParkedToTray();
       return boardDrop('placed', guideResult, memberIds);
     }
 
@@ -88,15 +88,21 @@ export class PuzzlePlay {
     const tray = this.trayPieces.map((piece) => ({ piece, quarterTurns: this.puzzle.orientationOf(piece.id) }));
     if (tray.length === 0) return false;
 
-    const { width, height } = this.puzzle.board.size;
-    const guide = new Bounds(0, 0, width, height);
     const occupied = [...this.workspace.occupiedFootprints(), ...this.placedFootprints()];
-    const parking = planTrayParking(tray, area, guide, occupied, random);
+    const parking = planTrayParking(tray, area, this.guideBounds(), occupied, random);
     if (parking.length === 0) return false;
 
     this.workspace.parkSingles(parking);
     for (const { pieceId } of parking) this.homes.takeFromTray(pieceId);
     return true;
+  }
+
+  shuffleParkedPieces(area: Bounds, random = Math.random): boolean {
+    const groups = this.parkedGroups.map((group) => this.workspace.layoutOf(group));
+    if (groups.length === 0) return false;
+
+    const positions = planParkedShuffle(groups, area, this.guideBounds(), this.placedFootprints(), random);
+    return this.workspace.moveGroups(positions);
   }
 
   sortParkedEdges(at: Point, area: Bounds, random = Math.random): boolean {
@@ -121,6 +127,11 @@ export class PuzzlePlay {
     return row === 0 || row === rows - 1 || column === 0 || column === columns - 1;
   }
 
+  private guideBounds(): Bounds {
+    const { width, height } = this.puzzle.board.size;
+    return new Bounds(0, 0, width, height);
+  }
+
   private placedFootprints(): Bounds[] {
     return this.puzzle.pieces.filter(({ id }) => this.puzzle.isPlaced(id)).map(({ outline }) => outline.frame);
   }
@@ -133,9 +144,11 @@ export class PuzzlePlay {
     return true;
   }
 
-  private clearLoosePieces() {
+  returnAllParkedToTray(): boolean {
+    if (this.parkedGroups.length === 0) return false;
     for (const group of this.parkedGroups) this.homes.returnToTray(group.memberIds, group.quarterTurns);
     this.workspace.replaceGroups([]);
+    return true;
   }
 
   turnPiece(pieceId: string): boolean {

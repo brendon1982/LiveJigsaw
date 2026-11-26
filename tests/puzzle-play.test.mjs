@@ -240,7 +240,9 @@ async function playLayout(page) {
       board: { x: board.x, y: board.y, width: board.width, height: board.height, zoom: board.zoom },
       breakButton: iconButton('Break piece off'),
       moveTrayButton: iconButton('Move Tray to Board'),
+      returnAllButton: iconButton('Return All Parked Pieces to Tray'),
       sortButton: iconButton('Sort Edge Pieces'),
+      shuffleButton: iconButton('Shuffle Parked Pieces'),
       fitButton: iconButton('Fit board'),
       nativeSizeButton: iconButton('Native size (1×)'),
       artwork: { x: board.x - board.scrollX * board.zoom, y: board.y - board.scrollY * board.zoom },
@@ -279,15 +281,48 @@ async function dragDivider(page, drag, destination) {
   await drag(divider.x, divider.y, destination.x ?? divider.x, destination.y ?? divider.y);
 }
 
-async function pressIcon(page, button, touch = false) {
+function iconCenter(button) {
   assert.ok(button.visible, 'The icon should be visible');
-  const x = button.x + button.width / 2;
-  const y = button.y + button.height / 2;
+  return [button.x + button.width / 2, button.y + button.height / 2];
+}
+
+async function pressIcon(page, button, touch = false) {
+  const [x, y] = iconCenter(button);
   if (touch) await page.touchscreen.tap(x, y);
   else await page.mouse.click(x, y);
 }
 
-scenario('board tools park the tray, sort at a zoomed mouse target, and restore the result', async (t) => {
+async function countWorkspaceSaves(page) {
+  await page.evaluate(() => {
+    const setItem = Storage.prototype.setItem;
+    window.workspaceSaves = 0;
+    Storage.prototype.setItem = function (key, value) {
+      if (this === localStorage && key === 'live-jigsaw.save') window.workspaceSaves++;
+      return setItem.call(this, key, value);
+    };
+  });
+  return () => page.evaluate(() => window.workspaceSaves);
+}
+
+function assertCompactBoardControls(layout) {
+  const { board } = layout;
+  const buttons = [layout.breakButton, layout.moveTrayButton, layout.returnAllButton, layout.sortButton,
+    layout.shuffleButton, layout.fitButton, layout.nativeSizeButton];
+  for (const [index, button] of buttons.entries()) {
+    assert.ok(button.visible);
+    assert.equal(button.width, 54);
+    assert.equal(button.height, 54);
+    assert.ok(button.x >= board.x && button.x + button.width <= board.x + board.width,
+      'Control must fit the board width');
+    assert.ok(button.y >= board.y && button.y + button.height <= board.y + board.height, 'Control must fit the board height');
+    for (const other of buttons.slice(0, index)) {
+      assert.ok(button.x + button.width <= other.x || other.x + other.width <= button.x
+        || button.y + button.height <= other.y || other.y + other.height <= button.y, 'Controls must not overlap');
+    }
+  }
+}
+
+scenario('board tools park, sort and shuffle with the mouse, and restore the shuffled positions', async (t) => {
   const { page, waitForText, errors, clickDialog, playSelection, setAllowLoosePiecesOnBoard } =
     await openCompactPuzzle(t, { viewport: { width: 1320, height: 780 } });
   await page.mouse.click(340, 180);
@@ -300,14 +335,7 @@ scenario('board tools park the tray, sort at a zoomed mouse target, and restore 
   assert.equal((await playLayout(page)).moveTrayButton.visible, false);
   await setAllowLoosePiecesOnBoard(true);
 
-  await page.evaluate(() => {
-    const setItem = Storage.prototype.setItem;
-    window.workspaceSaves = 0;
-    Storage.prototype.setItem = function (key, value) {
-      if (this === localStorage && key === 'live-jigsaw.save') window.workspaceSaves++;
-      return setItem.call(this, key, value);
-    };
-  });
+  const saves = await countWorkspaceSaves(page);
   await pressIcon(page, (await playLayout(page)).moveTrayButton);
   layout = await playLayout(page);
   assert.equal(layout.moveTrayButton.visible, false);
@@ -339,14 +367,32 @@ scenario('board tools park the tray, sort at a zoomed mouse target, and restore 
   };
   assert.ok(Math.abs(midrange('x') - 256) < 2 && Math.abs(midrange('y') - 144) < 2,
     'The bundle must center on the logical target after pan and zoom');
-  assert.equal(await page.evaluate(() => window.workspaceSaves), 2, 'Each tool should save once');
+  assert.equal(await saves(), 2, 'Each tool should save once');
+
+  await pressIcon(page, sorted.sortButton);
+  layout = await playLayout(page);
+  assert.equal(layout.sortButton.armed, true);
+  await pressIcon(page, layout.shuffleButton);
+  const shuffled = await playLayout(page);
+  assert.equal(shuffled.sortButton.armed, false);
+  assert.deepEqual(shuffled.artwork, layout.artwork, 'Shuffling must preserve pan');
+  assert.equal(shuffled.board.zoom, layout.board.zoom, 'Shuffling must preserve zoom');
+  assert.notDeepEqual(shuffled.parked, sorted.parked);
+  assert.equal(await saves(), 3, 'Shuffling should save once');
 
   await page.reload();
   await waitForText('Windmill');
   await page.mouse.click(340, 180);
   await waitForText('Resume');
   await clickDialog(100, resumeActionY);
-  assert.deepEqual((await playLayout(page)).parked, sorted.parked);
+  layout = await playLayout(page);
+  assert.deepEqual(layout.parked, shuffled.parked);
+  const resumedSaves = await countWorkspaceSaves(page);
+  await pressIcon(page, layout.returnAllButton);
+  layout = await playLayout(page);
+  assert.deepEqual(layout.parked, []);
+  assert.equal(layout.tray.length, 8);
+  assert.equal(await resumedSaves(), 1, 'A Return All click should save once');
   assert.deepEqual(errors, []);
 });
 
@@ -358,11 +404,12 @@ scenario('touch board tools fit on compact screens and distinguish taps from pin
     { memberIds: ['piece-0-0', 'piece-0-1'], anchorPieceId: 'piece-0-0', position: { x: -150, y: 80 }, quarterTurns: 0 },
     { memberIds: ['piece-1-0'], anchorPieceId: 'piece-1-0', position: { x: 300, y: 300 }, quarterTurns: 0 },
   ];
+  const placedPieceIds = ['piece-1-3'];
   await page.evaluate((save) => localStorage.setItem('live-jigsaw.save', JSON.stringify(save)), {
     version: saveVersion,
     progress: { Windmill: {
       setup: { size: compactSize, seed: 42, connectorStyle: 'none', animationSpeed: 'Normal', challengeMode: 'none', pieceRotation: false },
-      placedPieceIds: [], trayOrientations: {}, parkedGroups,
+      placedPieceIds, trayOrientations: {}, parkedGroups,
     } },
   });
   await page.reload();
@@ -370,9 +417,9 @@ scenario('touch board tools fit on compact screens and distinguish taps from pin
   await page.touchscreen.tap(340, 180);
   await waitForText('Resume');
   await clickDialog(100, resumeActionY);
-  await waitForText('0 of 8 placed');
-  await page.setViewportSize({ width: 275, height: 680 });
-  await page.waitForFunction(() => document.querySelector('canvas').width === 275);
+  await waitForText('1 of 8 placed');
+  await page.setViewportSize({ width: 230, height: 680 });
+  await page.waitForFunction(() => document.querySelector('canvas').width === 230);
   const { dispatch } = await touchController(page);
   let layout = await playLayout(page);
   await pressIcon(page, layout.breakButton, true);
@@ -383,9 +430,10 @@ scenario('touch board tools fit on compact screens and distinguish taps from pin
   assert.equal(layout.breakButton.armed, false);
   assert.equal(layout.sortButton.armed, true);
 
+  const saves = await countWorkspaceSaves(page);
   const before = (await readSave(page)).progress.Windmill;
   const fittedZoom = layout.board.zoom;
-  const y = layout.board.y + 170;
+  const y = layout.board.y + 245;
   await dispatch('touchStart', [95, y]);
   await dispatch('touchStart', [95, y], [175, y]);
   await dispatch('touchMove', [75, y], [195, y]);
@@ -393,15 +441,55 @@ scenario('touch board tools fit on compact screens and distinguish taps from pin
   layout = await playLayout(page);
   assert.ok(layout.board.zoom > fittedZoom, 'The two contacts should zoom, not sort');
   assert.deepEqual((await readSave(page)).progress.Windmill, before);
-  const { breakButton, moveTrayButton, sortButton, fitButton, nativeSizeButton } = layout;
-  for (const button of [breakButton, moveTrayButton, sortButton, fitButton, nativeSizeButton]) {
-    assert.ok(button.visible && button.x >= layout.board.x && button.x + button.width <= layout.board.x + layout.board.width);
-  }
-  assert.equal(breakButton.y, moveTrayButton.y);
-  assert.equal(moveTrayButton.y, sortButton.y);
-  assert.ok(breakButton.x + breakButton.width < moveTrayButton.x && moveTrayButton.x + moveTrayButton.width < sortButton.x);
-  assert.ok(fitButton.y >= sortButton.y + sortButton.height && nativeSizeButton.y === fitButton.y);
+  assert.equal(layout.board.width, 230);
+  assertCompactBoardControls(layout);
+  assert.ok(layout.shuffleButton.y > layout.breakButton.y, 'Parked tools should wrap');
+  assert.ok(layout.fitButton.y >= layout.shuffleButton.y + layout.shuffleButton.height,
+    'Zoom should wrap below both occupied tool rows when it cannot fit beside them');
 
+  await page.setViewportSize({ width: 275, height: 680 });
+  await page.waitForFunction(() => document.querySelector('canvas').width === 275);
+  layout = await playLayout(page);
+  assert.equal(layout.board.width, 275);
+  assertCompactBoardControls(layout);
+  assert.equal(layout.fitButton.y, layout.shuffleButton.y, 'Zoom should share the last row when it fits');
+  await pressIcon(page, layout.fitButton, true);
+  const wideFit = await playLayout(page);
+  assert.equal(wideFit.fitButton.visible, false);
+
+  await page.setViewportSize({ width: 230, height: 680 });
+  await page.waitForFunction(() => document.querySelector('canvas').width === 230);
+  layout = await playLayout(page);
+  assert.equal(layout.board.width, 230, 'The board viewport should shrink without a tray-side change');
+  assert.equal(layout.fitButton.visible, false, 'The board should stay fitted after shrinking');
+  assert.ok(layout.board.zoom < wideFit.board.zoom, 'Fit should use the narrower width');
+  const artworkCenter = layout.boardPoint(compactSize.width / 2, compactSize.height / 2);
+  assert.ok(Math.abs(artworkCenter.x - 115) < 1, 'Fitted artwork should stay centered in the canvas');
+  const shuffle = iconCenter(layout.shuffleButton);
+  const pinchStart = [shuffle[0], y + 50];
+  const zoomBeforePinch = layout.board.zoom;
+  await dispatch('touchStart', pinchStart);
+  await dispatch('touchStart', pinchStart, shuffle);
+  await dispatch('touchMove', [pinchStart[0], pinchStart[1] + 30], shuffle);
+  await dispatch('touchEnd');
+  layout = await playLayout(page);
+  assert.ok(layout.board.zoom > zoomBeforePinch, 'A second contact on Shuffle must still allow pinch');
+  assertCompactBoardControls(layout);
+
+  await dispatch('touchStart', iconCenter(layout.returnAllButton));
+  await dispatch('touchCancel');
+  layout = await playLayout(page);
+  assert.deepEqual((await readSave(page)).progress.Windmill, before, 'Pinch and cancellation must not run a bulk tool');
+  assert.equal(await saves(), 0);
+
+  await pressIcon(page, layout.nativeSizeButton, true);
+  layout = await playLayout(page);
+  assert.equal(layout.board.zoom, 1);
+  await pressIcon(page, layout.fitButton, true);
+  layout = await playLayout(page);
+  assert.equal(layout.fitButton.visible, false);
+
+  await pressIcon(page, layout.sortButton, true);
   await dispatch('touchStart', [130, y]);
   await dispatch('touchCancel');
   layout = await playLayout(page);
@@ -415,8 +503,42 @@ scenario('touch board tools fit on compact screens and distinguish taps from pin
   assert.notDeepEqual(sorted.parkedGroups[1].position, before.parkedGroups[1].position);
   assert.deepEqual(sorted.parkedGroups[0].memberIds, parkedGroups[0].memberIds);
   await pressIcon(page, layout.moveTrayButton, true);
-  assert.equal((await playLayout(page)).moveTrayButton.visible, false);
-  assert.equal((await readSave(page)).progress.Windmill.parkedGroups.length, 7);
+  layout = await playLayout(page);
+  assert.equal(layout.moveTrayButton.visible, false);
+  assert.equal((await readSave(page)).progress.Windmill.parkedGroups.length, 6);
+  assert.equal(await saves(), 2);
+
+  await pressIcon(page, layout.breakButton, true);
+  layout = await playLayout(page);
+  assert.equal(layout.breakButton.armed, true);
+  await pressIcon(page, layout.shuffleButton, true);
+  layout = await playLayout(page);
+  assert.equal(layout.breakButton.armed, false);
+  assert.equal(await saves(), 3, 'A Shuffle tap should save once');
+
+  await pressIcon(page, layout.sortButton, true);
+  layout = await playLayout(page);
+  assert.equal(layout.sortButton.armed, true);
+  await pressIcon(page, layout.returnAllButton, true);
+  const returned = await playLayout(page);
+  assert.equal(returned.sortButton.armed, false);
+  assert.equal(returned.returnAllButton.visible, false);
+  assert.equal(returned.shuffleButton.visible, false);
+  assert.equal(returned.parked.length, 0);
+  assert.equal(returned.tray.length, 7);
+  assert.equal(await saves(), 4, 'A Return All tap should save once');
+  assert.deepEqual((await readSave(page)).progress.Windmill.placedPieceIds, placedPieceIds);
+
+  await page.setViewportSize({ width: 1320, height: 780 });
+  await page.reload();
+  await waitForText('Windmill');
+  await page.touchscreen.tap(340, 180);
+  await waitForText('Resume');
+  await clickDialog(100, resumeActionY);
+  await waitForText('1 of 8 placed');
+  layout = await playLayout(page);
+  assert.deepEqual(layout.parked, []);
+  assert.deepEqual(layout.tray.map(({ id }) => id), returned.tray.map(({ id }) => id));
   assert.deepEqual(errors, []);
 });
 

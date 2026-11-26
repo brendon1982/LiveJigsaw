@@ -108,6 +108,22 @@ function drawMoveTrayIcon(art: Phaser.GameObjects.Graphics, color: number) {
   art.strokePath();
 }
 
+function drawReturnAllIcon(art: Phaser.GameObjects.Graphics, color: number) {
+  art.clear().lineStyle(2, color).strokeRect(-8, -10, 5, 5).strokeRect(3, -10, 5, 5).beginPath();
+  art.moveTo(0, -3).lineTo(0, 5).moveTo(-4, 1).lineTo(0, 5).lineTo(4, 1);
+  art.moveTo(-10, 3).lineTo(-10, 10).lineTo(10, 10).lineTo(10, 3);
+  art.strokePath();
+}
+
+function drawShuffleIcon(art: Phaser.GameObjects.Graphics, color: number) {
+  art.clear().lineStyle(2, color).beginPath();
+  art.moveTo(-11, -6).lineTo(-6, -6).lineTo(6, 6).lineTo(11, 6);
+  art.moveTo(-11, 6).lineTo(-6, 6).lineTo(6, -6).lineTo(11, -6);
+  art.moveTo(7, -10).lineTo(11, -6).lineTo(7, -2);
+  art.moveTo(7, 2).lineTo(11, 6).lineTo(7, 10);
+  art.strokePath();
+}
+
 function drawSortEdgesIcon(art: Phaser.GameObjects.Graphics, color: number) {
   art.clear().lineStyle(2, color).strokeRect(-10, -8, 20, 16).beginPath();
   art.moveTo(-10, 0).lineTo(10, 0).moveTo(0, -8).lineTo(0, 8);
@@ -121,6 +137,8 @@ export class PuzzleBoardView {
   private readonly nativeSizeButton: ReturnType<typeof makeIconButton>;
   private readonly breakButton: ReturnType<typeof makeIconButton>;
   private readonly moveTrayButton: ReturnType<typeof makeIconButton>;
+  private readonly returnAllButton: ReturnType<typeof makeIconButton>;
+  private readonly shuffleButton: ReturnType<typeof makeIconButton>;
   private readonly sortButton: ReturnType<typeof makeIconButton>;
   private readonly toolButtons: readonly ReturnType<typeof makeIconButton>[];
   private readonly zoomButtons: readonly ReturnType<typeof makeIconButton>[];
@@ -190,8 +208,10 @@ export class PuzzleBoardView {
       }, { dragThreshold: tapSlop, clickInterval: 0 }).setVisible(false);
     this.breakButton = makeToolButton('Break piece off', drawBreakPieceIcon, () => this.toggleTool('break'));
     this.moveTrayButton = makeToolButton('Move Tray to Board', drawMoveTrayIcon, () => this.moveTrayToBoard());
+    this.returnAllButton = makeToolButton('Return All Parked Pieces to Tray', drawReturnAllIcon, () => this.returnAllParkedToTray());
     this.sortButton = makeToolButton('Sort Edge Pieces', drawSortEdgesIcon, () => this.toggleTool('sort'));
-    this.toolButtons = [this.breakButton, this.moveTrayButton, this.sortButton];
+    this.shuffleButton = makeToolButton('Shuffle Parked Pieces', drawShuffleIcon, () => this.shuffleParkedPieces());
+    this.toolButtons = [this.breakButton, this.moveTrayButton, this.returnAllButton, this.sortButton, this.shuffleButton];
     this.zoomButtons = [this.fitButton, this.nativeSizeButton];
     this.placementEffects = new PlacementEffects(scene, this.board.layer);
     this.floatingPieces = scene.add.layer();
@@ -361,6 +381,9 @@ export class PuzzleBoardView {
     this.breakButton.setVisible(playing && this.play.parkedGroups.some((group) => group.memberIds.length > 1));
     this.moveTrayButton.setVisible(playing && this.play.puzzle.challengeMode !== 'seed'
       && this.allowLoosePiecesOnBoard && this.play.trayPieces.length > 0);
+    const showParkedTools = playing && this.play.parkedGroups.length > 0;
+    this.returnAllButton.setVisible(showParkedTools);
+    this.shuffleButton.setVisible(showParkedTools);
     this.sortButton.setVisible(playing && this.play.hasSortableParkedEdges);
     if ((this.armedTool === 'break' && !this.breakButton.visible) || (this.armedTool === 'sort' && !this.sortButton.visible)) {
       this.setArmedTool();
@@ -384,24 +407,43 @@ export class PuzzleBoardView {
 
   private layoutBoardControls() {
     const { x, y, width } = this.board.camera;
-    const top = y + headerControlGap;
-    let left = x + headerControlGap;
-    let toolHeight = 0;
+    const rowLeft = x + headerControlGap;
+    const rowRight = x + width - headerControlGap;
+    let top = y + headerControlGap;
+    let rowHeight = 0;
+    const nextRow = () => {
+      top += rowHeight + headerControlGap;
+      rowHeight = 0;
+    };
+
+    let left = rowLeft;
     for (const button of this.toolButtons) {
       if (!button.visible) continue;
+      if (rowHeight && left + button.width > rowRight) {
+        nextRow();
+        left = rowLeft;
+      }
       button.setPosition(left, top);
       left += button.width + headerControlGap;
-      toolHeight = Math.max(toolHeight, button.height);
+      rowHeight = Math.max(rowHeight, button.height);
     }
 
-    let right = x + width - headerControlGap;
-    const zoomWidth = this.zoomButtons.reduce((sum, button) => button.visible ? sum + button.width + headerControlGap : sum, 0);
-    const zoomTop = toolHeight && right - zoomWidth + headerControlGap < left ? top + toolHeight + headerControlGap : top;
-    for (const button of this.zoomButtons) {
-      if (!button.visible) continue;
+    const visibleZoomButtons = this.zoomButtons.filter((button) => button.visible);
+    if (visibleZoomButtons.length === 0) return;
+    const zoomWidth = visibleZoomButtons.reduce((sum, button) => sum + button.width, 0)
+      + (visibleZoomButtons.length - 1) * headerControlGap;
+    if (rowHeight && rowRight - zoomWidth < left) nextRow();
+
+    let right = rowRight;
+    for (const button of visibleZoomButtons) {
+      if (rowHeight && right - button.width < rowLeft) {
+        nextRow();
+        right = rowRight;
+      }
       const buttonLeft = Math.max(x, right - button.width);
-      button.setPosition(buttonLeft, zoomTop);
+      button.setPosition(buttonLeft, top);
       right = buttonLeft - headerControlGap;
+      rowHeight = Math.max(rowHeight, button.height);
     }
   }
 
@@ -688,6 +730,20 @@ export class PuzzleBoardView {
   private moveTrayToBoard() {
     this.setArmedTool();
     if (!this.play.moveTrayToBoard(this.board.reachableBounds, this.allowLoosePiecesOnBoard)) return;
+    this.reconcileWorkspace();
+    this.actions.onWorkspaceChange();
+  }
+
+  private returnAllParkedToTray() {
+    this.setArmedTool();
+    if (!this.play.returnAllParkedToTray()) return;
+    this.reconcileWorkspace();
+    this.actions.onWorkspaceChange();
+  }
+
+  private shuffleParkedPieces() {
+    this.setArmedTool();
+    if (!this.play.shuffleParkedPieces(this.board.reachableBounds)) return;
     this.reconcileWorkspace();
     this.actions.onWorkspaceChange();
   }

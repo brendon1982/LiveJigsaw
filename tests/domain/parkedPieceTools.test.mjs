@@ -125,6 +125,183 @@ test('bulk parking in Sequential keeps later pieces gated and saves their parked
   assert.equal(resumed.dropOnBoard(next.id, next.target).kind, 'placed');
 });
 
+test('bulk return restores a rotated group and single to a partially filled tray in seeded order', () => {
+  const setup = { columns: 4, rows: 2, seed: 7, pieceRotation: true };
+  const { play, pieceAt, expectProgress } = givenPuzzle(setup);
+  const [anchor, member, singleton, placed] = [0, 1, 2, 3].map((column) => pieceAt(column, 0));
+  const seededOrder = play.trayPieces;
+  turnTo(play, anchor, 1);
+  turnTo(play, member, 1);
+  turnTo(play, singleton, 3);
+  turnTo(play, placed, 0);
+  assert.equal(play.dropOnBoard(anchor.id, { x: -300, y: -300 }).kind, 'parked');
+  assert.equal(play.dropOnBoard(member.id, { x: -300, y: -300 + member.target.x - anchor.target.x }).kind, 'joined');
+  assert.equal(play.dropOnBoard(singleton.id, { x: -600, y: -300 }).kind, 'parked');
+  assert.equal(play.dropOnBoard(placed.id, placed.target).kind, 'placed');
+  assert.equal(play.turnPiece(member.id), true);
+  const trayTurns = play.snapshot().trayOrientations;
+
+  assert.equal(play.returnAllParkedToTray(), true);
+  assert.deepEqual(play.parkedGroups, []);
+  assert.deepEqual(play.trayPieces, seededOrder.filter((piece) => piece !== placed));
+  const returned = play.snapshot();
+  assert.deepEqual(returned.trayOrientations, { ...trayTurns, [anchor.id]: 2, [member.id]: 2, [singleton.id]: 3 });
+  assert.deepEqual(returned.placedPieceIds, [placed.id]);
+  expectProgress({ placed: 1, total: 8 });
+  assert.equal(play.returnAllParkedToTray(), false);
+  assert.deepEqual(play.snapshot(), returned);
+  assertRestores(setup, play);
+});
+
+test('bulk return is available in Seed and first placement still clears parked pieces', () => {
+  const { play, pieceAt } = givenPuzzle({ challengeMode: 'seed', seed: 7, pieceRotation: true });
+  const parked = pieceAt(0, 0);
+  const seed = pieceAt(1, 1);
+  const offGuide = { x: -300, y: -300 };
+  const seededOrder = play.trayPieces;
+  turnTo(play, parked, 3);
+  turnTo(play, seed, 0);
+  assert.equal(play.dropOnBoard(parked.id, offGuide).kind, 'parked');
+  assert.equal(play.returnAllParkedToTray(), true);
+  assert.deepEqual(play.trayPieces, seededOrder);
+  assert.equal(play.orientationOf(parked.id), 3);
+
+  assert.equal(play.dropOnBoard(parked.id, offGuide).kind, 'parked');
+  assert.equal(play.dropOnBoard(seed.id, seed.target).kind, 'placed');
+  assert.equal(play.returnAllParkedToTray(), false);
+  assert.deepEqual(play.trayPieces, seededOrder.filter((piece) => piece !== seed));
+  assert.equal(play.orientationOf(parked.id), 3);
+});
+
+test('bulk return does not unlock gated pieces in Sequential', () => {
+  const { play } = givenPuzzle({ challengeMode: 'sequential', seed: 7 });
+  const seededOrder = play.trayPieces;
+  const [first, next] = seededOrder;
+  assert.equal(play.moveTrayToBoard(roomyWorkspace, true, () => 0), true);
+  assert.equal(play.dropOnBoard(next.id, next.target).guideResult, 'blocked');
+
+  assert.equal(play.returnAllParkedToTray(), true);
+  assert.deepEqual(play.trayPieces, seededOrder);
+  assert.equal(play.dropOnBoard(next.id, next.target).guideResult, 'blocked');
+  assert.equal(play.dropOnBoard(first.id, first.target).kind, 'placed');
+  assert.equal(play.dropOnBoard(next.id, next.target).kind, 'placed');
+});
+
+test('shuffle clears the guide and moves rotated groups intact without changing the tray or progress', () => {
+  const setup = { columns: 4, rows: 2, cell: { width: 80, height: 100 }, seed: 7, pieceRotation: true };
+  const { board, play, pieceAt, expectProgress } = givenPuzzle(setup);
+  const [anchor, member, single, placed] = [0, 1, 2, 3].map((column) => pieceAt(column, 0));
+  turnTo(play, anchor, 1);
+  turnTo(play, member, 1);
+  turnTo(play, single, 3);
+  turnTo(play, placed, 0);
+  assert.equal(play.dropOnBoard(anchor.id, { x: -300, y: -300 }).kind, 'parked');
+  assert.equal(play.dropOnBoard(member.id, { x: -300, y: -220 }).kind, 'joined');
+  assert.equal(play.dropOnBoard(single.id, { x: -300, y: 100 }).kind, 'parked');
+  assert.equal(play.dropOnBoard(placed.id, placed.target).kind, 'placed');
+
+  const tray = play.trayPieces;
+  const { parkedGroups, ...before } = play.snapshot();
+  assert.equal(play.shuffleParkedPieces(roomyWorkspace, () => 0), true);
+
+  const guide = new Bounds(0, 0, board.size.width, board.size.height);
+  for (const [index, { position, ...group }] of play.parkedGroups.entries()) {
+    const { position: original, ...originalGroup } = parkedGroups[index];
+    assert.notDeepEqual(position, original);
+    assert.deepEqual(group, originalGroup);
+  }
+  const position = play.positionOf(anchor.id);
+  assert.deepEqual(play.positionOf(member.id), { x: position.x, y: position.y + 80 });
+  const singleFrame = parkedFrame(play, single);
+  for (const piece of [anchor, member, single]) {
+    const frame = parkedFrame(play, piece);
+    assertInside(frame, roomyWorkspace);
+    assert.equal(overlaps(frame, guide), false);
+    if (piece !== single) assert.equal(overlaps(frame, singleFrame), false);
+  }
+  const { parkedGroups: shuffled, ...after } = play.snapshot();
+  assert.deepEqual(after, before);
+  assert.deepEqual(play.trayPieces, tray);
+  expectProgress({ placed: 1, total: 8 });
+  assertRestores(setup, play);
+});
+
+test('shuffle swaps single-piece parking slots for a reversed order without treating old slots as obstacles', () => {
+  const { play } = givenPuzzle({ columns: 2, rows: 1, cell: { width: 80, height: 80 }, connectorStyle: 'none' });
+  const workspace = new Bounds(-320, 0, 240, 80);
+  const [first, second] = play.trayPieces;
+  assert.equal(play.moveTrayToBoard(workspace, true, () => 0.75), true);
+  const slots = [play.positionOf(first.id), play.positionOf(second.id)];
+  assert.deepEqual(slots, [{ x: -120, y: 40 }, { x: -200, y: 40 }]);
+
+  assert.equal(play.shuffleParkedPieces(workspace, () => 0), true);
+  assert.deepEqual([play.positionOf(second.id), play.positionOf(first.id)], slots);
+  assert.deepEqual(play.groupOf(first.id).memberIds, [first.id]);
+  assert.deepEqual(play.groupOf(second.id).memberIds, [second.id]);
+});
+
+test('shuffle scores member footprints rather than the joined envelope in a crowded area', () => {
+  const { play, pieceAt, expectProgress } = givenPuzzle({
+    columns: 4, rows: 2, cell: { width: 80, height: 80 }, connectorStyle: 'none',
+  });
+  const [anchor, member, corner, placed, single] = [[0, 0], [1, 0], [0, 1], [2, 1], [3, 1]]
+    .map(([column, row]) => pieceAt(column, row));
+  assert.equal(play.dropOnBoard(placed.id, placed.target).kind, 'placed');
+  assert.equal(play.dropOnBoard(anchor.id, { x: -300, y: -300 }).kind, 'parked');
+  assert.equal(play.dropOnBoard(member.id, { x: -220, y: -300 }).kind, 'joined');
+  assert.equal(play.dropOnBoard(corner.id, { x: -300, y: -220 }).kind, 'joined');
+  assert.equal(play.dropOnBoard(single.id, { x: 120, y: 40 }).kind, 'parked');
+
+  assert.equal(play.shuffleParkedPieces(new Bounds(80, 0, 240, 160), () => 0.75), true);
+  assert.deepEqual(play.positionOf(anchor.id), { x: 120, y: 40 });
+  assert.ok(overlaps(bundleFrame(play, [anchor, member, corner]), placed.outline.frame));
+  const singleFrame = parkedFrame(play, single);
+  for (const piece of [anchor, member, corner, single]) {
+    const frame = parkedFrame(play, piece);
+    assert.equal(overlaps(frame, placed.outline.frame), false);
+    if (piece !== single) assert.equal(overlaps(frame, singleFrame), false);
+  }
+  assert.deepEqual(play.groupOf(single.id).memberIds, [single.id]);
+  expectProgress({ placed: 1, total: 8 });
+});
+
+test('shuffle keeps member centers reachable when frames cannot fit and keeps the anchor reachable in a smaller area', () => {
+  const { play, pieceAt } = givenPuzzle({ columns: 2, rows: 1, connectorStyle: 'none', pieceRotation: true });
+  const [anchor, member] = [pieceAt(0, 0), pieceAt(1, 0)];
+  turnTo(play, anchor, 1);
+  turnTo(play, member, 1);
+  assert.equal(play.dropOnBoard(anchor.id, { x: -300, y: -300 }).kind, 'parked');
+  assert.equal(play.dropOnBoard(member.id, { x: -300, y: -172 }).kind, 'joined');
+
+  const crowded = new Bounds(-250, -200, 50, 150);
+  assert.equal(play.shuffleParkedPieces(crowded, () => 0), true);
+  for (const piece of [anchor, member]) assertPointInside(play.positionOf(piece.id), crowded);
+
+  const tiny = new Bounds(5, -7, 0, 0);
+  assert.equal(play.shuffleParkedPieces(tiny, () => 0), true);
+  assertPointInside(play.positionOf(anchor.id), tiny);
+  assert.deepEqual(play.positionOf(member.id), { x: 5, y: 121 });
+  assert.deepEqual(play.groupOf(member.id).memberIds, [anchor.id, member.id]);
+  assert.equal(play.orientationOf(member.id), 1);
+});
+
+test('shuffle works in Seed and leaves empty, invalid, and unchanged layouts alone', () => {
+  const { play, pieceAt } = givenPuzzle({ challengeMode: 'seed' });
+  const unexpectedRandom = () => assert.fail('should not need randomness');
+  assert.equal(play.shuffleParkedPieces(roomyWorkspace, unexpectedRandom), false);
+  const piece = pieceAt(0, 0);
+  assert.equal(play.dropOnBoard(piece.id, { x: -300, y: -300 }).kind, 'parked');
+  const before = play.snapshot();
+  for (const area of [new Bounds(0, 0, -1, 20), new Bounds(0, NaN, 40, 40), new Bounds(0, 0, Infinity, 40)]) {
+    assert.equal(play.shuffleParkedPieces(area, unexpectedRandom), false);
+    assert.deepEqual(play.snapshot(), before);
+  }
+  assert.equal(play.shuffleParkedPieces(roomyWorkspace, unexpectedRandom), true);
+  const after = play.snapshot();
+  assert.equal(play.shuffleParkedPieces(roomyWorkspace, unexpectedRandom), false);
+  assert.deepEqual(play.snapshot(), after);
+});
+
 test('edge sorting bundles perimeter singles and clears the gap without splitting rotated blockers', () => {
   const setup = { columns: 5, rows: 4, cell: { width: 80, height: 80 }, connectorStyle: 'none', pieceRotation: true };
   const { play, pieceAt, expectProgress } = givenPuzzle(setup);
@@ -310,6 +487,10 @@ function bundleFrame(play, pieces) {
     const { x, y, width, height } = parkedFrame(play, piece);
     return [{ x, y }, { x: x + width, y: y + height }];
   }));
+}
+
+function assertPointInside({ x, y }, outer) {
+  assertInside(new Bounds(x, y, 0, 0), outer);
 }
 
 function assertInside(inner, outer) {

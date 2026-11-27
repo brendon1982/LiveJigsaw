@@ -1,71 +1,27 @@
 import Phaser from 'phaser';
+import type { Bounds, Point } from '../domain/geometry';
 import type { PuzzlePiece } from '../domain/Puzzle';
-import { Bounds, type Point, type Size } from '../domain/geometry';
+import { BatchedPieceImage } from '../rendering/BatchedPieceImage';
 import type { LivePuzzleCapture } from '../rendering/LivePuzzleCapture';
-import { drawEffectImage, effectImageResolution, traceEffectPath } from './effectImage';
+import { borderFrameName, type PieceMask } from '../rendering/PieceMaskAtlas';
 import { styleWithTheme } from './theme';
 
-function pieceRenderFrame(frame: Bounds, captureSize: Size): Bounds {
-  const { x, y, width, height } = frame;
-  if (!Phaser.Math.Pow2.IsSize(width, height)) return frame;
-
-  // Phaser repeats power-of-two filter outputs. Add a transparent texel outside the outline
-  // to make the render target non-power-of-two without changing the piece or tray slot.
-  if (width > 1 && width < captureSize.width) {
-    const left = x + width < captureSize.width ? x : x - 1;
-    return new Bounds(left, y, width + 1, height);
-  }
-  if (height > 1 && height < captureSize.height) {
-    const top = y + height < captureSize.height ? y : y - 1;
-    return new Bounds(x, top, width, height + 1);
-  }
-  return frame;
-}
-
 export class PuzzlePieceView {
-  readonly mask: Phaser.Textures.CanvasTexture;
   readonly frame: Bounds;
-  private readonly image: Phaser.GameObjects.Image;
+  private readonly image: BatchedPieceImage;
   private readonly hitArea: Phaser.Geom.Polygon;
   private readonly visibleBounds = new Phaser.Geom.Rectangle();
-  private grayscale?: Phaser.Filters.ColorMatrix;
   private parkedBorder?: Phaser.GameObjects.Image;
   private scale = 1;
 
-  constructor(scene: Phaser.Scene, capture: LivePuzzleCapture, readonly piece: PuzzlePiece) {
-    const { frame: outlineBounds, points } = piece.outline;
-    const { texture } = capture;
-    // Round the texture crop outward to include the full outline.
-    const left = Math.floor(outlineBounds.x);
-    const top = Math.floor(outlineBounds.y);
-    const right = Math.ceil(outlineBounds.x + outlineBounds.width);
-    const bottom = Math.ceil(outlineBounds.y + outlineBounds.height);
-    this.frame = new Bounds(left, top, right - left, bottom - top);
-    const frame = pieceRenderFrame(this.frame, texture);
-    const localPoints = points.map((point) => frame.toLocal(point));
-    const maskKey = `live-puzzle-mask-${piece.id}`;
-    const mask = scene.textures.createCanvas(maskKey, frame.width, frame.height);
-    if (!mask) throw new Error(`Could not create mask for ${piece.id}`);
-    this.mask = mask;
-
-    const context = mask.context;
-    context.beginPath();
-    context.moveTo(localPoints[0].x, localPoints[0].y);
-    for (const point of localPoints.slice(1)) context.lineTo(point.x, point.y);
-    context.closePath();
-    context.fillStyle = '#fff';
-    context.fill();
-    mask.refresh();
-    mask.setWrap(Phaser.Textures.WrapMode.CLAMP_TO_EDGE);
-
-    texture.add(piece.id, 0, frame.x, frame.y, frame.width, frame.height);
-
+  constructor(scene: Phaser.Scene, capture: LivePuzzleCapture, readonly piece: PuzzlePiece, mask: PieceMask) {
+    const { texture, frame } = mask;
+    this.frame = frame;
     const origin = frame.toLocal(piece.target);
-    this.image = scene.add.image(0, 0, texture.key, piece.id)
-      .setOrigin(origin.x / frame.width, origin.y / frame.height);
-    this.image.enableFilters().filters!.internal.addMask(maskKey);
+    this.image = new BatchedPieceImage(scene, texture, piece.id, capture.texture, frame)
+      .setDisplayOrigin(origin.x, origin.y);
 
-    const hitPoints = points.map(({ x, y }) => ({ x: x - piece.target.x, y: y - piece.target.y }));
+    const hitPoints = piece.outline.points.map(({ x, y }) => ({ x: x - piece.target.x, y: y - piece.target.y }));
     this.hitArea = new Phaser.Geom.Polygon(hitPoints);
   }
 
@@ -107,7 +63,7 @@ export class PuzzlePieceView {
   setScale(scale: number) {
     this.scale = scale;
     this.image.setScale(scale);
-    this.parkedBorder?.setScale(scale / effectImageResolution);
+    this.parkedBorder?.setScale(scale);
   }
 
   addTo(layer: Phaser.GameObjects.Layer, index?: number) {
@@ -131,25 +87,18 @@ export class PuzzlePieceView {
       this.parkedBorder?.destroy();
       this.parkedBorder = undefined;
     } else if (!this.parkedBorder) {
-      const { outline, target } = this.piece;
-      const border = drawEffectImage(this.image.scene, outline.frame, 2, target, (context) => {
-        context.beginPath();
-        traceEffectPath(context, outline.points);
-        context.closePath();
-        context.lineWidth = 1;
-        context.strokeStyle = '#fff';
-        context.stroke();
-      }).setName('Parked piece border');
+      const { scene, artwork, texture } = this.image;
+      const border = new BatchedPieceImage(scene, texture,
+        borderFrameName(this.piece.id), artwork, this.frame, true).setName('Parked piece border');
+      const paddingX = (border.width - this.frame.width) / 2;
+      const paddingY = (border.height - this.frame.height) / 2;
+      border.setDisplayOrigin(this.image.displayOriginX + paddingX, this.image.displayOriginY + paddingY);
       styleWithTheme(border, (colors) => border.setTint(colors.border));
       this.parkedBorder = border;
     }
   }
 
   setGrayscale(enabled: boolean) {
-    if (enabled && !this.grayscale) {
-      this.grayscale = this.image.filters!.internal.addColorMatrix();
-      this.grayscale.colorMatrix.grayscale();
-    }
-    this.grayscale?.setActive(enabled);
+    this.image.grayscale = enabled;
   }
 }

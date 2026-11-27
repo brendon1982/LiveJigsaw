@@ -1179,7 +1179,7 @@ scenario('Folk Art Christmas Tree shows Sara Oliveira’s full wrapped artwork c
 scenario('the Flowers and Static filters open Cherry Blossoms with an adaptive cut that survives reload', async (t) => {
   const { page, waitForText, errors, clickDialog } = await openPuzzle(t, {
     viewport: { width: 1320, height: 780 }, hasTouch: true,
-  });
+  }, currentSizesPuzzlePath, trackPieceDraws);
   const { moveFinger } = await touchController(page);
   const filterFlowers = async () => {
     await pressHeader(page, 'Filters', true);
@@ -1212,6 +1212,10 @@ scenario('the Flowers and Static filters open Cherry Blossoms with an adaptive c
   const size = { width: 1043, height: 1649, columns: 17, rows: 27, snapTolerance: 16 };
   const layout = await playLayout(page);
   await assertStaticCapture(page, size);
+  const { maskDraws, batchDraws, quads } = await page.evaluate(() => window.inspectPieceDraws());
+  assert.equal(maskDraws, 0, 'Static pieces should also avoid offscreen mask passes');
+  assert.equal(batchDraws, 1);
+  assert.ok(quads > 1 && quads < size.columns * size.rows);
   const piece = layout.tray[0];
   const target = pieceTarget(layout, piece.id, size);
   await moveFinger(piece.x, piece.y, target.x, target.y);
@@ -1294,42 +1298,40 @@ for (const { title, key, cardX, width, height, columns, rows } of [
   });
 }
 
-function trackPieceMaskDraws(page) {
+function trackPieceDraws(page) {
   return page.addInitScript(() => {
-    // Count actual mask draws, which camera clipping alone does not prevent.
-    const maskPrograms = new WeakSet();
-    const activeMasks = new WeakMap();
+    const programs = new WeakMap();
+    const activePrograms = new WeakMap();
     let maskDraws = 0;
-    let repeatingMasks = 0;
+    let batchDraws = 0;
+    let quads = 0;
     for (const { prototype } of [WebGLRenderingContext, WebGL2RenderingContext]) {
       const { getUniformLocation, useProgram } = prototype;
       prototype.getUniformLocation = function (program, name) {
-        if (name === 'uMaskSampler') maskPrograms.add(program);
+        if (name === 'uMaskSampler') programs.set(program, 'filter');
+        if (name === 'uPieceArtwork') programs.set(program, 'batch');
         return getUniformLocation.call(this, program, name);
       };
       prototype.useProgram = function (program) {
-        activeMasks.set(this, maskPrograms.has(program));
+        activePrograms.set(this, programs.get(program));
         return useProgram.call(this, program);
       };
       for (const method of ['drawArrays', 'drawElements']) {
         const draw = prototype[method];
         prototype[method] = function (...args) {
-          if (activeMasks.get(this)) {
-            maskDraws++;
-            const activeUnit = this.getParameter(this.ACTIVE_TEXTURE);
-            this.activeTexture(this.TEXTURE1); // Phaser binds the mask on unit 1.
-            const wrapS = this.getTexParameter(this.TEXTURE_2D, this.TEXTURE_WRAP_S);
-            const wrapT = this.getTexParameter(this.TEXTURE_2D, this.TEXTURE_WRAP_T);
-            this.activeTexture(activeUnit);
-            if (wrapS !== this.CLAMP_TO_EDGE || wrapT !== this.CLAMP_TO_EDGE) repeatingMasks++;
+          const kind = activePrograms.get(this);
+          if (kind === 'filter') maskDraws++;
+          if (kind === 'batch' && method === 'drawElements') {
+            batchDraws++;
+            quads += args[1] / 6;
           }
           return draw.apply(this, args);
         };
       }
     }
-    window.inspectPieceMaskDraws = () => new Promise((resolve) => requestAnimationFrame(() => {
-      maskDraws = repeatingMasks = 0;
-      requestAnimationFrame(() => resolve({ maskDraws, repeatingMasks }));
+    window.inspectPieceDraws = () => new Promise((resolve) => requestAnimationFrame(() => {
+      maskDraws = batchDraws = quads = 0;
+      requestAnimationFrame(() => resolve({ maskDraws, batchDraws, quads }));
     }));
   });
 }
@@ -1545,25 +1547,35 @@ scenario('work surface tooltips follow mouse hover without affecting touch or cl
   assert.deepEqual(errors, []);
 });
 
-scenario('the 420-piece tray only draws nearby piece masks', async (t) => {
+scenario('420 loose pieces batch on the board and the tray only submits nearby pieces', async (t) => {
   const { page, waitForText, errors, playSelection } = await openPuzzle(t, {
     viewport: { width: 1320, height: 780 },
-  }, currentSizesPuzzlePath, trackPieceMaskDraws);
+  }, currentSizesPuzzlePath, trackPieceDraws);
   await page.mouse.click(340, 180);
   for (const count of ['40', '72', '144', '300', '420']) await waitForText(count);
   assert.ok(!(await page.evaluate(() => window.paintedText)).includes('8'));
   await playSelection({ size: 420, pieceShape: 'square', connectorStyle: 'Classic' });
   await waitForText('0 of 420 placed');
 
-  const assertMaskDraws = async () => {
-    const { maskDraws, repeatingMasks } = await page.evaluate(() => window.inspectPieceMaskDraws());
-    assert.ok(maskDraws > 1 && maskDraws < 16, `Expected only visible tray masks, got ${maskDraws} draws`);
-    assert.equal(repeatingMasks, 0, 'Piece cutouts should not sample the opposite edge of their masks');
+  const measureDraws = () => page.evaluate(() => window.inspectPieceDraws());
+  const assertTrayBatch = async () => {
+    const { maskDraws, batchDraws, quads } = await measureDraws();
+    assert.equal(maskDraws, 0, 'Loose pieces should not run offscreen mask passes');
+    assert.equal(batchDraws, 1);
+    assert.ok(quads > 1 && quads < 16, `Expected only nearby tray pieces, got ${quads}`);
   };
-  await assertMaskDraws();
+  await assertTrayBatch();
   await page.mouse.move(85, 140);
   await page.mouse.wheel(0, 30000);
-  await assertMaskDraws();
+  await assertTrayBatch();
+
+  const { moveTrayButton } = await playLayout(page);
+  await page.mouse.click(moveTrayButton.x, moveTrayButton.y);
+  assert.equal((await playLayout(page)).parked.length, 420);
+  const { maskDraws, batchDraws, quads } = await measureDraws();
+  assert.equal(maskDraws, 0);
+  assert.equal(quads, 840, 'Every parked piece and border should be submitted');
+  assert.ok(batchDraws >= 1 && batchDraws <= 4, `Expected a few board batches, got ${batchDraws}`);
   assert.deepEqual(errors, []);
 });
 

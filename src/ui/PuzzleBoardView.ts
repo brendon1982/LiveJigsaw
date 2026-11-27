@@ -3,6 +3,7 @@ import type { Bounds, Point } from '../domain/geometry';
 import type { PuzzlePlay } from '../domain/PuzzlePlay';
 import type { TrayFractions, TrayPosition } from '../persistence/GameSave';
 import type { LivePuzzleCapture } from '../rendering/LivePuzzleCapture';
+import { PieceMaskAtlas } from '../rendering/PieceMaskAtlas';
 import { makeIconButton, type UIScene } from './button';
 import { drawEffectImage, effectImageResolution, traceEffectPath } from './effectImage';
 import { makeHoverTooltip } from './hoverTooltip';
@@ -150,6 +151,7 @@ export class PuzzleBoardView {
   private readonly floatingPieces: Phaser.GameObjects.Layer;
   private readonly liftShadows = new Map<PuzzlePieceView, Phaser.GameObjects.Image>();
   private rejectedPiece?: PuzzlePieceView;
+  private readonly pieceMasks: PieceMaskAtlas;
   private readonly pieces = new Map<string, PuzzlePieceView>();
   private parkedPieces: PuzzlePieceView[] = [];
   private breakSlide?: { entry: PuzzlePieceView; tween: Phaser.Tweens.Tween };
@@ -175,9 +177,10 @@ export class PuzzleBoardView {
   ) {
     const { puzzle } = play;
     const placedPieces = puzzle.pieces.filter(({ id }) => puzzle.isPlaced(id));
-    for (const piece of puzzle.pieces) {
-      if (puzzle.isPlaced(piece.id)) continue;
-      const entry = new PuzzlePieceView(scene, capture, piece);
+    const loosePieces = puzzle.pieces.filter(({ id }) => !puzzle.isPlaced(id));
+    this.pieceMasks = new PieceMaskAtlas(scene, loosePieces);
+    for (const piece of loosePieces) {
+      const entry = new PuzzlePieceView(scene, capture, piece, this.pieceMasks.masks.get(piece.id)!);
       entry.setOrientation(play.orientationOf(piece.id));
       this.pieces.set(piece.id, entry);
     }
@@ -305,7 +308,7 @@ export class PuzzleBoardView {
     this.seedDropFeedback?.destroy();
     this.placementEffects.destroy();
     this.board.destroy();
-    for (const { mask } of this.pieces.values()) this.scene.textures.remove(mask);
+    this.pieceMasks.destroy();
   }
 
   setTrayPosition(position: TrayPosition) {

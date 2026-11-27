@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import type { Size } from '../../domain/geometry';
 import { seededRandom } from '../../domain/seededRandom';
 import { imagePreview } from '../imagePreview';
-import { puzzleAnimationRates, type PuzzleSource, type PuzzleSourceSceneData } from '../PuzzleSource';
+import { puzzleAnimationRates, type PuzzleAttribution, type PuzzleSource, type PuzzleSourceSceneData } from '../PuzzleSource';
 import type { PuzzleTheme } from '../PuzzleTags';
 
 type ParallaxLayer = Readonly<{
@@ -25,6 +25,7 @@ type ParallaxArtwork = Readonly<{
   key: string;
   title: string;
   theme: PuzzleTheme;
+  attribution?: PuzzleAttribution;
   preview: string;
   artworkSize?: Size;
   /** The compositing order, from back to front. */
@@ -40,7 +41,7 @@ const defaultPlacementRange = [-0.06, 1.06] as const;
 const standardArtworkSize = { width: 1920, height: 1080 };
 
 export function parallaxSource({
-  key, title, theme, preview, artworkSize = standardArtworkSize, layers,
+  key, title, theme, attribution, preview, artworkSize = standardArtworkSize, layers,
 }: ParallaxArtwork): PuzzleSource {
   const textureKey = (name: string) => `parallax-${key}-${name}`;
 
@@ -121,6 +122,7 @@ export function parallaxSource({
   return {
     title,
     tags: { theme, type: 'Parallax' },
+    attribution,
     maxViewport: artworkSize,
     scene: ParallaxScene,
     ...imagePreview(textureKey('preview'), preview),

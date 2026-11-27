@@ -49,7 +49,7 @@ import { violetNebulaSource } from './violetNebula/violetNebulaSource';
 import { windmillSource } from './windmill/windmillSource';
 import { witchlightHearthSource } from './witchlightHearth/witchlightHearthSource';
 
-export const puzzleSources: readonly PuzzleSource[] = [
+const catalog: readonly PuzzleSource[] = [
   windmillSource,
   lighthouseSource,
   mountainsSource,
@@ -100,3 +100,13 @@ export const puzzleSources: readonly PuzzleSource[] = [
   eclipseOrbitSource,
   blueStarSource,
 ];
+
+// Temporary credits for the current catalog. Source-level attribution takes precedence.
+const placeholderAttribution = {
+  name: 'Artist credit pending',
+  description: 'Placeholder for the artwork credits.',
+  url: 'https://example.com',
+};
+
+export const puzzleSources: readonly PuzzleSource[] = catalog.map((source) =>
+  source.attribution ? source : { ...source, attribution: placeholderAttribution });

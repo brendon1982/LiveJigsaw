@@ -12,6 +12,8 @@ const cornerRadius = 16;
 const footerHeight = 72;
 const statusRowHeight = 22;
 const footerInset = puzzleSpacing;
+const creditsWidth = 72;
+const creditsHeight = 44;
 
 export function makePreviewCornerCutout(scene: UIScene): Phaser.Textures.CanvasTexture {
   const cutout = scene.textures.createCanvas('picker-preview-corners', maxPickerCardWidth, cornerRadius);
@@ -36,6 +38,7 @@ export function makePuzzlePickerCard(
   listBounds: Phaser.Geom.Rectangle,
   scrollThreshold: number,
   openOptions: () => void,
+  openCredits?: () => void,
 ) {
   const background = scene.rexUI.add.roundRectangle(0, 0, 1, 1, cornerRadius).setOrigin(0);
   let preview: Phaser.GameObjects.RenderTexture | undefined;
@@ -47,6 +50,20 @@ export function makePuzzlePickerCard(
   const statusLabel = scene.add.text(0, 0, status, metadataStyle).setOrigin(1, 0.5);
   const inlineStatusWidth = status ? tags.width + headerControlGap + statusLabel.width : 0;
 
+  const isInsideList = (x: number, y: number) => {
+    const point = scene.cameras.main.getWorldPoint(x, y);
+    return listBounds.contains(point.x, point.y);
+  };
+  const bindTap = (target: Phaser.GameObjects.GameObject, action: () => void) => {
+    scene.rexUI.add.click(target, { threshold: scrollThreshold, clickInterval: 0 })
+      .on('click', (_button: unknown, _object: unknown, pointer: Phaser.Input.Pointer) => {
+        if (pointer.wasCanceled || pointer.getDistance() >= scrollThreshold
+          || !isInsideList(pointer.downX, pointer.downY) || !isInsideList(pointer.x, pointer.y)) return;
+        action();
+      });
+    target.input!.cursor = 'pointer';
+  };
+
   let pressed = false;
   styleWithTheme(background, (colors) => {
     background.setFillStyle(pressed ? colors.surfacePressed : colors.surface);
@@ -55,26 +72,30 @@ export function makePuzzlePickerCard(
     statusLabel.setColor(colors.text);
   });
   if (availablePuzzleSizes(source.maxViewport).length > 0) {
-    const isInsideList = (x: number, y: number) => {
-      const point = scene.cameras.main.getWorldPoint(x, y);
-      return listBounds.contains(point.x, point.y);
-    };
     addPressFeedback(background, (value) => {
       pressed = value;
       background.setFillStyle(pressed ? palette.surfacePressed : palette.surface);
       preview?.setTint(pressed ? 0xececec : 0xffffff);
     }, scrollThreshold, (pointer) => isInsideList(pointer.x, pointer.y));
-    scene.rexUI.add.click(background, { threshold: scrollThreshold, clickInterval: 0 })
-      .on('click', (_button: unknown, _object: unknown, pointer: Phaser.Input.Pointer) => {
-        if (pointer.wasCanceled || pointer.getDistance() >= scrollThreshold
-          || !isInsideList(pointer.downX, pointer.downY) || !isInsideList(pointer.x, pointer.y)) return;
-        openOptions();
-      });
-    background.input!.cursor = 'pointer';
+    bindTap(background, openOptions);
   }
 
   const container = scene.rexUI.add.container(0, 0, 0, 0).setOrigin(0)
     .addLocal([background, title, tags, statusLabel]);
+  const credits = openCredits && scene.rexUI.add.label({
+    width: creditsWidth, height: creditsHeight, align: 'right',
+    text: scene.add.text(0, 0, 'Credits', metadataStyle),
+  }).setOrigin(1, 0.5).layout();
+  if (credits) {
+    const caption = credits.getElement('text') as Phaser.GameObjects.Text;
+    let creditsPressed = false;
+    const restyle = (colors: typeof palette) => caption.setColor(creditsPressed ? colors.text : colors.mutedText);
+    styleWithTheme(credits, restyle);
+    addPressFeedback(credits, (value) => { creditsPressed = value; restyle(palette); }, scrollThreshold,
+      (pointer) => isInsideList(pointer.x, pointer.y));
+    bindTap(credits, openCredits);
+    container.addLocal(credits);
+  }
   return {
     container,
     preparePreview() {
@@ -104,10 +125,12 @@ export function makePuzzlePickerCard(
       background.setRadius(cornerRadius * scale).resize(width, height);
       if (background.input) background.input.hitArea.setSize(width, height);
       if (preview) container.setChildLocalScale(preview, scale, scale);
-      fitLabel(title, source.title, textWidth);
+      const titleWidth = credits ? Math.max(0, textWidth - creditsWidth - headerControlGap) : textWidth;
+      fitLabel(title, source.title, titleWidth);
       fitLabel(tags, metadata, textWidth);
       fitLabel(statusLabel, status, textWidth);
       container.setChildLocalPosition(title, footerInset, artworkBottom + 23);
+      if (credits) container.setChildLocalPosition(credits, right, artworkBottom + 23);
       container.setChildLocalPosition(tags, footerInset, metadataY);
       statusLabel.setOrigin(stackStatus ? 0 : 1, 0.5);
       container.setChildLocalPosition(statusLabel, stackStatus ? footerInset : right,

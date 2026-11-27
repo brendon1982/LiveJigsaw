@@ -7,6 +7,7 @@ import { puzzleSources } from '../puzzles/catalog';
 import type { PuzzleSource } from '../puzzles/PuzzleSource';
 import { makeButton } from './button';
 import type { PuzzleSelection } from './PlayPuzzleScene';
+import { artworkCreditLines, showArtworkCredits } from './puzzleCreditsDialog';
 import { showPuzzleFilters } from './puzzleFilterDialog';
 import { activeFilterCount, matchesPuzzleFilters, noPuzzleFilters, samePuzzleFilters, type PuzzleFilters } from './puzzleFilters';
 import { headerControlGap, headerInset, makeSettingsButton, puzzleSpacing } from './puzzleHeader';
@@ -88,8 +89,14 @@ export class SelectPuzzleScene extends Phaser.Scene {
     const cards = puzzleSources.map((source) => {
       const completions = gameSave.completionCount(source.scene.key);
       const progress = resumableProgress(source);
+      const credits = artworkCreditLines(source.attribution);
+      const openCredits = credits.length ? () => {
+        if (dialogOpen) return;
+        openDialog();
+        showArtworkCredits(this, credits, closeDialog);
+      } : undefined;
       const card = makePuzzlePickerCard(this, source, cardStatus(progress, completions), cutout, listBounds,
-        scrollThreshold, () => openCard(source, progress));
+        scrollThreshold, () => openCard(source, progress), openCredits);
       return { card, tags: source.tags, completions };
     });
     const grid = this.rexUI.add.gridSizer({

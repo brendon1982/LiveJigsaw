@@ -2850,6 +2850,31 @@ scenario('touch can scroll the filter dialog and apply choices on a short screen
   assert.deepEqual(errors, []);
 });
 
+scenario('touch Credits taps open the dialog but swipes and cancellation do not', async (t) => {
+  const { page, canvas, waitForText, errors, clickDialog } = await openPuzzle(t, {
+    viewport: { width: 1320, height: 780 }, hasTouch: true, isMobile: true,
+  });
+  const { dispatch, moveFinger } = await touchController(page);
+  const credits = [590, 424];
+  await page.touchscreen.tap(...credits);
+  await waitForText('Artwork credits');
+  await waitForText('Artist credit pending');
+  await waitForText('Placeholder for the artwork credits.');
+  await waitForText('https://example.com');
+  await clickDialog(119, 65); // Done
+  await page.evaluate(() => { window.paintedText = []; });
+
+  const initial = await canvas.screenshot();
+  await dispatch('touchStart', credits);
+  await dispatch('touchCancel');
+  await moveFinger(...credits, credits[0], 310);
+  assert.ok(!initial.equals(await canvas.screenshot()), 'A swipe starting on Credits should scroll');
+  const paintedText = await page.evaluate(() => window.paintedText);
+  assert.ok(!paintedText.includes('Artwork credits'));
+  assert.ok(!paintedText.includes('Piece count'));
+  assert.deepEqual(errors, []);
+});
+
 scenario('the picker scrolls past two cards and clips previews', async (t) => {
   await build({
     base: '/picker-fixture/',
@@ -2860,6 +2885,21 @@ scenario('the picker scrolls past two cards and clips previews', async (t) => {
   });
   const path = '/picker-fixture/tests/fixtures/puzzle-picker.html';
   const previewColor = [255, 0, 255, 255];
+  await t.test('mouse opens partial credits without opening puzzle options', async (t) => {
+    const { page, waitForText, errors } = await openPuzzle(t, { viewport: { width: 1320, height: 540 } }, path);
+    await page.mouse.click(1166, 412);
+    await waitForText('Artwork credits');
+    await waitForText('https://example.com/lighthouse');
+    const paintedText = await page.evaluate(() => window.paintedText);
+    assert.ok(!paintedText.includes('Artist credit pending'));
+    assert.ok(!paintedText.includes('Placeholder for the artwork credits.'));
+    assert.ok(!paintedText.includes('Piece count'));
+    await page.keyboard.press('Escape');
+    await scrollPickerTo(page, 1000);
+    await page.mouse.click(590, 475); // The uncredited card has no separate footer action.
+    await waitForText('Piece count');
+    assert.deepEqual(errors, []);
+  });
   await t.test('mouse wheel scrolls to a selectable third card', async (t) => {
     const { page, canvas, waitForText, errors, clickSetup, playSelection } = await openPuzzle(t, { viewport: { width: 1320, height: 540 } }, path);
     const initial = await canvas.screenshot();

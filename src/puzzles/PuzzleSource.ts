@@ -11,6 +11,12 @@ export const puzzleAnimationRates: Readonly<Record<PuzzleAnimationSpeed, number>
 /** Settings passed to the source scene at the start of a puzzle. */
 export type PuzzleSourceSceneData = Size & Readonly<{ seed: number; animationSpeed: PuzzleAnimationSpeed }>;
 
+export type PuzzleAttribution = Readonly<{
+  name?: string;
+  description?: string;
+  url?: string;
+}>;
+
 /**
  * Artwork for the puzzle. The host starts the scene with PuzzleSourceSceneData
  * and captures the scene's display list. Each scene sets its own animation
@@ -24,6 +30,7 @@ export type PuzzleSourceSceneData = Size & Readonly<{ seed: number; animationSpe
 export type PuzzleSource = Readonly<{
   title: string;
   tags: PuzzleTags;
+  attribution?: PuzzleAttribution;
   maxViewport: Size;
   scene: {
     readonly key: string;

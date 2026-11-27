@@ -93,6 +93,7 @@ import { driftingOrbitsSource } from './driftingOrbits/driftingOrbitsSource';
 import { neonCircuitSource } from './neonCircuit/neonCircuitSource';
 import { pastriesAndCoffeeSource } from './pastriesAndCoffee/pastriesAndCoffeeSource';
 import { pumpkinSpiceLatteSource } from './pumpkinSpiceLatte/pumpkinSpiceLatteSource';
+import { gildedWatercolorSource } from './gildedWatercolor/gildedWatercolorSource';
 
 export const puzzleSources: readonly PuzzleSource[] = [
   windmillSource,
@@ -189,4 +190,5 @@ export const puzzleSources: readonly PuzzleSource[] = [
   neonCircuitSource,
   pastriesAndCoffeeSource,
   pumpkinSpiceLatteSource,
+  gildedWatercolorSource,
 ];

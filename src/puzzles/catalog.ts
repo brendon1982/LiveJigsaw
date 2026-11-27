@@ -86,6 +86,7 @@ import { castleAmongStarsSource } from './castleAmongStars/castleAmongStarsSourc
 import { tealTreetopsSource } from './tealTreetops/tealTreetopsSource';
 import { mistvaleKeepSource } from './mistvaleKeep/mistvaleKeepSource';
 import { polarLightsSource } from './polarLights/polarLightsSource';
+import { violetSnowfallSource } from './violetSnowfall/violetSnowfallSource';
 
 export const puzzleSources: readonly PuzzleSource[] = [
   windmillSource,
@@ -175,4 +176,5 @@ export const puzzleSources: readonly PuzzleSource[] = [
   tealTreetopsSource,
   mistvaleKeepSource,
   polarLightsSource,
+  violetSnowfallSource,
 ];

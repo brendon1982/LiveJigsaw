@@ -61,6 +61,7 @@ import { marketMorningSource } from './marketMorning/marketMorningSource';
 import { moonOverMainStreetSource } from './moonOverMainStreet/moonOverMainStreetSource';
 import { roseBadlandsSource } from './roseBadlands/roseBadlandsSource';
 import { duneOasisSource } from './duneOasis/duneOasisSource';
+import { windcarvedDunesSource } from './windcarvedDunes/windcarvedDunesSource';
 
 export const puzzleSources: readonly PuzzleSource[] = [
   windmillSource,
@@ -125,4 +126,5 @@ export const puzzleSources: readonly PuzzleSource[] = [
   moonOverMainStreetSource,
   roseBadlandsSource,
   duneOasisSource,
+  windcarvedDunesSource,
 ];

@@ -82,6 +82,7 @@ import { meteorBasinSource } from './meteorBasin/meteorBasinSource';
 import { ringfallSource } from './ringfall/ringfallSource';
 import { auroraGlacierSource } from './auroraGlacier/auroraGlacierSource';
 import { strawberrySummitSource } from './strawberrySummit/strawberrySummitSource';
+import { castleAmongStarsSource } from './castleAmongStars/castleAmongStarsSource';
 
 export const puzzleSources: readonly PuzzleSource[] = [
   windmillSource,
@@ -167,4 +168,5 @@ export const puzzleSources: readonly PuzzleSource[] = [
   ringfallSource,
   auroraGlacierSource,
   strawberrySummitSource,
+  castleAmongStarsSource,
 ];

@@ -50,7 +50,7 @@ export class SettingsScene extends Phaser.Scene {
     const row = () => this.rexUI.add.sizer({ orientation: 'x', space: { item: 8 } });
     const themeChoices = row();
     for (const theme of Object.keys(themes) as (keyof typeof themes)[]) {
-      themeChoices.add(choice(theme, 94, () => selectTheme(theme), () => activeTheme === theme));
+      themeChoices.add(choice(theme, 70, () => selectTheme(theme), () => activeTheme === theme));
     }
     const filterChoice = (filter: keyof typeof puzzleFilters, width: number) =>
       choice(puzzleFilters[filter], width, () => selectPuzzleFilter(filter), () => activePuzzleFilter === filter);

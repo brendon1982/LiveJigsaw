@@ -158,12 +158,8 @@ export class SelectPuzzleScene extends Phaser.Scene {
       thumb.setFillStyle(colors.scrollbarThumb);
     });
     const headerBackground = this.add.rectangle(0, 0, 1, 1).setOrigin(0);
-    const title = this.add.text(0, 0, 'Select a Puzzle', {
-      fontFamily: 'system-ui', fontSize: '34px', fontStyle: 'bold',
-    }).setOrigin(0, 0.5);
     styleWithTheme(headerBackground, (colors) => {
       headerBackground.setFillStyle(colors.background);
-      title.setColor(colors.text);
     });
     const settings = makeSettingsButton(this, () => {
       if (dialogOpen) return;
@@ -178,7 +174,7 @@ export class SelectPuzzleScene extends Phaser.Scene {
         if (filters) applyFilters(filters);
       });
     }, 130);
-    const previewSizeRow = this.rexUI.add.sizer({ space: { item: headerControlGap } }).setOrigin(0.5, 0);
+    const previewSizeRow = this.rexUI.add.sizer({ space: { item: headerControlGap } }).setOrigin(0);
     const previewSizeTiles = pickerPreviewSizes.map((size) => {
       const tile = makeOptionTile(this, {
         name: `preview-size-${size}`, width: 70, height: filtersButton.height,
@@ -236,21 +232,13 @@ export class SelectPuzzleScene extends Phaser.Scene {
     };
     const layoutPicker = (offset: number) => {
       const { width, height } = this.scale.gameSize;
-      const stacked = width < 560;
       settings.layout(width);
       filtersButton.setPosition(settings.button.x - filtersButton.width - headerControlGap, settings.button.y);
-      title.setFontSize(stacked ? 20 : 34);
       const buttonHeight = Math.max(settings.button.height, filtersButton.height);
-      const rowHeight = Math.max(buttonHeight, title.height);
-      const titleY = stacked ? puzzleSpacing + buttonHeight + headerControlGap + title.height / 2
-        : puzzleSpacing + rowHeight / 2;
-      title.setPosition(headerInset, titleY);
-      const headerBottom = stacked ? titleY + title.height / 2 : puzzleSpacing + rowHeight;
-      const sizeRowLeft = (width - previewSizeRow.width) / 2;
-      const sizesFitInline = !stacked && title.x + title.width + headerControlGap <= sizeRowLeft
-        && sizeRowLeft + previewSizeRow.width + headerControlGap <= filtersButton.x;
-      const sizeRowTop = sizesFitInline ? titleY - previewSizeRow.height / 2 : headerBottom + headerControlGap;
-      previewSizeRow.setPosition(width / 2, sizeRowTop);
+      const headerBottom = puzzleSpacing + buttonHeight;
+      const sizesFitInline = headerInset + previewSizeRow.width + headerControlGap <= filtersButton.x;
+      const sizeRowTop = sizesFitInline ? puzzleSpacing : headerBottom + headerControlGap;
+      previewSizeRow.setPosition(headerInset, sizeRowTop);
       const panelTop = Math.max(headerBottom, sizeRowTop + previewSizeRow.height) + puzzleSpacing;
       const panelHeight = Math.max(1, height - panelTop);
       const listWidth = width - scrollbarSpace;

@@ -13,7 +13,6 @@ const footerHeight = 72;
 const statusRowHeight = 22;
 const footerInset = puzzleSpacing;
 const compactFooterInset = 12;
-const creditsWidth = 72;
 const footerActionHeight = 44;
 const moreWidth = 44;
 const compactFooterWidth = 224;
@@ -94,10 +93,10 @@ export function makePuzzlePickerCard(
 
   const container = scene.rexUI.add.container(0, 0, 0, 0).setOrigin(0)
     .addLocal([background, title, tags, statusLabel]);
-  const makeFooterAction = (name: string, width: number, action: () => void) => {
-    const caption = scene.add.text(0, 0, name, metadataTextStyle);
+  const makeFooterAction = (name: string, text: string, width: number, action: () => void) => {
+    const caption = scene.add.text(0, 0, text, metadataTextStyle);
     const button = scene.rexUI.add.label({ width, height: footerActionHeight, align: 'right', text: caption })
-      .setName(`picker-${name.toLowerCase()}`).setOrigin(1, 0.5).layout();
+      .setName(`picker-${name}`).setOrigin(1, 0.5).layout();
     let actionPressed = false;
     const restyle = (colors: typeof palette) => caption.setColor(actionPressed ? colors.text : colors.mutedText);
     styleWithTheme(button, restyle);
@@ -105,7 +104,7 @@ export function makePuzzlePickerCard(
       (pointer) => isInsideList(pointer.x, pointer.y));
     bindTap(button, action);
     container.addLocal(button);
-    return button;
+    return { button, caption };
   };
   function copyPreview() {
     const artwork = scene.add.image(0, 0, preview?.texture ?? '__DEFAULT');
@@ -123,10 +122,11 @@ export function makePuzzlePickerCard(
     }
     return artwork;
   }
-  const more = makeFooterAction('More', moreWidth, () => {
+  const { button: more } = makeFooterAction('more', '...', moreWidth, () => {
     if (compact) openMore(copyPreview);
   });
-  const credits = openCredits && makeFooterAction('Credits', creditsWidth, openCredits);
+  const artistName = source.attribution?.name?.trim() || 'Credits';
+  const credits = openCredits && makeFooterAction('credits', artistName, footerActionHeight, openCredits);
   return {
     container,
     preparePreview() {
@@ -164,7 +164,7 @@ export function makePuzzlePickerCard(
       container.setChildVisible(more, compact);
       container.setChildVisible(tags, !compact);
       container.setChildVisible(statusLabel, !compact);
-      if (credits) container.setChildVisible(credits, !compact);
+      if (credits) container.setChildVisible(credits.button, !compact);
       if (compact) {
         const titleY = artworkBottom + footerActionHeight / 2;
         fitLabel(title, source.title, Math.max(0, textWidth - moreWidth - headerControlGap));
@@ -174,13 +174,21 @@ export function makePuzzlePickerCard(
       }
 
       const metadataY = artworkBottom + 50;
-      const titleWidth = credits && !stackCredits ? Math.max(0, textWidth - creditsWidth - headerControlGap) : textWidth;
+      let titleWidth = textWidth;
+      if (credits) {
+        const { button, caption } = credits;
+        fitLabel(caption, artistName, stackCredits ? textWidth : Math.floor(textWidth / 2));
+        const buttonWidth = Math.max(footerActionHeight, caption.width);
+        button.setMinSize(buttonWidth, footerActionHeight).layout();
+        if (button.input) button.input.hitArea.setSize(button.width, button.height);
+        container.setChildLocalPosition(button, right,
+          stackCredits ? height - footerActionHeight / 2 : artworkBottom + 23);
+        if (!stackCredits) titleWidth -= buttonWidth + headerControlGap;
+      }
       fitLabel(title, source.title, titleWidth);
       fitLabel(tags, metadata, textWidth);
       fitLabel(statusLabel, status, textWidth);
       container.setChildLocalPosition(title, footerInset, artworkBottom + 23);
-      if (credits) container.setChildLocalPosition(credits, right,
-        stackCredits ? height - footerActionHeight / 2 : artworkBottom + 23);
       container.setChildLocalPosition(tags, footerInset, metadataY);
       statusLabel.setOrigin(stackStatus ? 0 : 1, 0.5);
       container.setChildLocalPosition(statusLabel, stackStatus ? footerInset : right,

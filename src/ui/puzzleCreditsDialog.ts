@@ -1,3 +1,4 @@
+import type Phaser from 'phaser';
 import type { PuzzleAttribution } from '../puzzles/PuzzleSource';
 import { makeButtonLabel, type UIScene } from './button';
 import { pickerControlDepth, showPickerDialog, type PickerDialogTitle } from './puzzleOptions';
@@ -29,7 +30,10 @@ export function addArtworkCreditText(scene: UIScene, content: InfoContent, credi
   }
 }
 
-export function showScrollablePickerInfo(scene: UIScene, title: PickerDialogTitle, content: InfoContent, onClose: () => void) {
+export function showScrollablePickerInfo(
+  scene: UIScene, title: PickerDialogTitle, content: InfoContent, onClose: () => void,
+  footerLabel?: Phaser.GameObjects.Text,
+) {
   const fullHeight = content.layout().height;
   const body = scene.rexUI.add.scrollablePanel({
     width: pickerInfoContentWidth, height: fullHeight,
@@ -41,6 +45,7 @@ export function showScrollablePickerInfo(scene: UIScene, title: PickerDialogTitl
   }).setDepth(pickerControlDepth);
 
   return showPickerDialog(scene, title, body, [makeButtonLabel(scene, 'Done', 88, 52, true)], onClose, {
+    footerLabel,
     fitContent: (height) => {
       const offset = body.childOY;
       body.setMinSize(pickerInfoContentWidth, Math.min(fullHeight, height)).layout().setChildOY(offset, true);

@@ -19,7 +19,6 @@ export function showPuzzleDetails(
   };
   addLine(source.title, { fontFamily: 'system-ui', fontSize: '22px', fontStyle: 'bold', color: palette.text });
   addLine(`${puzzleCardTags(source)} · ${source.motion}`, { ...metadataTextStyle, color: palette.mutedText });
-  if (status) addLine(status, { ...metadataTextStyle, color: palette.text });
 
   const credits = artworkCreditLines(source.attribution);
   if (credits.length) {
@@ -30,5 +29,6 @@ export function showPuzzleDetails(
   const artworkWidth = pickerInfoContentWidth + 2 * pickerDialogInset;
   artwork.setDisplaySize(artworkWidth, artworkWidth * 9 / 16);
   const cornerRadius = pickerCardCornerRadius * artworkWidth / maxPickerCardWidth;
-  return showScrollablePickerInfo(scene, { artwork, cornerRadius }, content, onClose);
+  const progressLabel = status ? scene.add.text(0, 0, status, { ...metadataTextStyle, color: palette.text }) : undefined;
+  return showScrollablePickerInfo(scene, { artwork, cornerRadius }, content, onClose, progressLabel);
 }

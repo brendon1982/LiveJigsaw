@@ -168,6 +168,7 @@ export function showPickerDialog(
   options?: {
     fitContent?: (height: number) => void;
     handleAction?: (index: number) => boolean;
+    footerLabel?: Phaser.GameObjects.Text;
   },
 ) {
   const cover = scene.add.rectangle(0, 0, 1, 1, palette.modalBackdrop, 0.72)
@@ -190,7 +191,12 @@ export function showPickerDialog(
       contentLeft: bodyInset, contentRight: bodyInset, actionsLeft: bodyInset, actionsRight: bodyInset,
     },
     click: { mode: 'release', clickInterval: 0 },
-  }).layout();
+  });
+  if (options?.footerLabel) {
+    const actionsRow = dialog.getElement('actionsSizer') as ReturnType<UIScene['rexUI']['add']['sizer']>;
+    actionsRow.insert(0, options.footerLabel.setDepth(depth.controls), { key: 'footerLabel' });
+  }
+  dialog.layout();
 
   dialog.forEachAction((button) => { button.input!.cursor = 'pointer'; });
 

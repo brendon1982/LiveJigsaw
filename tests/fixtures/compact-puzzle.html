@@ -12,6 +12,8 @@
       import { puzzleSources } from '../../src/puzzles/catalog';
       import { SelectPuzzleScene } from '../../src/ui/SelectPuzzleScene';
 
+      // Keep Windmill first on screen for the fixed-coordinate gameplay scenarios.
+      puzzleSources.reverse();
       const createPicker = SelectPuzzleScene.prototype.create;
       SelectPuzzleScene.prototype.create = function () {
         createPicker.call(this);

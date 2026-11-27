@@ -40,6 +40,8 @@
           return [graphics];
         },
       });
+      // Display Windmill, Lighthouse, and Oversized preview in that order for the layout checks.
+      puzzleSources.reverse();
 
       await import('../../src/main');
     </script>

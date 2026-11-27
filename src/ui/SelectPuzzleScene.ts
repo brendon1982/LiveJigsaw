@@ -86,7 +86,8 @@ export class SelectPuzzleScene extends Phaser.Scene {
       });
     };
     const cutout = makePreviewCornerCutout(this);
-    const cards = puzzleSources.map((source) => {
+    const newestFirst = [...puzzleSources].reverse();
+    const cards = newestFirst.map((source) => {
       const completions = gameSave.completionCount(source.scene.key);
       const progress = resumableProgress(source);
       const credits = artworkCreditLines(source.attribution);

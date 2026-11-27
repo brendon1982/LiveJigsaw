@@ -15,6 +15,7 @@ const settingsY = { theme: -207, firstFilter: -108, secondFilter: -46, firstTray
 const setupY = { size: -251, shape: -155, connector: -44, speed: 67, rotation: 163, challenge: 259, action: 329 };
 const resumeActionY = 114;
 const compactPuzzlePath = '/compact-fixture/tests/fixtures/compact-puzzle.html';
+const currentSizesPuzzlePath = `${compactPuzzlePath}?currentSizes`;
 const compactSize = { width: 512, height: 288, columns: 4, rows: 2, snapTolerance: 28 };
 let compactPuzzleBuild;
 
@@ -133,7 +134,18 @@ async function openGamePage(t, options) {
   return { page, canvas, waitForText, errors, origin: `http://127.0.0.1:${port}` };
 }
 
-async function openPuzzle(t, options, path = '/', initPage) {
+async function openPuzzle(t, options, path = currentSizesPuzzlePath, initPage) {
+  if (path.startsWith(compactPuzzlePath)) {
+    compactPuzzleBuild ??= build({
+      base: '/compact-fixture/',
+      logLevel: 'warn',
+      build: {
+        outDir: 'dist/compact-fixture',
+        rollupOptions: { input: 'tests/fixtures/compact-puzzle.html' },
+      },
+    });
+    await compactPuzzleBuild;
+  }
   const { page, canvas, waitForText, errors, origin } = await openGamePage(t, options);
   await initPage?.(page);
   await page.goto(`${origin}${path}`);
@@ -204,15 +216,6 @@ async function openPuzzle(t, options, path = '/', initPage) {
 }
 
 async function openCompactPuzzle(t, options, path = compactPuzzlePath) {
-  compactPuzzleBuild ??= build({
-    base: '/compact-fixture/',
-    logLevel: 'warn',
-    build: {
-      outDir: 'dist/compact-fixture',
-      rollupOptions: { input: 'tests/fixtures/compact-puzzle.html' },
-    },
-  });
-  await compactPuzzleBuild;
   return openPuzzle(t, options, path);
 }
 
@@ -759,7 +762,7 @@ scenario('picker scrollbar sync does not feed changes back into the panel', asyn
   assert.deepEqual(errors, []);
 });
 
-scenario('the picker renders before requesting offscreen previews', async (t) => {
+scenario('the picker shows newest puzzles first and only loads nearby previews', async (t) => {
   const { page, canvas, waitForText, errors, origin } = await openGamePage(t, {
     viewport: { width: 768, height: 1024 },
     reducedMotion: 'reduce',
@@ -792,30 +795,36 @@ scenario('the picker renders before requesting offscreen previews', async (t) =>
     await page.emulateMedia({ reducedMotion: 'no-preference' });
     assert.equal(await spinner.evaluate((element) => getComputedStyle(element).animationName), 'startup-spin');
 
+    const previewRequested = page.waitForRequest(previewAsset, { timeout: 4000 });
     scriptGate.resolve();
     await waitForText('Select a Puzzle');
     await status.waitFor({ state: 'detached', timeout: 4000 });
-    assert.deepEqual(requestedPreviews, [], 'The first screen contains only drawn previews');
-
-    await page.mouse.move(380, 400);
-    const previewRequested = page.waitForRequest(previewAsset, { timeout: 4000 });
-    await page.mouse.wheel(0, 30000);
     await previewRequested;
     const placeholder = [48, 69, 63, 255];
-    const bottomPreview = async () => pixelAt(page, await canvas.screenshot(), 380, 780);
-    assert.deepEqual(await bottomPreview(), placeholder, 'A pending preview should leave the card in place');
+    const topPreview = async () => pixelAt(page, await canvas.screenshot(), 380, 220);
+    assert.deepEqual(await topPreview(), placeholder, 'A pending preview should leave the card in place');
     assert.ok(requestedPreviews.length >= 3 && requestedPreviews.length <= 4,
-      `Expected only previews near the bottom, got ${requestedPreviews.length}`);
+      `Expected only previews near the top, got ${requestedPreviews.length}`);
     previewGate.resolve();
-    let artwork = await bottomPreview();
+    let artwork = await topPreview();
     for (let frame = 0; frame < 30 && artwork.every((channel, i) => channel === placeholder[i]); frame++) {
-      artwork = await bottomPreview();
+      artwork = await topPreview();
     }
     assert.notDeepEqual(artwork, placeholder, 'The preview should appear in the same card when it loads');
-    await page.mouse.wheel(0, -30000);
-    await canvas.screenshot();
+    const expectPuzzleAt = async (y, title) => {
+      await page.evaluate(() => { window.paintedText = []; });
+      await page.mouse.click(380, y);
+      await waitForText('Piece count');
+      await waitForText(title);
+      await page.keyboard.press('Escape');
+    };
+    await expectPuzzleAt(220, 'Blue Star');
+    await page.mouse.move(380, 400);
     await page.mouse.wheel(0, 30000);
-    assert.deepEqual(await bottomPreview(), artwork);
+    await canvas.screenshot();
+    await expectPuzzleAt(780, 'Windmill');
+    await page.mouse.wheel(0, -30000);
+    assert.deepEqual(await topPreview(), artwork);
     assert.equal(new Set(requestedPreviews).size, requestedPreviews.length, 'Revisited cards should reuse their preview');
     assert.deepEqual(errors, []);
   } finally {
@@ -867,7 +876,7 @@ function trackPieceMaskDraws(page) {
 scenario('the board starts fitted to the space left by the saved tray width', async (t) => {
   const { page, canvas, waitForText, errors, playSelection } = await openPuzzle(t, {
     viewport: { width: 1320, height: 780 },
-  }, '/', (page) => page.addInitScript(() => {
+  }, currentSizesPuzzlePath, (page) => page.addInitScript(() => {
     localStorage.setItem('live-jigsaw.save', JSON.stringify({
       version: 6,
       settings: { trayPosition: 'Left', trayFractions: { vertical: 0.4, horizontal: 0 } },
@@ -892,7 +901,7 @@ scenario('the board starts fitted to the space left by the saved tray width', as
 scenario('the 1× board button restores native size and Fit board returns to the fitted view', async (t) => {
   const { page, canvas, waitForText, errors, playSelection } = await openPuzzle(t, {
     viewport: { width: 1320, height: 780 }, hasTouch: true,
-  }, '/', (page) => page.addInitScript(() => {
+  }, currentSizesPuzzlePath, (page) => page.addInitScript(() => {
     localStorage.setItem('live-jigsaw.save', JSON.stringify({
       version: 8,
       settings: { trayPosition: 'Left', trayFractions: { vertical: 0.4, horizontal: 0 } },
@@ -943,7 +952,7 @@ scenario('the 1× board button restores native size and Fit board returns to the
 scenario('the 420-piece tray only draws nearby piece masks', async (t) => {
   const { page, waitForText, errors, playSelection } = await openPuzzle(t, {
     viewport: { width: 1320, height: 780 },
-  }, '/', trackPieceMaskDraws);
+  }, currentSizesPuzzlePath, trackPieceMaskDraws);
   await page.mouse.click(340, 180);
   for (const count of ['40', '72', '144', '300', '420']) await waitForText(count);
   assert.ok(!(await page.evaluate(() => window.paintedText)).includes('8'));

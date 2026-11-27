@@ -94,6 +94,7 @@ import { neonCircuitSource } from './neonCircuit/neonCircuitSource';
 import { pastriesAndCoffeeSource } from './pastriesAndCoffee/pastriesAndCoffeeSource';
 import { pumpkinSpiceLatteSource } from './pumpkinSpiceLatte/pumpkinSpiceLatteSource';
 import { gildedWatercolorSource } from './gildedWatercolor/gildedWatercolorSource';
+import { starburstSantaSource } from './starburstSanta/starburstSantaSource';
 
 export const puzzleSources: readonly PuzzleSource[] = [
   windmillSource,
@@ -191,4 +192,5 @@ export const puzzleSources: readonly PuzzleSource[] = [
   pastriesAndCoffeeSource,
   pumpkinSpiceLatteSource,
   gildedWatercolorSource,
+  starburstSantaSource,
 ];

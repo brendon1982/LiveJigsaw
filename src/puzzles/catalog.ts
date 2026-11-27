@@ -51,6 +51,7 @@ import { verdigrisFrontierSource } from './verdigrisFrontier/verdigrisFrontierSo
 import { violetNebulaSource } from './violetNebula/violetNebulaSource';
 import { windmillSource } from './windmill/windmillSource';
 import { witchlightHearthSource } from './witchlightHearth/witchlightHearthSource';
+import { palmshoreSource } from './palmshore/palmshoreSource';
 
 export const puzzleSources: readonly PuzzleSource[] = [
   windmillSource,
@@ -105,4 +106,5 @@ export const puzzleSources: readonly PuzzleSource[] = [
   cherryBlossomsSource,
   grayPantherSource,
   jungleRhinosSource,
+  palmshoreSource,
 ];

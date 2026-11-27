@@ -88,6 +88,7 @@ import { mistvaleKeepSource } from './mistvaleKeep/mistvaleKeepSource';
 import { polarLightsSource } from './polarLights/polarLightsSource';
 import { violetSnowfallSource } from './violetSnowfall/violetSnowfallSource';
 import { frostwaterValleySource } from './frostwaterValley/frostwaterValleySource';
+import { shadowbeltSource } from './shadowbelt/shadowbeltSource';
 
 export const puzzleSources: readonly PuzzleSource[] = [
   windmillSource,
@@ -179,4 +180,5 @@ export const puzzleSources: readonly PuzzleSource[] = [
   polarLightsSource,
   violetSnowfallSource,
   frostwaterValleySource,
+  shadowbeltSource,
 ];

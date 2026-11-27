@@ -75,6 +75,7 @@ import { sentinelPassSource } from './sentinelPass/sentinelPassSource';
 import { sunspireCanyonSource } from './sunspireCanyon/sunspireCanyonSource';
 import { sunsetCragSource } from './sunsetCrag/sunsetCragSource';
 import { paleSummitsSource } from './paleSummits/paleSummitsSource';
+import { cloudcapPeakSource } from './cloudcapPeak/cloudcapPeakSource';
 
 export const puzzleSources: readonly PuzzleSource[] = [
   windmillSource,
@@ -153,4 +154,5 @@ export const puzzleSources: readonly PuzzleSource[] = [
   sunspireCanyonSource,
   sunsetCragSource,
   paleSummitsSource,
+  cloudcapPeakSource,
 ];

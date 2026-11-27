@@ -70,6 +70,7 @@ import { dragonflyDellSource } from './dragonflyDell/dragonflyDellSource';
 import { fireflyWoodSource } from './fireflyWood/fireflyWoodSource';
 import { snowboundPinesSource } from './snowboundPines/snowboundPinesSource';
 import { gildedSkylineSource } from './gildedSkyline/gildedSkylineSource';
+import { luminousFallsSource } from './luminousFalls/luminousFallsSource';
 
 export const puzzleSources: readonly PuzzleSource[] = [
   windmillSource,
@@ -143,4 +144,5 @@ export const puzzleSources: readonly PuzzleSource[] = [
   fireflyWoodSource,
   snowboundPinesSource,
   gildedSkylineSource,
+  luminousFallsSource,
 ];

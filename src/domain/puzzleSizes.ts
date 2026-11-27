@@ -22,7 +22,7 @@ export const pieceShapeIds = Object.keys(pieceShapes) as PieceShape[];
 export const defaultPieceShape: PieceShape = 'vertical-short';
 
 type PieceGrid = readonly [columns: number, rows: number, cellWidth: number, cellHeight: number];
-type PuzzleSizePreset = Readonly<Record<PieceShape, PuzzleSize>>;
+export type PuzzleSizePreset = Readonly<Record<PieceShape, PuzzleSize>>;
 
 export const puzzleSizePresets: readonly PuzzleSizePreset[] = [
   definePreset(28, {

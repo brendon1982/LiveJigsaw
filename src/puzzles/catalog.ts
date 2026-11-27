@@ -4,6 +4,7 @@ import { birchGladeSource } from './birchGlade/birchGladeSource';
 import { blueMoonValleySource } from './blueMoonValley/blueMoonValleySource';
 import { blueStarSource } from './blueStar/blueStarSource';
 import { canyonDriftSource } from './canyonDrift/canyonDriftSource';
+import { cherryBlossomsSource } from './cherryBlossoms/cherryBlossomsSource';
 import { chocolateHillsSource } from './chocolateHills/chocolateHillsSource';
 import { cobaltWorldSource } from './cobaltWorld/cobaltWorldSource';
 import { coralGardenSource } from './coralGarden/coralGardenSource';
@@ -99,4 +100,5 @@ export const puzzleSources: readonly PuzzleSource[] = [
   violetNebulaSource,
   eclipseOrbitSource,
   blueStarSource,
+  cherryBlossomsSource,
 ];

@@ -5,6 +5,7 @@ import { drawMountains, MountainsScene } from './MountainsScene';
 export const mountainsSource: PuzzleSource = {
   title: 'Mountains',
   tags: { theme: 'Mountains', type: 'Flat Illustration' },
+  motion: 'Animated',
   attribution: puzzleCredits.prototypeArtwork,
   maxViewport: { width: 1920, height: 1080 },
   scene: MountainsScene,

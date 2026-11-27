@@ -122,6 +122,7 @@ export function parallaxSource({
   return {
     title,
     tags: { theme, type: 'Parallax' },
+    motion: 'Animated',
     attribution,
     maxViewport: artworkSize,
     scene: ParallaxScene,

@@ -7,7 +7,7 @@ export class LivePuzzleCapture {
 
   constructor(
     private readonly host: Phaser.Scene,
-    source: PuzzleSource,
+    private readonly source: PuzzleSource,
     private readonly data: PuzzleSourceSceneData,
   ) {
     const { width, height } = data;
@@ -42,7 +42,7 @@ export class LivePuzzleCapture {
     if (this.sourceScene.input.keyboard) this.sourceScene.input.keyboard.enabled = false;
     this.sourceScene.scene.setVisible(false);
     this.refresh();
-    this.host.game.events.on(Phaser.Core.Events.POST_STEP, this.refresh);
+    if (this.source.motion === 'Animated') this.host.game.events.on(Phaser.Core.Events.POST_STEP, this.refresh);
   };
 
   private readonly refresh = () => {

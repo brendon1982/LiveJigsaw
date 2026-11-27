@@ -7,6 +7,7 @@ import previewImage from './assets/preview.png';
 export const medievalVillageSource: PuzzleSource = {
   title: 'Medieval Village',
   tags: { theme: 'Medieval', type: 'Procedural' },
+  motion: 'Animated',
   attribution: puzzleCredits.kenney,
   maxViewport: { width: 1920, height: 1080 },
   scene: MedievalVillageScene,

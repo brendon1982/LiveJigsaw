@@ -2,10 +2,11 @@ import Phaser from 'phaser';
 import { challengeModes, type ChallengeMode } from '../domain/challengeModes';
 import { connectorStyles, type ConnectorStyleId } from '../domain/connectorStyles';
 import {
-  availablePuzzleSizes, defaultPieceShape, getPieceCount, pieceShapeIds, pieceShapes, type PieceShape, type PuzzleSize,
+  defaultPieceShape, getPieceCount, pieceShapeIds, pieceShapes, type PieceShape, type PuzzleSize,
 } from '../domain/puzzleSizes';
 import type { PuzzleOptions, PuzzleProgress } from '../persistence/GameSave';
 import { puzzleAnimationSpeeds, type PuzzleSource } from '../puzzles/PuzzleSource';
+import { puzzleSizeChoices } from '../puzzles/puzzleSizeChoices';
 import { makeButtonLabel, makeOptionTile, type UIScene } from './button';
 import { palette } from './theme';
 
@@ -28,19 +29,17 @@ export function showPuzzleOptions(
   scene: UIScene,
   source: PuzzleSource,
   defaults: PuzzleOptions | undefined,
-  play: (size: PuzzleSize, options: Omit<PuzzleOptions, 'pieceCount'>) => void,
+  play: (size: PuzzleSize, options: PuzzleOptions) => void,
   onClose: () => void,
 ) {
   const styles = Object.keys(connectorStyles) as ConnectorStyleId[];
-  const sizeChoices = availablePuzzleSizes(source.maxViewport).map((preset) => ({
-    preset, count: getPieceCount(preset.square),
-  }));
-  const initialSize = sizeChoices.find(({ count }) => count === defaults?.pieceCount) ?? sizeChoices[0];
+  const sizeChoices = puzzleSizeChoices(source);
+  const initialSize = sizeChoices.find(({ targetCount }) => targetCount === defaults?.pieceCount) ?? sizeChoices[0];
   const sizeTileWidth = sizeChoices.length > 4 ? fiveOptionWidth : optionWidth;
-  const sizeButtons = makeRadioButtons(scene, sizeChoices.map(({ count }) => ({
-    name: String(count),
-    label: String(count),
-  })), String(initialSize.count), sizeTileWidth);
+  const sizeButtons = makeRadioButtons(scene, sizeChoices.map(({ targetCount }) => ({
+    name: String(targetCount),
+    label: String(targetCount),
+  })), String(initialSize.targetCount), sizeTileWidth);
   const shapeButtons = makeRadioButtons(scene, pieceShapeIds.map((shape) => ({
     name: shape,
     height: 52,
@@ -50,10 +49,10 @@ export function showPuzzleOptions(
     name: style,
     drawIcon: () => drawConnectorIcon(scene, style),
   })), defaults?.connectorStyle ?? 'classic');
-  const speedButtons = makeRadioButtons(scene, puzzleAnimationSpeeds.map((speed) => ({
+  const speedButtons = source.motion === 'Animated' ? makeRadioButtons(scene, puzzleAnimationSpeeds.map((speed) => ({
     name: speed,
     label: speed,
-  })), defaults?.animationSpeed ?? 'Normal');
+  })), defaults?.animationSpeed ?? 'Normal') : undefined;
   const rotationButtons = makeRadioButtons(scene, ['Off', 'On'].map((label) => ({ name: label, label })),
     defaults?.pieceRotation ? 'On' : 'Off');
   const modes = Object.keys(challengeModes) as ChallengeMode[];
@@ -63,8 +62,14 @@ export function showPuzzleOptions(
   })), defaults?.challengeMode ?? 'none', fiveOptionWidth, '14px');
 
   const content = scene.rexUI.add.sizer({ orientation: 'y', width: contentWidth, space: { item: 14 } });
+  const currentCut = () => {
+    const targetCount = Number(sizeButtons.getSelectedButtonName());
+    const sizeChoice = sizeChoices.find((choice) => choice.targetCount === targetCount);
+    const pieceShape = pieceShapeIds.find((shape) => shape === shapeButtons.getSelectedButtonName());
+    if (sizeChoice && pieceShape) return { targetCount, pieceShape, size: sizeChoice.preset[pieceShape] };
+  };
   const sections = [
-    ['Piece count', sizeButtons],
+    [source.motion === 'Static' ? 'Target piece count' : 'Piece count', sizeButtons],
     ['Piece shape', shapeButtons],
     ['Connector style', styleButtons],
     ['Animation speed', speedButtons],
@@ -72,12 +77,26 @@ export function showPuzzleOptions(
     ['Challenge mode', modeButtons],
   ] as const;
   for (const [heading, buttons] of sections) {
+    if (!buttons) continue;
     const section = scene.rexUI.add.sizer({ orientation: 'y', space: { item: 6 } });
     section.add(scene.add.text(0, 0, heading, {
       fontFamily: 'system-ui', fontSize: '17px', color: palette.mutedText,
     }).setFixedSize(0, 24).setDepth(depth.controls), { align: 'left' });
     section.add(buttons, { align: 'left' });
     content.add(section, { align: 'left' });
+  }
+  if (source.motion === 'Static') {
+    const cutSummary = scene.add.text(0, 0, '', {
+      fontFamily: 'system-ui', fontSize: '15px', color: palette.mutedText,
+    }).setFixedSize(contentWidth, 22).setDepth(depth.controls);
+    const updateCutSummary = () => {
+      const cut = currentCut();
+      if (cut) cutSummary.setText(`${getPieceCount(cut.size)} pieces · ${cut.size.columns} × ${cut.size.rows}`);
+    };
+    sizeButtons.on('button.click', updateCutSummary);
+    shapeButtons.on('button.click', updateCutSummary);
+    updateCutSummary();
+    content.add(cutSummary, { align: 'left' });
   }
 
   const actions = [
@@ -88,15 +107,17 @@ export function showPuzzleOptions(
     onClose();
     if (action !== 1) return;
 
-    const selectedCount = Number(sizeButtons.getSelectedButtonName());
-    const sizeChoice = sizeChoices.find(({ count }) => count === selectedCount);
-    const pieceShape = pieceShapeIds.find((id) => id === shapeButtons.getSelectedButtonName());
+    const cut = currentCut();
     const style = styles.find((id) => id === styleButtons.getSelectedButtonName());
-    const speed = puzzleAnimationSpeeds.find((name) => name === speedButtons.getSelectedButtonName());
+    const speed = puzzleAnimationSpeeds.find((name) => name === speedButtons?.getSelectedButtonName())
+      ?? defaults?.animationSpeed ?? 'Normal';
     const challengeMode = modes.find((id) => id === modeButtons.getSelectedButtonName());
     const pieceRotation = rotationButtons.getSelectedButtonName() === 'On';
-    if (sizeChoice && pieceShape && style && speed && challengeMode) {
-      play(sizeChoice.preset[pieceShape], { pieceShape, connectorStyle: style, animationSpeed: speed, challengeMode, pieceRotation });
+    if (cut && style && challengeMode) {
+      play(cut.size, {
+        pieceCount: cut.targetCount, pieceShape: cut.pieceShape,
+        connectorStyle: style, animationSpeed: speed, challengeMode, pieceRotation,
+      });
     }
   });
 }

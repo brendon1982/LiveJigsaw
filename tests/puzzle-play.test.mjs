@@ -13,6 +13,7 @@ const scenario = (name, run) => scenarios.push({ name, run });
 
 const settingsY = { theme: -207, firstFilter: -108, secondFilter: -46, firstTray: 50, secondTray: 112, loosePieces: 208, done: 280 };
 const setupY = { size: -251, shape: -155, connector: -44, speed: 67, rotation: 163, challenge: 259, action: 329 };
+const filterY = { firstTheme: -225, secondTheme: -163, type: 52, completion: 143, motion: 231, action: 302 };
 const resumeActionY = 114;
 const compactPuzzlePath = '/compact-fixture/tests/fixtures/compact-puzzle.html';
 const currentSizesPuzzlePath = `${compactPuzzlePath}?currentSizes`;
@@ -768,7 +769,7 @@ scenario('the picker shows newest puzzles first and only loads nearby previews',
     reducedMotion: 'reduce',
   });
   const gameScript = /\/assets\/index-[\w-]+\.js$/;
-  const previewAsset = /\/assets\/preview-[\w-]+\.png$/;
+  const previewAsset = /\/assets\/(?:preview|cherry-blossoms-on-branch)-[\w-]+\.png$/;
   const requestedPreviews = [];
   const scriptGate = Promise.withResolvers();
   const previewGate = Promise.withResolvers();
@@ -811,14 +812,15 @@ scenario('the picker shows newest puzzles first and only loads nearby previews',
       artwork = await topPreview();
     }
     assert.notDeepEqual(artwork, placeholder, 'The preview should appear in the same card when it loads');
-    const expectPuzzleAt = async (y, title) => {
+    const expectPuzzleAt = async (y, title, countHeading = 'Piece count') => {
       await page.evaluate(() => { window.paintedText = []; });
       await page.mouse.click(380, y);
-      await waitForText('Piece count');
+      await waitForText(countHeading);
       await waitForText(title);
       await page.keyboard.press('Escape');
     };
-    await expectPuzzleAt(220, 'Blue Star');
+    await expectPuzzleAt(220, 'Cherry Blossoms', 'Target piece count');
+    await expectPuzzleAt(610, 'Blue Star');
     await page.mouse.move(380, 400);
     await page.mouse.wheel(0, 30000);
     await canvas.screenshot();
@@ -831,6 +833,58 @@ scenario('the picker shows newest puzzles first and only loads nearby previews',
     scriptGate.resolve();
     previewGate.resolve();
   }
+});
+
+scenario('the Static filter opens Cherry Blossoms with an adaptive cut that survives reload', async (t) => {
+  const { page, waitForText, errors, clickDialog } = await openPuzzle(t, {
+    viewport: { width: 1320, height: 780 }, hasTouch: true,
+  });
+  const { moveFinger } = await touchController(page);
+  await page.touchscreen.tap(1120, 49);
+  await waitForText('Artwork motion');
+  await clickDialog(-60, filterY.motion); // Static
+  await clickDialog(125, filterY.action); // Apply
+  await waitForText('Filters (1)');
+  await page.touchscreen.tap(900, 430);
+  await waitForText('Artwork credits');
+  await waitForText('Umme Hani Ali');
+  await page.keyboard.press('Escape');
+
+  await page.touchscreen.tap(660, 220);
+  await waitForText('Target piece count');
+  await waitForText('48 pieces · 6 × 8');
+  assert.ok(!await page.evaluate(() => window.paintedText.includes('Animation speed')));
+  await clickDialog(170, -221); // Target 420
+  await waitForText('456 pieces · 19 × 24');
+  await clickDialog(170, -125); // Square
+  await waitForText('459 pieces · 17 × 27');
+  await clickDialog(156, -14); // No connectors
+  await clickDialog(158, 299); // Play
+  await waitForText('0 of 459 placed');
+
+  const size = { width: 1200, height: 1897, columns: 17, rows: 27, snapTolerance: 16 };
+  const layout = await playLayout(page);
+  const piece = layout.tray[0];
+  const target = pieceTarget(layout, piece.id, size);
+  await moveFinger(piece.x, piece.y, target.x, target.y);
+  await waitForText('1 of 459 placed');
+  const save = await readSave(page);
+  assert.equal(save.recentOptions.pieceCount, 420);
+  assert.deepEqual(save.progress.CherryBlossoms.setup.size, size);
+
+  await page.reload();
+  await waitForText('Select a Puzzle');
+  await page.touchscreen.tap(1120, 49);
+  await waitForText('Artwork motion');
+  await clickDialog(-60, filterY.motion);
+  await clickDialog(125, filterY.action);
+  await waitForText('Filters (1)');
+  await page.touchscreen.tap(660, 220);
+  await waitForText('Resume');
+  await page.evaluate(() => { window.paintedText = []; });
+  await clickDialog(100, resumeActionY);
+  await waitForText('1 of 459 placed');
+  assert.deepEqual(errors, []);
 });
 
 function trackPieceMaskDraws(page) {
@@ -2722,15 +2776,15 @@ scenario('picker tag and completion filters combine and refresh after play', asy
   };
 
   await openFilters();
-  await clickDialog(93, -180); // Coast
-  await clickDialog(-119, -118); // Countryside
+  await clickDialog(93, filterY.firstTheme); // Coast
+  await clickDialog(-119, filterY.secondTheme); // Countryside
   const selectedTiles = await canvas.screenshot();
   const selectedFill = [75, 108, 94, 255];
-  assert.deepEqual(await pixelAt(page, selectedTiles, 753, 195), selectedFill, 'Coast should use the selected tile fill');
-  assert.deepEqual(await pixelAt(page, selectedTiles, 541, 257), selectedFill, 'Countryside should stay selected alongside Coast');
-  await clickDialog(-109, 96); // Flat Illustration
-  await clickDialog(-66, 187); // Completed
-  await clickDialog(125, 257);
+  assert.deepEqual(await pixelAt(page, selectedTiles, 753, 151), selectedFill, 'Coast should use the selected tile fill');
+  assert.deepEqual(await pixelAt(page, selectedTiles, 541, 213), selectedFill, 'Countryside should stay selected alongside Coast');
+  await clickDialog(-109, filterY.type); // Flat Illustration
+  await clickDialog(-66, filterY.completion); // Completed
+  await clickDialog(125, filterY.action);
   await waitForText('Filters (4)');
   assert.deepEqual(await readSave(page), original);
   await pickFirst(660);
@@ -2739,17 +2793,17 @@ scenario('picker tag and completion filters combine and refresh after play', asy
   await page.keyboard.press('Escape');
 
   await openFilters();
-  await clickDialog(-61, 257); // Clear the draft
-  await clickDialog(29, 257); // Cancel
+  await clickDialog(-61, filterY.action); // Clear the draft
+  await clickDialog(29, filterY.action); // Cancel
   await pickFirst(660);
   await waitForText('Lighthouse');
   await page.keyboard.press('Escape');
 
   await openFilters();
-  await clickDialog(-61, 257);
-  await clickDialog(93, -180); // Coast
-  await clickDialog(2, 96); // Parallax
-  await clickDialog(125, 257);
+  await clickDialog(-61, filterY.action);
+  await clickDialog(93, filterY.firstTheme); // Coast
+  await clickDialog(2, filterY.type); // Parallax
+  await clickDialog(125, filterY.action);
   await waitForText('No puzzles match your filters');
   const emptyImage = PNG.sync.read(await canvas.screenshot());
   const centerOfVisibleContent = (startY, endY) => {
@@ -2778,10 +2832,10 @@ scenario('picker tag and completion filters combine and refresh after play', asy
   await page.mouse.click(button.x, button.y);
 
   await openFilters();
-  await clickDialog(93, -180); // Coast
-  await clickDialog(-119, -118); // Countryside
-  await clickDialog(65, 187); // Never completed
-  await clickDialog(125, 257);
+  await clickDialog(93, filterY.firstTheme); // Coast
+  await clickDialog(-119, filterY.secondTheme); // Countryside
+  await clickDialog(65, filterY.completion); // Never completed
+  await clickDialog(125, filterY.action);
   await waitForText('Filters (3)');
   const topOfResults = await canvas.screenshot();
   await scrollPickerTo(page, 200);
@@ -2816,8 +2870,8 @@ scenario('the picker preserves an active filter and its scroll offset until relo
   });
   await page.mouse.click(1120, 43);
   await waitForText('Type');
-  await clickDialog(2, 96); // Parallax
-  await clickDialog(125, 257);
+  await clickDialog(2, filterY.type); // Parallax
+  await clickDialog(125, filterY.action);
   await waitForText('Filters (1)');
   await scrollPickerTo(page, 1000);
   const scrolled = await canvas.screenshot();
@@ -2852,7 +2906,7 @@ scenario('touch can scroll the filter dialog and apply choices on a short screen
   await page.touchscreen.tap(413, 135); // Coast
   await moveFinger(311, 247, 311, 90);
   await moveFinger(311, 247, 311, 90);
-  await page.touchscreen.tap(385, 247); // Never completed, after scrolling the dialog body.
+  await page.touchscreen.tap(385, 247); // Animated, after scrolling the dialog body.
   await page.touchscreen.tap(445, 317);
   await waitForText('Filters (2)');
   assert.notDeepEqual(await pixelAt(page, await canvas.screenshot(), 120, 165), firstPreview);

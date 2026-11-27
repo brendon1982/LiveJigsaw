@@ -5,6 +5,7 @@ import { drawLighthouse, LighthouseScene } from './LighthouseScene';
 export const lighthouseSource: PuzzleSource = {
   title: 'Lighthouse',
   tags: { theme: 'Coast', type: 'Flat Illustration' },
+  motion: 'Animated',
   attribution: puzzleCredits.prototypeArtwork,
   maxViewport: { width: 1920, height: 1080 },
   scene: LighthouseScene,

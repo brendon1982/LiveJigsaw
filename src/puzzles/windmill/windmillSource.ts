@@ -5,6 +5,7 @@ import { drawWindmill, WindmillScene } from './WindmillScene';
 export const windmillSource: PuzzleSource = {
   title: 'Windmill',
   tags: { theme: 'Countryside', type: 'Flat Illustration' },
+  motion: 'Animated',
   attribution: puzzleCredits.prototypeArtwork,
   maxViewport: { width: 1920, height: 1080 },
   scene: WindmillScene,

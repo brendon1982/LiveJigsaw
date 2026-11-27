@@ -62,9 +62,10 @@ export class SelectPuzzleScene extends Phaser.Scene {
     };
     const openSetup = (source: PuzzleSource) => {
       openDialog();
-      showPuzzleOptions(this, source, gameSave.recentOptions, (size, { pieceShape, ...options }) => {
+      showPuzzleOptions(this, source, gameSave.recentOptions, (size, recentOptions) => {
         const [seed] = crypto.getRandomValues(new Uint32Array(1));
-        gameSave.startAttempt(source.scene.key, { ...options, pieceCount: getPieceCount(size), pieceShape });
+        gameSave.startAttempt(source.scene.key, recentOptions);
+        const { pieceCount, pieceShape, ...options } = recentOptions;
         play({ source, setup: { ...options, size, seed } });
       }, closeDialog);
     };
@@ -98,7 +99,7 @@ export class SelectPuzzleScene extends Phaser.Scene {
       } : undefined;
       const card = makePuzzlePickerCard(this, source, cardStatus(progress, completions), cutout, listBounds,
         scrollThreshold, () => openCard(source, progress), openCredits);
-      return { card, tags: source.tags, completions };
+      return { card, source, completions };
     });
     const grid = this.rexUI.add.gridSizer({
       column: 1, row: 1,
@@ -161,7 +162,7 @@ export class SelectPuzzleScene extends Phaser.Scene {
     });
 
     const matchingCards = (filters: PuzzleFilters) =>
-      cards.filter(({ tags, completions }) => matchesPuzzleFilters(tags, completions, filters));
+      cards.filter(({ source, completions }) => matchesPuzzleFilters(source, completions, filters));
     let visibleCards = matchingCards(this.filters);
     let cardLayout: { columns: number; width: number; stackStatus: boolean } | undefined;
     const updateFilterCaption = () => {

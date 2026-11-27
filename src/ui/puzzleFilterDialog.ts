@@ -1,7 +1,7 @@
 import type Phaser from 'phaser';
 import { puzzleThemes, puzzleTypes } from '../puzzles/PuzzleTags';
 import { makeButtonLabel, makeOptionTile, type UIScene } from './button';
-import { completionFilters, noPuzzleFilters, type PuzzleFilters } from './puzzleFilters';
+import { completionFilters, motionFilters, noPuzzleFilters, type PuzzleFilters } from './puzzleFilters';
 import { pickerControlDepth, showPickerDialog } from './puzzleOptions';
 import { palette } from './theme';
 
@@ -56,6 +56,9 @@ export function showPuzzleFilters(
   });
   addSection('Completion', completionFilters, [50, 94, 156], (status) => draft.completion === status, (status) => {
     draft = { ...draft, completion: status };
+  });
+  addSection('Artwork motion', motionFilters, [50, 94, 156], (motion) => draft.motion === motion, (motion) => {
+    draft = { ...draft, motion };
   });
   refreshButtons.forEach((refresh) => refresh());
 

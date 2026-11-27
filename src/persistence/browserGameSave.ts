@@ -1,7 +1,8 @@
 import { challengeModes, type ChallengeMode } from '../domain/challengeModes';
 import { connectorStyles, type ConnectorStyleId } from '../domain/connectorStyles';
 import { PuzzlePlay } from '../domain/PuzzlePlay';
-import { createPuzzle, defaultPieceShape, getPieceCount, pieceShapeIds, puzzleSizePresets, type PuzzleSize } from '../domain/puzzleSizes';
+import { createPuzzle, defaultPieceShape, getPieceCount, pieceShapeIds, type PuzzleSize } from '../domain/puzzleSizes';
+import { maximumPuzzlePieceCount } from '../domain/staticPuzzleSizes';
 import { puzzleAnimationSpeeds, type PuzzleAnimationSpeed } from '../puzzles/PuzzleSource';
 import {
   defaultAllowLoosePiecesOnBoard, defaultTrayFractions, hasProgress, trayPositions,
@@ -142,8 +143,6 @@ function readOptions(value: unknown): PuzzleOptions | undefined {
   }
 }
 
-const maximumPieceCount = Math.max(...puzzleSizePresets.map((preset) => getPieceCount(preset.square)));
-
 function isPositiveInteger(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value > 0;
 }
@@ -152,7 +151,7 @@ function readSize(value: unknown): PuzzleSize | undefined {
   if (!isRecord(value)) return;
   const { width, height, columns, rows, snapTolerance } = value;
   if (!isPositiveInteger(width) || !isPositiveInteger(height)
-    || !isPositiveInteger(columns) || !isPositiveInteger(rows) || getPieceCount({ columns, rows }) > maximumPieceCount
+    || !isPositiveInteger(columns) || !isPositiveInteger(rows) || getPieceCount({ columns, rows }) > maximumPuzzlePieceCount
     || width < columns || height < rows
     || typeof snapTolerance !== 'number' || !Number.isFinite(snapTolerance) || snapTolerance < 0) return;
   return { width, height, columns, rows, snapTolerance };

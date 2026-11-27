@@ -1,6 +1,6 @@
 export const puzzleThemes = [
-  'Alien Worlds', 'Candy', 'Coast', 'Countryside', 'Desert', 'Halloween',
-  'Medieval', 'Mountains', 'Ocean', 'Sky', 'Space', 'Woodland',
+  'Alien Worlds', 'Candy', 'Coast', 'Countryside', 'Desert', 'Flowers',
+  'Halloween', 'Medieval', 'Mountains', 'Ocean', 'Sky', 'Space', 'Woodland',
 ] as const;
 export const puzzleTypes = ['Flat Illustration', 'Parallax', 'Procedural'] as const;
 

@@ -13,7 +13,7 @@ const scenario = (name, run) => scenarios.push({ name, run });
 
 const settingsY = { theme: -207, firstFilter: -108, secondFilter: -46, firstTray: 50, secondTray: 112, loosePieces: 208, done: 280 };
 const setupY = { size: -251, shape: -155, connector: -44, speed: 67, rotation: 163, challenge: 259, action: 329 };
-const filterY = { firstTheme: -225, secondTheme: -163, type: 52, completion: 143, motion: 231, action: 302 };
+const filterY = { firstTheme: -256, secondTheme: -194, type: 83, completion: 174, motion: 262, action: 333 };
 const resumeActionY = 114;
 const compactPuzzlePath = '/compact-fixture/tests/fixtures/compact-puzzle.html';
 const currentSizesPuzzlePath = `${compactPuzzlePath}?currentSizes`;
@@ -835,16 +835,18 @@ scenario('the picker shows newest puzzles first and only loads nearby previews',
   }
 });
 
-scenario('the Static filter opens Cherry Blossoms with an adaptive cut that survives reload', async (t) => {
+scenario('the Flowers and Static filters open Cherry Blossoms with an adaptive cut that survives reload', async (t) => {
   const { page, waitForText, errors, clickDialog } = await openPuzzle(t, {
     viewport: { width: 1320, height: 780 }, hasTouch: true,
   });
   const { moveFinger } = await touchController(page);
+  await waitForText('Flowers · Flat Illustration');
   await page.touchscreen.tap(1120, 49);
   await waitForText('Artwork motion');
+  await clickDialog(93, filterY.secondTheme); // Flowers
   await clickDialog(-60, filterY.motion); // Static
   await clickDialog(125, filterY.action); // Apply
-  await waitForText('Filters (1)');
+  await waitForText('Filters (2)');
   await page.touchscreen.tap(900, 430);
   await waitForText('Artwork credits');
   await waitForText('Umme Hani Ali');
@@ -854,12 +856,12 @@ scenario('the Static filter opens Cherry Blossoms with an adaptive cut that surv
   await waitForText('Target piece count');
   await waitForText('48 pieces · 6 × 8');
   assert.ok(!await page.evaluate(() => window.paintedText.includes('Animation speed')));
-  await clickDialog(170, -221); // Target 420
+  await clickDialog(170, -217); // Target 420
   await waitForText('456 pieces · 19 × 24');
-  await clickDialog(170, -125); // Square
+  await clickDialog(170, -101); // Square
   await waitForText('459 pieces · 17 × 27');
-  await clickDialog(156, -14); // No connectors
-  await clickDialog(158, 299); // Play
+  await clickDialog(156, 10); // No connectors
+  await clickDialog(158, 295); // Play
   await waitForText('0 of 459 placed');
 
   const size = { width: 1200, height: 1897, columns: 17, rows: 27, snapTolerance: 16 };
@@ -2780,8 +2782,8 @@ scenario('picker tag and completion filters combine and refresh after play', asy
   await clickDialog(-119, filterY.secondTheme); // Countryside
   const selectedTiles = await canvas.screenshot();
   const selectedFill = [75, 108, 94, 255];
-  assert.deepEqual(await pixelAt(page, selectedTiles, 753, 151), selectedFill, 'Coast should use the selected tile fill');
-  assert.deepEqual(await pixelAt(page, selectedTiles, 541, 213), selectedFill, 'Countryside should stay selected alongside Coast');
+  assert.deepEqual(await pixelAt(page, selectedTiles, 753, 390 + filterY.firstTheme - 14), selectedFill, 'Coast should use the selected tile fill');
+  assert.deepEqual(await pixelAt(page, selectedTiles, 541, 390 + filterY.secondTheme - 14), selectedFill, 'Countryside should stay selected alongside Coast');
   await clickDialog(-109, filterY.type); // Flat Illustration
   await clickDialog(-66, filterY.completion); // Completed
   await clickDialog(125, filterY.action);
@@ -2904,6 +2906,7 @@ scenario('touch can scroll the filter dialog and apply choices on a short screen
   await page.touchscreen.tap(445, 49);
   await waitForText('Theme');
   await page.touchscreen.tap(413, 135); // Coast
+  await moveFinger(311, 247, 311, 90);
   await moveFinger(311, 247, 311, 90);
   await moveFinger(311, 247, 311, 90);
   await page.touchscreen.tap(385, 247); // Animated, after scrolling the dialog body.

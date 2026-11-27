@@ -3,7 +3,7 @@ import type { PuzzleSource } from '../puzzles/PuzzleSource';
 import { puzzleSizeChoices } from '../puzzles/puzzleSizeChoices';
 import { addPressFeedback, type UIScene } from './button';
 import { headerControlGap, puzzleSpacing } from './puzzleHeader';
-import { palette, styleWithTheme } from './theme';
+import { metadataTextStyle, palette, styleWithTheme } from './theme';
 
 export const maxPickerCardWidth = 560;
 const previewSize = { width: 1024, height: 576 };
@@ -45,9 +45,8 @@ export function makePuzzlePickerCard(
   let previewRequested = false;
   const metadata = `${source.tags.theme} · ${source.tags.type}`;
   const title = scene.add.text(0, 0, source.title, { fontFamily: 'system-ui', fontSize: '22px' }).setOrigin(0, 0.5);
-  const metadataStyle = { fontFamily: 'system-ui', fontSize: '15px' };
-  const tags = scene.add.text(0, 0, metadata, metadataStyle).setOrigin(0, 0.5);
-  const statusLabel = scene.add.text(0, 0, status, metadataStyle).setOrigin(1, 0.5);
+  const tags = scene.add.text(0, 0, metadata, metadataTextStyle).setOrigin(0, 0.5);
+  const statusLabel = scene.add.text(0, 0, status, metadataTextStyle).setOrigin(1, 0.5);
   const inlineStatusWidth = status ? tags.width + headerControlGap + statusLabel.width : 0;
 
   const isInsideList = (x: number, y: number) => {
@@ -84,7 +83,7 @@ export function makePuzzlePickerCard(
     .addLocal([background, title, tags, statusLabel]);
   const credits = openCredits && scene.rexUI.add.label({
     width: creditsWidth, height: creditsHeight, align: 'right',
-    text: scene.add.text(0, 0, 'Credits', metadataStyle),
+    text: scene.add.text(0, 0, 'Credits', metadataTextStyle),
   }).setOrigin(1, 0.5).layout();
   if (credits) {
     const caption = credits.getElement('text') as Phaser.GameObjects.Text;

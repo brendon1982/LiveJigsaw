@@ -1,6 +1,8 @@
 import type Phaser from 'phaser';
 import { gameSave } from '../persistence';
 
+export const metadataTextStyle = { fontFamily: 'system-ui', fontSize: '15px' };
+
 const forest = {
   background: 0x263a36,
   text: '#edf3e9',

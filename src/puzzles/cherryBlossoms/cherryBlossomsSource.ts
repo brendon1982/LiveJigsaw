@@ -24,7 +24,7 @@ class CherryBlossomsScene extends Phaser.Scene {
 
 export const cherryBlossomsSource: PuzzleSource = {
   title: 'Cherry Blossoms',
-  tags: { theme: 'Woodland', type: 'Flat Illustration' },
+  tags: { theme: 'Flowers', type: 'Flat Illustration' },
   motion: 'Static',
   attribution: {
     name: 'Umme Hani Ali',

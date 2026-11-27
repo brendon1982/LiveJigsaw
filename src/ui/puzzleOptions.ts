@@ -8,7 +8,7 @@ import type { PuzzleOptions, PuzzleProgress } from '../persistence/GameSave';
 import { puzzleAnimationSpeeds, type PuzzleSource } from '../puzzles/PuzzleSource';
 import { puzzleSizeChoices } from '../puzzles/puzzleSizeChoices';
 import { makeButtonLabel, makeOptionTile, type UIScene } from './button';
-import { palette } from './theme';
+import { metadataTextStyle, palette, styleWithTheme } from './theme';
 
 const optionWidth = 96;
 const optionGap = 8;
@@ -83,20 +83,22 @@ export function showPuzzleOptions(
       fontFamily: 'system-ui', fontSize: '17px', color: palette.mutedText,
     }).setFixedSize(0, 24).setDepth(depth.controls), { align: 'left' });
     section.add(buttons, { align: 'left' });
+    if (source.motion === 'Static' && buttons === sizeButtons) {
+      const sizeRowWidth = sizeChoices.length * (sizeTileWidth + optionGap) - optionGap;
+      const cutSummary = scene.add.text(0, 0, '', {
+        ...metadataTextStyle, align: 'right',
+      }).setFixedSize(sizeRowWidth, 22).setDepth(depth.controls);
+      styleWithTheme(cutSummary, (colors) => cutSummary.setColor(colors.mutedText));
+      const updateCutSummary = () => {
+        const cut = currentCut();
+        if (cut) cutSummary.setText(`${getPieceCount(cut.size)} pieces · ${cut.size.columns} × ${cut.size.rows}`);
+      };
+      sizeButtons.on('button.click', updateCutSummary);
+      shapeButtons.on('button.click', updateCutSummary);
+      updateCutSummary();
+      section.add(cutSummary, { align: 'left' });
+    }
     content.add(section, { align: 'left' });
-  }
-  if (source.motion === 'Static') {
-    const cutSummary = scene.add.text(0, 0, '', {
-      fontFamily: 'system-ui', fontSize: '15px', color: palette.mutedText,
-    }).setFixedSize(contentWidth, 22).setDepth(depth.controls);
-    const updateCutSummary = () => {
-      const cut = currentCut();
-      if (cut) cutSummary.setText(`${getPieceCount(cut.size)} pieces · ${cut.size.columns} × ${cut.size.rows}`);
-    };
-    sizeButtons.on('button.click', updateCutSummary);
-    shapeButtons.on('button.click', updateCutSummary);
-    updateCutSummary();
-    content.add(cutSummary, { align: 'left' });
   }
 
   const actions = [

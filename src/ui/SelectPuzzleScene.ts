@@ -5,7 +5,7 @@ import { gameSave } from '../persistence';
 import type { PuzzleProgress } from '../persistence/GameSave';
 import { puzzleSources } from '../puzzles/catalog';
 import type { PuzzleSource } from '../puzzles/PuzzleSource';
-import { makeButton } from './button';
+import { makeButton, makeOptionTile, type UIScene } from './button';
 import type { PuzzleSelection } from './PlayPuzzleScene';
 import { artworkCreditLines, showArtworkCredits } from './puzzleCreditsDialog';
 import { showPuzzleFilters } from './puzzleFilterDialog';
@@ -20,6 +20,32 @@ const scrollbarWidth = 10;
 const scrollbarGap = 14;
 const scrollbarSpace = scrollbarWidth + scrollbarGap;
 const scrollThreshold = 10;
+const previewSizes = {
+  Medium: { maxWidth: 200, widthFraction: 0.465, iconGridSize: 2 },
+  Large: { maxWidth: maxPickerCardWidth, widthFraction: 1, iconGridSize: 1 },
+} as const;
+type PreviewSize = keyof typeof previewSizes;
+
+function drawPreviewSizeIcon(scene: UIScene, size: PreviewSize) {
+  const { iconGridSize } = previewSizes[size];
+  const width = 28;
+  const height = 18;
+  const gap = 2;
+  const cardWidth = (width + gap) / iconGridSize - gap;
+  const cardHeight = (height + gap) / iconGridSize - gap;
+  const art = scene.add.graphics();
+  styleWithTheme(art, (colors) => {
+    art.clear().fillStyle(colors.optionIconOutline);
+    for (let row = 0; row < iconGridSize; row++) {
+      for (let column = 0; column < iconGridSize; column++) {
+        const x = column * (cardWidth + gap) - width / 2;
+        const y = row * (cardHeight + gap) - height / 2;
+        art.fillRect(x, y, cardWidth, cardHeight);
+      }
+    }
+  });
+  return scene.add.container(0, 0, [art]).setSize(width, height);
+}
 
 function resumableProgress(source: PuzzleSource): PuzzleProgress | undefined {
   const progress = gameSave.getProgress(source.scene.key);
@@ -36,6 +62,7 @@ export class SelectPuzzleScene extends Phaser.Scene {
   static readonly key = 'SelectPuzzle';
   declare rexUI: RexUIPlugin;
   private filters = noPuzzleFilters;
+  private previewSize: PreviewSize = 'Large';
   private scrollOffset = 0;
 
   constructor() {
@@ -105,7 +132,7 @@ export class SelectPuzzleScene extends Phaser.Scene {
       column: 1, row: 1,
     });
     const list = this.rexUI.add.sizer({ orientation: 'y', space: { bottom: puzzleSpacing } })
-      .add(grid, { align: 'center' });
+      .add(grid, { align: 'center', key: 'cards' });
     const track = this.rexUI.add.roundRectangle(0, 0, 8, 10, 4);
     const thumb = this.rexUI.add.roundRectangle(0, 0, scrollbarWidth, 36, 5);
     const panel = this.rexUI.add.scrollablePanel({
@@ -147,6 +174,20 @@ export class SelectPuzzleScene extends Phaser.Scene {
         if (filters) applyFilters(filters);
       });
     }, 130);
+    const previewSizeRow = this.rexUI.add.sizer({ space: { item: headerControlGap } }).setOrigin(0.5, 0);
+    const previewSizeTiles = (Object.keys(previewSizes) as PreviewSize[]).map((size) => {
+      const tile = makeOptionTile(this, {
+        name: `preview-size-${size}`, width: 70, height: filtersButton.height,
+        drawIcon: () => drawPreviewSizeIcon(this, size),
+        dragThreshold: scrollThreshold,
+        onClick: () => {
+          if (!dialogOpen) changePreviewSize(size);
+        },
+      });
+      previewSizeRow.add(tile.button);
+      return { size, tile };
+    });
+    previewSizeRow.layout();
     const clearFilters = makeButton(this, 0, 0, 'Clear filters', (pointer) => {
       if (!dialogOpen && !pointer.wasCanceled) applyFilters(noPuzzleFilters);
     }, 140);
@@ -169,6 +210,18 @@ export class SelectPuzzleScene extends Phaser.Scene {
       const count = activeFilterCount(this.filters);
       filtersButton.setText(count ? `Filters (${count})` : 'Filters').layout();
     };
+    const updatePreviewSizeTiles = () => {
+      for (const { size, tile } of previewSizeTiles) tile.setSelected(this.previewSize === size);
+    };
+    const changePreviewSize = (size: PreviewSize) => {
+      if (this.previewSize === size) return;
+      const firstInView = panel.childOY < 0 && visibleCards.find(({ card: { container } }) =>
+        container.y + container.height > listBounds.top);
+      this.previewSize = size;
+      updatePreviewSizeTiles();
+      layoutPicker(0);
+      if (firstInView) panel.setChildOY(listBounds.top - firstInView.card.container.y, true);
+    };
     const applyFilters = (filters: PuzzleFilters) => {
       if (samePuzzleFilters(this.filters, filters)) return;
       this.filters = filters;
@@ -189,12 +242,18 @@ export class SelectPuzzleScene extends Phaser.Scene {
         : puzzleSpacing + rowHeight / 2;
       title.setPosition(headerInset, titleY);
       const headerBottom = stacked ? titleY + title.height / 2 : puzzleSpacing + rowHeight;
-      const panelTop = headerBottom + puzzleSpacing;
+      const sizeRowLeft = (width - previewSizeRow.width) / 2;
+      const sizesFitInline = !stacked && title.x + title.width + headerControlGap <= sizeRowLeft
+        && sizeRowLeft + previewSizeRow.width + headerControlGap <= filtersButton.x;
+      const sizeRowTop = sizesFitInline ? titleY - previewSizeRow.height / 2 : headerBottom + headerControlGap;
+      previewSizeRow.setPosition(width / 2, sizeRowTop);
+      const panelTop = Math.max(headerBottom, sizeRowTop + previewSizeRow.height) + puzzleSpacing;
       const panelHeight = Math.max(1, height - panelTop);
       const listWidth = width - scrollbarSpace;
       const availableWidth = listWidth - 2 * puzzleSpacing;
-      const cardWidth = Phaser.Math.Clamp(availableWidth, 1, maxPickerCardWidth);
-      const fittingColumns = Math.floor((availableWidth + puzzleSpacing) / (maxPickerCardWidth + puzzleSpacing));
+      const { maxWidth, widthFraction } = previewSizes[this.previewSize];
+      const cardWidth = Phaser.Math.Clamp(Math.floor(availableWidth * widthFraction), 1, maxWidth);
+      const fittingColumns = Math.floor((availableWidth + puzzleSpacing) / (cardWidth + puzzleSpacing));
       const columns = Math.min(Math.max(1, fittingColumns), Math.max(1, visibleCards.length));
       const stackStatus = visibleCards.some(({ card }) => card.needsStatusRow(cardWidth));
       if (cardLayout?.columns !== columns || cardLayout.width !== cardWidth || cardLayout.stackStatus !== stackStatus) {
@@ -241,6 +300,7 @@ export class SelectPuzzleScene extends Phaser.Scene {
       this.textures.remove(cutout);
     });
     updateFilterCaption();
+    updatePreviewSizeTiles();
     layoutPicker(this.scrollOffset);
     loadNearbyPreviews();
   }

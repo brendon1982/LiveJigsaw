@@ -14,6 +14,8 @@ const statusRowHeight = 22;
 const footerInset = puzzleSpacing;
 const creditsWidth = 72;
 const creditsHeight = 44;
+const compactFooterWidth = 224;
+const creditsRowHeight = 36;
 
 export function makePreviewCornerCutout(scene: UIScene): Phaser.Textures.CanvasTexture {
   const cutout = scene.textures.createCanvas('picker-preview-corners', maxPickerCardWidth, cornerRadius);
@@ -116,7 +118,10 @@ export function makePuzzlePickerCard(
     layout(width: number, stackStatus: boolean) {
       const scale = width / maxPickerCardWidth;
       const artworkBottom = previewHeight * scale;
-      const height = artworkBottom + footerHeight + (stackStatus ? statusRowHeight : 0);
+      const compactFooter = width < compactFooterWidth;
+      const stackCredits = credits && compactFooter;
+      const height = artworkBottom + footerHeight + (stackStatus ? statusRowHeight : 0)
+        + (stackCredits ? creditsRowHeight : 0);
       const right = width - footerInset;
       const textWidth = Math.max(0, right - footerInset);
       const metadataY = artworkBottom + 50;
@@ -124,12 +129,14 @@ export function makePuzzlePickerCard(
       background.setRadius(cornerRadius * scale).resize(width, height);
       if (background.input) background.input.hitArea.setSize(width, height);
       if (preview) container.setChildLocalScale(preview, scale, scale);
-      const titleWidth = credits ? Math.max(0, textWidth - creditsWidth - headerControlGap) : textWidth;
+      title.setFontSize(compactFooter ? 16 : 22);
+      const titleWidth = credits && !stackCredits ? Math.max(0, textWidth - creditsWidth - headerControlGap) : textWidth;
       fitLabel(title, source.title, titleWidth);
       fitLabel(tags, metadata, textWidth);
       fitLabel(statusLabel, status, textWidth);
       container.setChildLocalPosition(title, footerInset, artworkBottom + 23);
-      if (credits) container.setChildLocalPosition(credits, right, artworkBottom + 23);
+      if (credits) container.setChildLocalPosition(credits, right,
+        stackCredits ? height - creditsHeight / 2 : artworkBottom + 23);
       container.setChildLocalPosition(tags, footerInset, metadataY);
       statusLabel.setOrigin(stackStatus ? 0 : 1, 0.5);
       container.setChildLocalPosition(statusLabel, stackStatus ? footerInset : right,

@@ -684,6 +684,61 @@ scenario('the board keeps fixed pan bounds through zoom with a parked piece', as
   assert.deepEqual(errors, []);
 });
 
+scenario('picker preview sizes reflow the cards and stay centered on touch screens', async (t) => {
+  const { page, waitForText, errors } = await openPuzzle(t, {
+    viewport: { width: 1320, height: 780 }, hasTouch: true,
+  });
+  await waitForText('Select a Puzzle');
+
+  const pickerLayout = () => page.evaluate(() => {
+    const { children } = window.puzzlePickerScene;
+    const panel = children.list.find(({ type }) => type === 'rexScrollablePanel');
+    const grid = panel.getElement('panel.cards');
+    const [card] = grid.getElement('items');
+    const options = children.list.filter(({ name }) => name.startsWith('preview-size-')).map((tile) => {
+      return {
+        size: tile.name.slice('preview-size-'.length), x: tile.x, y: tile.y,
+        selected: tile.getElement('background').lineWidth === 2,
+        icon: Boolean(tile.getElement('icon')), text: Boolean(tile.getElement('text')),
+      };
+    });
+    return { options, columns: grid.columnCount, width: card.width, height: card.height, panelTop: panel.y };
+  });
+  const assertSelection = (layout, size) => {
+    assert.deepEqual(layout.options.filter(({ selected }) => selected).map((option) => option.size), [size]);
+  };
+  const large = await pickerLayout();
+  assert.deepEqual(large.options.map(({ size }) => size), ['Medium', 'Large']);
+  assertSelection(large, 'Large');
+  assert.ok(large.options.every(({ icon, text }) => icon && !text));
+  assert.equal((large.options[0].x + large.options[1].x) / 2, 660);
+  assert.equal(large.columns, 2);
+  assert.equal(large.width, 560);
+
+  await page.mouse.click(large.options[0].x, large.options[0].y);
+  const medium = await pickerLayout();
+  assertSelection(medium, 'Medium');
+  assert.equal(medium.columns, 5);
+  assert.equal(medium.width, 200);
+  assert.ok(medium.height < large.height);
+
+  await page.setViewportSize({ width: 375, height: 640 });
+  await page.waitForFunction(() => document.querySelector('canvas').width === 375);
+  const portrait = await pickerLayout();
+  assertSelection(portrait, 'Medium');
+  assert.equal(portrait.width, 148);
+  assert.equal(portrait.columns, 2);
+  assert.ok(Math.abs((portrait.options[0].x + portrait.options[1].x) / 2 - 375 / 2) <= 1);
+  assert.ok(portrait.options.every(({ x, y }) => x > 0 && x < 375 && y < portrait.panelTop));
+  await page.touchscreen.tap(portrait.options[1].x, portrait.options[1].y);
+  const portraitLarge = await pickerLayout();
+  assertSelection(portraitLarge, 'Large');
+  assert.ok(portraitLarge.width > portrait.width);
+  await page.touchscreen.tap(175, portraitLarge.panelTop + 70);
+  await waitForText('Piece count');
+  assert.deepEqual(errors, []);
+});
+
 scenario('the touch picker stays usable while the viewport width changes', async (t) => {
   const { page, waitForText, errors, clickDialog } = await openPuzzle(t, {
     viewport: { width: 1320, height: 780 }, hasTouch: true, isMobile: true,
@@ -714,8 +769,8 @@ scenario('a touch scrollbar survives a resize that leaves no thumb travel', asyn
     viewport: { width: 680, height: 200 }, hasTouch: true, isMobile: true,
   });
   const { dispatch } = await touchController(page);
-  await dispatch('touchStart', [675, 104]);
-  await dispatch('touchMove', [675, 126]);
+  await dispatch('touchStart', [675, 155]);
+  await dispatch('touchMove', [675, 177]);
   for (const height of [160, 142, 130, 122, 120, 116, 114, 112, 110, 106, 100]) {
     await page.setViewportSize({ width: 680, height });
     await page.waitForFunction((height) => document.querySelector('canvas').height === height, height);
@@ -1809,6 +1864,11 @@ scenario('picker Settings remembers the theme and filter on a narrow touch scree
     viewport: { width: 375, height: 640 }, hasTouch: true, isMobile: true,
   });
   await waitForText('Select a Puzzle');
+  const previewY = await page.evaluate(() => {
+    const panel = window.puzzlePickerScene.children.list.find(({ type }) => type === 'rexScrollablePanel');
+    const [firstCard] = panel.getElement('panel.cards.items');
+    return Math.round(firstCard.y + 65);
+  });
   const forest = await canvas.screenshot();
   assert.deepEqual(await pixelAt(page, forest, 5, 105), [38, 58, 54, 255]);
   await page.touchscreen.tap(301, 39);
@@ -1819,7 +1879,7 @@ scenario('picker Settings remembers the theme and filter on a narrow touch scree
   const slate = await canvas.screenshot();
   assert.deepEqual(await pixelAt(page, slate, 5, 105), [39, 51, 68, 255]);
   assert.deepEqual(await pixelAt(page, slate, 5, 130), [39, 51, 68, 255], 'The Phaser canvas background should change too');
-  assert.deepEqual(await pixelAt(page, slate, 75, 170), await pixelAt(page, forest, 75, 170), 'Preview artwork should keep its colors');
+  assert.deepEqual(await pixelAt(page, slate, 75, previewY), await pixelAt(page, forest, 75, previewY), 'Preview artwork should keep its colors');
   await page.reload();
   await waitForText('Select a Puzzle');
   assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 5, 105), [39, 51, 68, 255]);
@@ -1831,7 +1891,7 @@ scenario('picker Settings remembers the theme and filter on a narrow touch scree
   await clickSetting(101, settingsY.done);
   const dark = await canvas.screenshot();
   assert.deepEqual(await pixelAt(page, dark, 5, 105), [33, 33, 33, 255]);
-  assert.deepEqual(await pixelAt(page, dark, 75, 170), await pixelAt(page, forest, 75, 170), 'Dark should preserve preview artwork');
+  assert.deepEqual(await pixelAt(page, dark, 75, previewY), await pixelAt(page, forest, 75, previewY), 'Dark should preserve preview artwork');
   await page.reload();
   await waitForText('Select a Puzzle');
   assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 5, 105), [33, 33, 33, 255]);

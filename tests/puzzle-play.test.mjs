@@ -691,6 +691,38 @@ scenario('the play workspace fills the viewport beneath the padded header', asyn
   assert.deepEqual(errors, []);
 });
 
+scenario('tray and board backgrounds stay painted through repeated viewport resizes', async (t) => {
+  const { page, canvas, errors, playSelection } = await openCompactPuzzle(t, {
+    viewport: { width: 1320, height: 780 },
+  });
+  await page.mouse.click(340, 180);
+  await playSelection();
+  await playLayout(page);
+
+  const assertBackgrounds = async (width, height) => {
+    await page.waitForFunction(({ width, height }) => {
+      const canvas = document.querySelector('canvas');
+      return canvas.width === width && canvas.height === height;
+    }, { width, height });
+    const image = await canvas.screenshot();
+    const landscape = width >= height;
+    const tray = await pixelAt(page, image, 2, height - 3);
+    const board = await pixelAt(page, image, width - 3, landscape ? height - 3 : 180);
+    assert.deepEqual(tray, [52, 66, 62, 255], `Tray background at ${width} × ${height}`);
+    assert.deepEqual(board, [32, 46, 42, 255], `Board background at ${width} × ${height}`);
+  };
+
+  await assertBackgrounds(1320, 780);
+  for (const [width, height] of [[1320, 780], [460, 820]]) {
+    for (let step = 0; step < 16; step += 1) {
+      const delta = step % 2 === 0 ? step : -step;
+      await page.setViewportSize({ width: width + delta, height });
+      await assertBackgrounds(width + delta, height);
+    }
+  }
+  assert.deepEqual(errors, []);
+});
+
 scenario('play opens artwork details and the active challenge rules without changing progress', async (t) => {
   const { page, errors, waitForText, playSelection } = await openCompactPuzzle(t, {
     viewport: { width: 460, height: 780 }, hasTouch: true, isMobile: true,

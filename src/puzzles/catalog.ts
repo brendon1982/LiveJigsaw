@@ -96,6 +96,7 @@ import { pumpkinSpiceLatteSource } from './pumpkinSpiceLatte/pumpkinSpiceLatteSo
 import { gildedWatercolorSource } from './gildedWatercolor/gildedWatercolorSource';
 import { starburstSantaSource } from './starburstSanta/starburstSantaSource';
 import { christmasStickersSource } from './christmasStickers/christmasStickersSource';
+import { lemonStripesSource } from './lemonStripes/lemonStripesSource';
 
 export const puzzleSources: readonly PuzzleSource[] = [
   windmillSource,
@@ -195,4 +196,5 @@ export const puzzleSources: readonly PuzzleSource[] = [
   gildedWatercolorSource,
   starburstSantaSource,
   christmasStickersSource,
+  lemonStripesSource,
 ];

@@ -290,9 +290,9 @@ async function playLayout(page) {
       board: { x: board.x, y: board.y, width: board.width, height: board.height, zoom: board.zoom },
       breakButton: iconButton('Break piece off'),
       moveTrayButton: iconButton('Move Tray to Board'),
-      returnAllButton: iconButton('Return All Parked Pieces to Tray'),
+      returnAllButton: iconButton('Return Pieces on Board to Tray'),
       sortButton: iconButton('Sort Edge Pieces'),
-      shuffleButton: iconButton('Shuffle Parked Pieces'),
+      shuffleButton: iconButton('Shuffle Pieces on Board'),
       fitButton: iconButton('Fit board'),
       nativeSizeButton: iconButton('Native size (1×)'),
       artwork: { x: board.x - board.scrollX * board.zoom, y: board.y - board.scrollY * board.zoom },
@@ -1349,6 +1349,141 @@ scenario('the 1× board button restores native size and Fit board returns to the
   const refitted = await canvas.screenshot();
   assert.deepEqual(await pixelAt(page, refitted, 900, 112), panelBackground);
   assert.deepEqual(await pixelAt(page, refitted, leftSlot, buttonY), panelBackground);
+  assert.deepEqual(errors, []);
+});
+
+scenario('setup challenge tooltips explain the rules without interfering with scrolling or selection', async (t) => {
+  const { page, errors, waitForText } = await openCompactPuzzle(t, {
+    viewport: { width: 1320, height: 500 }, hasTouch: true,
+  });
+  const openSetup = () => page.mouse.click(340, 180);
+  const tooltip = () => page.evaluate(() => {
+    const scene = window.puzzlePickerScene;
+    const label = scene.children.getByName('Hover tooltip');
+    if (!label) return null;
+    const text = label.getElement('text');
+    const background = label.getElement('background');
+    const dialog = scene.children.list.find(({ type }) => type === 'rexDialog');
+    const drawOrder = scene.children.list;
+    const panelIndex = drawOrder.indexOf(dialog.getElement('background'));
+    const bounds = label.getBounds();
+    const { width, height } = scene.scale.gameSize;
+    return {
+      visible: label.visible,
+      text: text.text,
+      rendered: scene.cameras.main.renderList.includes(text),
+      abovePanel: panelIndex >= 0 && drawOrder.indexOf(background) > panelIndex
+        && drawOrder.indexOf(text) > drawOrder.indexOf(background),
+      inViewport: bounds.left >= 0 && bounds.top >= 0 && bounds.right <= width && bounds.bottom <= height,
+    };
+  });
+  const pointFor = (name) => uiControl(page, name === 'none' ? { name, text: 'None' } : { name });
+  const scrollToChallenges = async () => {
+    const { y, clip } = await pointFor('seed');
+    assert.ok(y > clip.bottom, 'The challenge row should start below the visible section');
+    await page.mouse.move(clip.x, (clip.top + clip.bottom) / 2);
+    await page.mouse.wheel(0, 1000);
+    await page.waitForFunction(() => {
+      const scene = window.puzzlePickerScene;
+      const body = scene.children.list.find(({ type }) => type === 'rexDialog').getElement('content');
+      return body.childOY === body.bottomChildOY;
+    }, undefined, { timeout: 2500 });
+    await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  };
+  await openSetup();
+  await scrollToChallenges();
+  for (const [name, description] of [
+    ['none', /^Play without extra rules/],
+    ['sequential', /^Only one piece is unlocked/],
+    ['sequential-window', /^Up to 4 pieces are unlocked/],
+    ['no-guide', /^The board has no artwork guide/],
+    ['seed', /^Start by placing any piece/],
+  ]) {
+    const { x, y } = await pointFor(name);
+    await page.mouse.move(x, y);
+    assert.equal((await tooltip())?.visible, false, 'Hover feedback should not appear immediately');
+    await page.waitForFunction(() => window.puzzlePickerScene.children.getByName('Hover tooltip')?.visible,
+      undefined, { timeout: 2500 });
+    await page.waitForFunction(() => new Promise(requestAnimationFrame));
+    const hint = await tooltip();
+    assert.match(hint.text, description);
+    assert.ok(hint.rendered && hint.inViewport);
+    assert.ok(hint.abovePanel, 'Draw the tooltip background and text above the dialog panel');
+  }
+  await page.mouse.wheel(0, -1000);
+  await page.waitForFunction(() => {
+    const { children } = window.puzzlePickerScene;
+    const body = children.list.find(({ type }) => type === 'rexDialog').getElement('content');
+    return body.childOY === body.topChildOY && children.getByName('Hover tooltip')?.visible === false;
+  }, undefined, { timeout: 2500 });
+  await page.keyboard.press('Escape');
+  await waitForDialogClosed(page, 'SelectPuzzle');
+  assert.equal(await tooltip(), null, 'Closing setup should destroy its tooltip');
+
+  await openSetup();
+  await scrollToChallenges();
+  const { x, y } = await pointFor('seed');
+  await page.touchscreen.tap(x, y);
+  await page.waitForTimeout(500);
+  assert.equal((await tooltip())?.visible, false, 'A touch tap should select without showing a tooltip');
+  await pressAction(page, 'Play', true);
+  await waitForText('0 of 8 placed');
+  assert.equal((await readSave(page)).recentOptions.challengeMode, 'seed');
+  assert.deepEqual(errors, []);
+});
+
+scenario('work surface tooltips follow mouse hover without affecting touch or clicks', async (t) => {
+  const { page, waitForText, errors, playSelection } = await openPuzzle(t, {
+    viewport: { width: 1320, height: 780 }, hasTouch: true,
+  }, currentSizesPuzzlePath, (page) => page.addInitScript(() => {
+    localStorage.setItem('live-jigsaw.save', JSON.stringify({
+      version: 8,
+      settings: { trayPosition: 'Left', trayFractions: { vertical: 0.4, horizontal: 0 } },
+    }));
+  }));
+  await page.touchscreen.tap(340, 180);
+  await playSelection({ size: 40, pieceShape: 'vertical-short' });
+  await waitForText('0 of 40 placed');
+
+  const tooltip = () => page.evaluate(() => {
+    const game = window.puzzlePickerScene.sys.game;
+    const play = game.scene.getScene('PlayPuzzle');
+    const label = play.children.list.flatMap((object) => object.type === 'Layer' ? object.list : [])
+      .find((object) => object.name === 'Hover tooltip');
+    if (!label?.visible) return null;
+    const text = label.getElement('text');
+    const { left, right, top, bottom } = label.getBounds();
+    const { width, height } = game.scale.gameSize;
+    return {
+      text: text.text,
+      rendered: play.cameras.getCamera('Board overlay').renderList.includes(text),
+      inViewport: left >= 0 && top >= 0 && right <= width && bottom <= height,
+    };
+  });
+  const [x, y] = [1285, 121];
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  await page.mouse.move(x, y);
+  assert.equal(await tooltip(), null, 'A tooltip should not appear immediately');
+  await waitForText('Native size (1×)');
+  await page.waitForFunction(() => new Promise(requestAnimationFrame));
+  assert.deepEqual(await tooltip(), { text: 'Native size (1×)', rendered: true, inViewport: true });
+
+  await page.mouse.move(900, 220);
+  assert.equal(await tooltip(), null, 'Leaving the button should dismiss its tooltip');
+  await page.mouse.move(x, y);
+  await page.mouse.move(900, 220);
+  await page.waitForTimeout(500);
+  assert.equal(await tooltip(), null, 'Leaving before the delay should cancel the tooltip');
+
+  await page.touchscreen.tap(x, y);
+  await page.waitForTimeout(500);
+  assert.equal(await tooltip(), null, 'A touch tap should not show a tooltip');
+  await page.mouse.move(x, y);
+  await waitForText('Fit board');
+  assert.equal((await tooltip())?.text, 'Fit board', 'The touch tap should still switch to native size');
+  await page.mouse.down();
+  assert.equal(await tooltip(), null, 'Pressing the button should dismiss its tooltip');
+  await page.mouse.up();
   assert.deepEqual(errors, []);
 });
 

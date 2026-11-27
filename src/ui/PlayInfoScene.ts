@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { challengeModes, type ChallengeMode } from '../domain/challengeModes';
 import { makeButtonLabel, type UIScene } from './button';
+import { challengeDescriptions } from './challengeDescriptions';
 import { pickerControlDepth, showPickerDialog } from './puzzleOptions';
 import { palette } from './theme';
 
@@ -31,13 +32,6 @@ export class PlayInfoScene extends Phaser.Scene {
     show(this, close);
   }
 }
-
-const challengeDescriptions = {
-  sequential: 'Only one piece is unlocked at a time. Place it to unlock the next piece. Locked pieces appear in gray.',
-  'sequential-window': `Up to ${challengeModes['sequential-window'].trayWindow} pieces are unlocked at a time. Place them in any order; each placement unlocks the next piece. Locked pieces appear in gray.`,
-  'no-guide': 'The board has no artwork guide. Use the artwork on the pieces and their shapes to find where they belong.',
-  seed: 'Start by placing any piece in its correct spot. After that, each new placement must touch a correctly placed piece along an edge.',
-} satisfies Record<Exclude<ChallengeMode, 'none'>, string>;
 
 export function showChallengeRules(scene: UIScene, mode: Exclude<ChallengeMode, 'none'>, close: () => void) {
   const content = scene.add.text(0, 0, challengeDescriptions[mode], {

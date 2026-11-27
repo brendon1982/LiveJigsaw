@@ -5,6 +5,7 @@ import type { TrayFractions, TrayPosition } from '../persistence/GameSave';
 import type { LivePuzzleCapture } from '../rendering/LivePuzzleCapture';
 import { makeIconButton, type UIScene } from './button';
 import { drawEffectImage, effectImageResolution, traceEffectPath } from './effectImage';
+import { makeHoverTooltip } from './hoverTooltip';
 import { PannableBoard } from './PannableBoard';
 import { PieceTray } from './PieceTray';
 import { PlacementEffects } from './PlacementEffects';
@@ -142,6 +143,7 @@ export class PuzzleBoardView {
   private readonly sortButton: ReturnType<typeof makeIconButton>;
   private readonly toolButtons: readonly ReturnType<typeof makeIconButton>[];
   private readonly zoomButtons: readonly ReturnType<typeof makeIconButton>[];
+  private readonly tooltips: ReturnType<typeof makeHoverTooltip>;
   private armedTool?: BoardTool;
   private readonly placementEffects: PlacementEffects;
   private seedDropFeedback?: SeedDropFeedback;
@@ -208,14 +210,17 @@ export class PuzzleBoardView {
       }, { dragThreshold: tapSlop, clickInterval: 0 }).setVisible(false);
     this.breakButton = makeToolButton('Break piece off', drawBreakPieceIcon, () => this.toggleTool('break'));
     this.moveTrayButton = makeToolButton('Move Tray to Board', drawMoveTrayIcon, () => this.moveTrayToBoard());
-    this.returnAllButton = makeToolButton('Return All Parked Pieces to Tray', drawReturnAllIcon, () => this.returnAllParkedToTray());
+    this.returnAllButton = makeToolButton('Return Pieces on Board to Tray', drawReturnAllIcon, () => this.returnAllParkedToTray());
     this.sortButton = makeToolButton('Sort Edge Pieces', drawSortEdgesIcon, () => this.toggleTool('sort'));
-    this.shuffleButton = makeToolButton('Shuffle Parked Pieces', drawShuffleIcon, () => this.shuffleParkedPieces());
+    this.shuffleButton = makeToolButton('Shuffle Pieces on Board', drawShuffleIcon, () => this.shuffleParkedPieces());
     this.toolButtons = [this.breakButton, this.moveTrayButton, this.returnAllButton, this.sortButton, this.shuffleButton];
     this.zoomButtons = [this.fitButton, this.nativeSizeButton];
     this.placementEffects = new PlacementEffects(scene, this.board.layer);
     this.floatingPieces = scene.add.layer();
-    for (const button of [...this.zoomButtons, ...this.toolButtons]) button.addToLayer(this.floatingPieces);
+    const controls = [...this.zoomButtons, ...this.toolButtons];
+    for (const button of controls) button.addToLayer(this.floatingPieces);
+    this.tooltips = makeHoverTooltip(scene, { layer: this.floatingPieces });
+    for (const button of controls) this.tooltips.attach(button, button.name);
     const dragCamera = scene.cameras.add().setName('Board overlay');
 
     // The panel cameras clip their own layers. The overlay draws above both panels.
@@ -340,6 +345,7 @@ export class PuzzleBoardView {
   }
 
   cancelInteraction() {
+    this.tooltips.hide();
     this.cancelActiveGesture();
     this.setArmedTool();
   }
@@ -406,6 +412,7 @@ export class PuzzleBoardView {
   }
 
   private layoutBoardControls() {
+    this.tooltips.hide();
     const { x, y, width } = this.board.camera;
     const rowLeft = x + headerControlGap;
     const rowRight = x + width - headerControlGap;

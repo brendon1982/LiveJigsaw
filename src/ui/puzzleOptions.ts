@@ -8,6 +8,8 @@ import type { PuzzleOptions, PuzzleProgress } from '../persistence/GameSave';
 import { puzzleAnimationSpeeds, type PuzzleSource } from '../puzzles/PuzzleSource';
 import { puzzleSizeChoices } from '../puzzles/puzzleSizeChoices';
 import { makeButtonLabel, makeOptionTile, type UIScene } from './button';
+import { challengeDescriptions } from './challengeDescriptions';
+import { makeHoverTooltip } from './hoverTooltip';
 import { makeScrollableDialogBody } from './scrollableDialogBody';
 import { metadataTextStyle, palette, styleWithTheme } from './theme';
 
@@ -16,11 +18,11 @@ const optionGap = 8;
 const contentWidth = 4 * optionWidth + 3 * optionGap;
 const fiveOptionWidth = (contentWidth - 4 * optionGap) / 5;
 // RexUI sizer children are separate entries in the Phaser display list.
-const depth = { cover: 1, panel: 2, controls: 3, tileContents: 4 };
+const depth = { cover: 1, panel: 2, controls: 3, tileContents: 4, tooltip: 5 };
 export const pickerControlDepth = depth.controls;
 
-type Option = {
-  name: string;
+type Option<Name extends string> = {
+  name: Name;
   label?: string;
   height?: number;
   drawIcon?: () => Phaser.GameObjects.Container;
@@ -37,7 +39,7 @@ export function showPuzzleOptions(
   const sizeChoices = puzzleSizeChoices(source);
   const initialSize = sizeChoices.find(({ targetCount }) => targetCount === defaults?.pieceCount) ?? sizeChoices[0];
   const sizeTileWidth = sizeChoices.length > 4 ? fiveOptionWidth : optionWidth;
-  const buttonsFor = (options: readonly Option[], selected: string, width?: number, fontSize?: string) =>
+  const buttonsFor = <Name extends string>(options: readonly Option<Name>[], selected: string, width?: number, fontSize?: string) =>
     makeRadioButtons(scene, options, selected, (pointer) => scroll.containsTap(pointer), width, fontSize);
   const sizeButtons = buttonsFor(sizeChoices.map(({ targetCount }) => ({
     name: String(targetCount),
@@ -109,7 +111,17 @@ export function showPuzzleOptions(
     makeButtonLabel(scene, 'Play', 92, 52, true),
   ];
   const scroll = makeScrollableDialogBody(scene, content, depth.controls);
-  return showPickerDialog(scene, source.title, scroll.body, actions, (action) => {
+  const tooltips = makeHoverTooltip(scene, { depth: depth.tooltip });
+  const canHover = (pointer: Phaser.Input.Pointer) => {
+    const { x, y } = scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
+    return scroll.body.getBounds().contains(x, y);
+  };
+  for (const { button, name } of modeButtons.tiles) {
+    tooltips.attach(button, challengeDescriptions[name], canHover);
+  }
+  scroll.body.on('scroll', tooltips.hide);
+
+  const dialog = showPickerDialog(scene, source.title, scroll.body, actions, (action) => {
     onClose();
     if (action !== 1) return;
 
@@ -126,6 +138,8 @@ export function showPuzzleOptions(
       });
     }
   }, { fitContent: scroll.fitContent });
+  dialog.once('destroy', tooltips.destroy);
+  return dialog;
 }
 
 export function showResumePuzzle(
@@ -252,24 +266,27 @@ export function showPickerDialog(
   return dialog;
 }
 
-function makeRadioButtons(
-  scene: UIScene, options: readonly Option[], selectedName: string, canSelect: (pointer: Phaser.Input.Pointer) => boolean,
+function makeRadioButtons<Name extends string>(
+  scene: UIScene, options: readonly Option<Name>[], selectedName: string, canSelect: (pointer: Phaser.Input.Pointer) => boolean,
   width = optionWidth, fontSize = '15px',
 ) {
   const buttons = scene.rexUI.add.sizer({ orientation: 'x', space: { item: optionGap } });
-  const tiles = options.map((option) => makeOptionTile(scene, {
-    ...option, width, fontSize, depth: depth.controls, contentDepth: depth.tileContents, dragThreshold: 10,
-    onClick: (pointer) => {
-      if (!canSelect(pointer)) return;
-      selectedName = option.name;
-      updateSelection();
-      buttons.emit('button.click');
-    },
+  const tiles = options.map((option) => ({
+    name: option.name,
+    ...makeOptionTile(scene, {
+      ...option, width, fontSize, depth: depth.controls, contentDepth: depth.tileContents, dragThreshold: 10,
+      onClick: (pointer) => {
+        if (!canSelect(pointer)) return;
+        selectedName = option.name;
+        updateSelection();
+        buttons.emit('button.click');
+      },
+    }),
   }));
-  const updateSelection = () => tiles.forEach((tile) => tile.setSelected(tile.button.name === selectedName));
+  const updateSelection = () => tiles.forEach((tile) => tile.setSelected(tile.name === selectedName));
   tiles.forEach(({ button }) => buttons.add(button));
   updateSelection();
-  return Object.assign(buttons, { getSelectedButtonName: () => selectedName });
+  return Object.assign(buttons, { tiles, getSelectedButtonName: () => selectedName });
 }
 
 function drawPieceShapeIcon(scene: UIScene, shape: PieceShape) {

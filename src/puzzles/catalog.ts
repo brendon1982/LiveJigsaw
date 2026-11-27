@@ -116,6 +116,7 @@ import { parkAtSunsetSource } from './parkAtSunset/parkAtSunsetSource';
 import { christmasTreeFarmSource } from './christmasTreeFarm/christmasTreeFarmSource';
 import { oceanLinerSource } from './oceanLiner/oceanLinerSource';
 import { snowmanAndBaublesSource } from './snowmanAndBaubles/snowmanAndBaublesSource';
+import { adriftInDreamsSource } from './adriftInDreams/adriftInDreamsSource';
 
 export const puzzleSources: readonly PuzzleSource[] = [
   windmillSource,
@@ -235,4 +236,5 @@ export const puzzleSources: readonly PuzzleSource[] = [
   christmasTreeFarmSource,
   oceanLinerSource,
   snowmanAndBaublesSource,
+  adriftInDreamsSource,
 ];

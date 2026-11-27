@@ -8,6 +8,7 @@ import type { PuzzleSource } from '../puzzles/PuzzleSource';
 import { makeButton, makeOptionTile, type UIScene } from './button';
 import type { PuzzleSelection } from './PlayPuzzleScene';
 import { artworkCreditLines, showArtworkCredits } from './puzzleCreditsDialog';
+import { showPuzzleDetails } from './puzzleDetailsDialog';
 import { showPuzzleFilters } from './puzzleFilterDialog';
 import { activeFilterCount, matchesPuzzleFilters, noPuzzleFilters, samePuzzleFilters, type PuzzleFilters } from './puzzleFilters';
 import { headerControlGap, headerInset, makeSettingsButton, puzzleSpacing } from './puzzleHeader';
@@ -21,8 +22,8 @@ const scrollbarGap = 14;
 const scrollbarSpace = scrollbarWidth + scrollbarGap;
 const scrollThreshold = 10;
 const previewSizes = {
-  Medium: { maxWidth: 200, widthFraction: 0.465, iconGridSize: 2 },
-  Large: { maxWidth: maxPickerCardWidth, widthFraction: 1, iconGridSize: 1 },
+  Compact: { maxWidth: 200, widthFraction: 0.465, iconGridSize: 2 },
+  Full: { maxWidth: maxPickerCardWidth, widthFraction: 1, iconGridSize: 1 },
 } as const;
 
 function drawPreviewSizeIcon(scene: UIScene, size: PickerPreviewSize) {
@@ -116,14 +117,19 @@ export class SelectPuzzleScene extends Phaser.Scene {
     const cards = newestFirst.map((source) => {
       const completions = gameSave.completionCount(source.scene.key);
       const progress = resumableProgress(source);
+      const status = cardStatus(progress, completions);
       const credits = artworkCreditLines(source.attribution);
       const openCredits = credits.length ? () => {
         if (dialogOpen) return;
         openDialog();
         showArtworkCredits(this, credits, closeDialog);
       } : undefined;
-      const card = makePuzzlePickerCard(this, source, cardStatus(progress, completions), cutout, listBounds,
-        scrollThreshold, () => openCard(source, progress), openCredits);
+      const card = makePuzzlePickerCard(this, source, status, cutout, listBounds, scrollThreshold,
+        () => openCard(source, progress), (copyPreview) => {
+          if (dialogOpen) return;
+          openDialog();
+          showPuzzleDetails(this, source, status, copyPreview(), closeDialog);
+        }, openCredits);
       return { card, source, completions };
     });
     const grid = this.rexUI.add.gridSizer({
@@ -203,7 +209,7 @@ export class SelectPuzzleScene extends Phaser.Scene {
     const matchingCards = (filters: PuzzleFilters) =>
       cards.filter(({ source, completions }) => matchesPuzzleFilters(source, completions, filters));
     let visibleCards = matchingCards(this.filters);
-    let cardLayout: { columns: number; width: number; stackStatus: boolean } | undefined;
+    let cardLayout: { columns: number; width: number; stackStatus: boolean; compact: boolean } | undefined;
     const updateFilterCaption = () => {
       const count = activeFilterCount(this.filters);
       filtersButton.setText(count ? `Filters (${count})` : 'Filters').layout();
@@ -249,21 +255,24 @@ export class SelectPuzzleScene extends Phaser.Scene {
       const panelHeight = Math.max(1, height - panelTop);
       const listWidth = width - scrollbarSpace;
       const availableWidth = listWidth - 2 * puzzleSpacing;
-      const { maxWidth, widthFraction } = previewSizes[gameSave.settings.pickerPreviewSize];
+      const size = gameSave.settings.pickerPreviewSize;
+      const compact = size === 'Compact';
+      const { maxWidth, widthFraction } = previewSizes[size];
       const cardWidth = Phaser.Math.Clamp(Math.floor(availableWidth * widthFraction), 1, maxWidth);
       const fittingColumns = Math.floor((availableWidth + puzzleSpacing) / (cardWidth + puzzleSpacing));
       const columns = Math.min(Math.max(1, fittingColumns), Math.max(1, visibleCards.length));
-      const stackStatus = visibleCards.some(({ card }) => card.needsStatusRow(cardWidth));
-      if (cardLayout?.columns !== columns || cardLayout.width !== cardWidth || cardLayout.stackStatus !== stackStatus) {
+      const stackStatus = !compact && visibleCards.some(({ card }) => card.needsStatusRow(cardWidth));
+      if (cardLayout?.columns !== columns || cardLayout.width !== cardWidth
+        || cardLayout.stackStatus !== stackStatus || cardLayout.compact !== compact) {
         const rows = Math.max(1, Math.ceil(visibleCards.length / columns));
         grid.resetGrid(columns, rows, 0, 0, { column: puzzleSpacing, row: puzzleSpacing });
         for (const { card } of cards) card.container.setVisible(false);
         visibleCards.forEach(({ card }, index) => {
-          card.layout(cardWidth, stackStatus);
+          card.layout(cardWidth, stackStatus, compact);
           card.container.setVisible(true);
           grid.add(card.container, { column: index % columns, row: Math.floor(index / columns) });
         });
-        cardLayout = { columns, width: cardWidth, stackStatus };
+        cardLayout = { columns, width: cardWidth, stackStatus, compact };
       }
 
       this.cameras.main.setViewport(0, 0, width, height).setOrigin(0);

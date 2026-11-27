@@ -8,16 +8,23 @@ import { metadataTextStyle, palette, styleWithTheme } from './theme';
 export const maxPickerCardWidth = 560;
 const previewSize = { width: 1024, height: 576 };
 const previewHeight = maxPickerCardWidth * previewSize.height / previewSize.width;
-const cornerRadius = 16;
+export const pickerCardCornerRadius = 16;
 const footerHeight = 72;
 const statusRowHeight = 22;
 const footerInset = puzzleSpacing;
+const compactFooterInset = 12;
 const creditsWidth = 72;
-const creditsHeight = 44;
+const footerActionHeight = 44;
+const moreWidth = 44;
 const compactFooterWidth = 224;
 const creditsRowHeight = 36;
 
+export function puzzleCardTags(source: PuzzleSource) {
+  return `${source.tags.theme} · ${source.tags.type}`;
+}
+
 export function makePreviewCornerCutout(scene: UIScene): Phaser.Textures.CanvasTexture {
+  const cornerRadius = pickerCardCornerRadius;
   const cutout = scene.textures.createCanvas('picker-preview-corners', maxPickerCardWidth, cornerRadius);
   if (!cutout) throw new Error('Could not create the picker preview corner mask');
   const { context } = cutout;
@@ -40,12 +47,14 @@ export function makePuzzlePickerCard(
   listBounds: Phaser.Geom.Rectangle,
   scrollThreshold: number,
   openOptions: () => void,
+  openMore: (copyPreview: () => Phaser.GameObjects.Image) => void,
   openCredits?: () => void,
 ) {
-  const background = scene.rexUI.add.roundRectangle(0, 0, 1, 1, cornerRadius).setOrigin(0);
+  const background = scene.rexUI.add.roundRectangle(0, 0, 1, 1, pickerCardCornerRadius).setOrigin(0);
   let preview: Phaser.GameObjects.RenderTexture | undefined;
   let previewRequested = false;
-  const metadata = `${source.tags.theme} · ${source.tags.type}`;
+  let compact = false;
+  const metadata = puzzleCardTags(source);
   const title = scene.add.text(0, 0, source.title, {
     fontFamily: 'system-ui', fontSize: '22px', fontStyle: 'bold',
   }).setOrigin(0, 0.5);
@@ -85,20 +94,39 @@ export function makePuzzlePickerCard(
 
   const container = scene.rexUI.add.container(0, 0, 0, 0).setOrigin(0)
     .addLocal([background, title, tags, statusLabel]);
-  const credits = openCredits && scene.rexUI.add.label({
-    width: creditsWidth, height: creditsHeight, align: 'right',
-    text: scene.add.text(0, 0, 'Credits', metadataTextStyle),
-  }).setOrigin(1, 0.5).layout();
-  if (credits) {
-    const caption = credits.getElement('text') as Phaser.GameObjects.Text;
-    let creditsPressed = false;
-    const restyle = (colors: typeof palette) => caption.setColor(creditsPressed ? colors.text : colors.mutedText);
-    styleWithTheme(credits, restyle);
-    addPressFeedback(credits, (value) => { creditsPressed = value; restyle(palette); }, scrollThreshold,
+  const makeFooterAction = (name: string, width: number, action: () => void) => {
+    const caption = scene.add.text(0, 0, name, metadataTextStyle);
+    const button = scene.rexUI.add.label({ width, height: footerActionHeight, align: 'right', text: caption })
+      .setName(`picker-${name.toLowerCase()}`).setOrigin(1, 0.5).layout();
+    let actionPressed = false;
+    const restyle = (colors: typeof palette) => caption.setColor(actionPressed ? colors.text : colors.mutedText);
+    styleWithTheme(button, restyle);
+    addPressFeedback(button, (value) => { actionPressed = value; restyle(palette); }, scrollThreshold,
       (pointer) => isInsideList(pointer.x, pointer.y));
-    bindTap(credits, openCredits);
-    container.addLocal(credits);
+    bindTap(button, action);
+    container.addLocal(button);
+    return button;
+  };
+  function copyPreview() {
+    const artwork = scene.add.image(0, 0, preview?.texture ?? '__DEFAULT');
+    if (!preview) {
+      const usePreviewWhenReady = () => {
+        if (!preview) return;
+        const { displayWidth, displayHeight } = artwork;
+        artwork.texture = preview.texture;
+        artwork.setFrame(preview.texture.get().name).setDisplaySize(displayWidth, displayHeight);
+        scene.rexUI.getParentSizer(artwork)?.resetChildScaleState(artwork);
+        scene.events.off(Phaser.Scenes.Events.UPDATE, usePreviewWhenReady);
+      };
+      scene.events.on(Phaser.Scenes.Events.UPDATE, usePreviewWhenReady);
+      artwork.once('destroy', () => scene.events.off(Phaser.Scenes.Events.UPDATE, usePreviewWhenReady));
+    }
+    return artwork;
   }
+  const more = makeFooterAction('More', moreWidth, () => {
+    if (compact) openMore(copyPreview);
+  });
+  const credits = openCredits && makeFooterAction('Credits', creditsWidth, openCredits);
   return {
     container,
     preparePreview() {
@@ -117,28 +145,42 @@ export function makePuzzlePickerCard(
       return false;
     },
     needsStatusRow(width: number) { return inlineStatusWidth > width - 2 * footerInset; },
-    layout(width: number, stackStatus: boolean) {
+    layout(width: number, stackStatus: boolean, compactLayout: boolean) {
+      compact = compactLayout;
       const scale = width / maxPickerCardWidth;
       const artworkBottom = previewHeight * scale;
       const compactFooter = width < compactFooterWidth;
       const stackCredits = credits && compactFooter;
-      const height = artworkBottom + footerHeight + (stackStatus ? statusRowHeight : 0)
-        + (stackCredits ? creditsRowHeight : 0);
-      const right = width - footerInset;
-      const textWidth = Math.max(0, right - footerInset);
-      const metadataY = artworkBottom + 50;
+      const height = artworkBottom + (compact ? footerActionHeight
+        : footerHeight + (stackStatus ? statusRowHeight : 0) + (stackCredits ? creditsRowHeight : 0));
+      const inset = compact ? compactFooterInset : footerInset;
+      const right = width - inset;
+      const textWidth = Math.max(0, right - inset);
       container.setSize(width, height);
-      background.setRadius(cornerRadius * scale).resize(width, height);
+      background.setRadius(pickerCardCornerRadius * scale).resize(width, height);
       if (background.input) background.input.hitArea.setSize(width, height);
       if (preview) container.setChildLocalScale(preview, scale, scale);
-      title.setFontSize(compactFooter ? 16 : 22);
+      title.setFontSize(compact || compactFooter ? 16 : 22);
+      container.setChildVisible(more, compact);
+      container.setChildVisible(tags, !compact);
+      container.setChildVisible(statusLabel, !compact);
+      if (credits) container.setChildVisible(credits, !compact);
+      if (compact) {
+        const titleY = artworkBottom + footerActionHeight / 2;
+        fitLabel(title, source.title, Math.max(0, textWidth - moreWidth - headerControlGap));
+        container.setChildLocalPosition(title, inset, titleY);
+        container.setChildLocalPosition(more, right, titleY);
+        return;
+      }
+
+      const metadataY = artworkBottom + 50;
       const titleWidth = credits && !stackCredits ? Math.max(0, textWidth - creditsWidth - headerControlGap) : textWidth;
       fitLabel(title, source.title, titleWidth);
       fitLabel(tags, metadata, textWidth);
       fitLabel(statusLabel, status, textWidth);
       container.setChildLocalPosition(title, footerInset, artworkBottom + 23);
       if (credits) container.setChildLocalPosition(credits, right,
-        stackCredits ? height - creditsHeight / 2 : artworkBottom + 23);
+        stackCredits ? height - footerActionHeight / 2 : artworkBottom + 23);
       container.setChildLocalPosition(tags, footerInset, metadataY);
       statusLabel.setOrigin(stackStatus ? 0 : 1, 0.5);
       container.setChildLocalPosition(statusLabel, stackStatus ? footerInset : right,
@@ -167,7 +209,7 @@ function makePreview(scene: UIScene, source: PuzzleSource, cutout: Phaser.Textur
   const preview = scene.add.renderTexture(0, 0, maxPickerCardWidth, previewHeight).setOrigin(0);
   preview.texture.setFilter(Phaser.Textures.FilterMode.LINEAR);
   // Capture and round the artwork once. Cards can then scale the finished preview as a single image.
-  preview.draw(artwork).erase(cutout.get(), maxPickerCardWidth / 2, cornerRadius / 2).render();
+  preview.draw(artwork).erase(cutout.get(), maxPickerCardWidth / 2, pickerCardCornerRadius / 2).render();
   artwork.destroy();
   return preview;
 }

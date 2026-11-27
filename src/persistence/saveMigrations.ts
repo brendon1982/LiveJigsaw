@@ -73,6 +73,15 @@ const migrations: readonly Migration[] = [
       pickerPreviewSize: 'Large',
     },
   }),
+  (document) => {
+    if (!isRecord(document.settings)) return document;
+    const { pickerPreviewSize } = document.settings;
+    if (pickerPreviewSize !== 'Medium' && pickerPreviewSize !== 'Large') return document;
+    return {
+      ...document,
+      settings: { ...document.settings, pickerPreviewSize: pickerPreviewSize === 'Medium' ? 'Compact' : 'Full' },
+    };
+  },
 ];
 
 function withRotationOff(value: unknown): unknown {

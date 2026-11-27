@@ -7,9 +7,9 @@ import type { PuzzleAnimationSpeed } from '../puzzles/PuzzleSource';
 export const trayPositions = ['Left', 'Right', 'Bottom', 'Top', 'Auto'] as const;
 export type TrayPosition = typeof trayPositions[number];
 
-export const pickerPreviewSizes = ['Medium', 'Large'] as const;
+export const pickerPreviewSizes = ['Compact', 'Full'] as const;
 export type PickerPreviewSize = typeof pickerPreviewSizes[number];
-export const defaultPickerPreviewSize: PickerPreviewSize = 'Large';
+export const defaultPickerPreviewSize: PickerPreviewSize = 'Full';
 
 export const defaultAllowLoosePiecesOnBoard = true;
 

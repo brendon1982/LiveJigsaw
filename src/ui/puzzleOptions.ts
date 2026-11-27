@@ -156,9 +156,12 @@ export function showResumePuzzle(
   });
 }
 
+export const pickerDialogInset = 20;
+export type PickerDialogTitle = string | { artwork: Phaser.GameObjects.Image; cornerRadius: number };
+
 export function showPickerDialog(
   scene: UIScene,
-  title: string,
+  title: PickerDialogTitle,
   content: Phaser.GameObjects.GameObject & { height: number },
   actions: ReturnType<typeof makeButtonLabel>[],
   onClose: (action?: number) => void,
@@ -169,16 +172,23 @@ export function showPickerDialog(
 ) {
   const cover = scene.add.rectangle(0, 0, 1, 1, palette.modalBackdrop, 0.72)
     .setOrigin(0).setDepth(depth.cover).setInteractive();
+  const artworkHeader = typeof title !== 'string';
+  const radius = artworkHeader ? { tl: title.cornerRadius, tr: title.cornerRadius, bl: 16, br: 16 } : 16;
+  const inset = artworkHeader ? 0 : pickerDialogInset;
+  const bodyInset = artworkHeader ? pickerDialogInset : 0;
   const dialog = scene.rexUI.add.dialog({
-    background: scene.rexUI.add.roundRectangle(0, 0, 1, 1, 16, palette.surface)
+    background: scene.rexUI.add.roundRectangle(0, 0, 1, 1, radius, palette.surface)
       .setStrokeStyle(1, palette.border).setDepth(depth.panel),
-    title: scene.add.text(0, 0, title, {
+    title: artworkHeader ? title.artwork.setDepth(depth.controls) : scene.add.text(0, 0, title, {
       fontFamily: 'system-ui', fontSize: '25px', fontStyle: 'bold', color: palette.text,
     }).setFixedSize(0, 34).setDepth(depth.controls),
     content,
     actions: actions.map((button) => button.setDepth(depth.controls)),
     align: { title: 'left', actions: 'right' },
-    space: { top: 20, bottom: 20, left: 20, right: 20, title: 14, content: 18, action: 8 },
+    space: {
+      top: inset, left: inset, right: inset, bottom: pickerDialogInset, title: 14, content: 18, action: 8,
+      contentLeft: bodyInset, contentRight: bodyInset, actionsLeft: bodyInset, actionsRight: bodyInset,
+    },
     click: { mode: 'release', clickInterval: 0 },
   }).layout();
 

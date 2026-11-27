@@ -732,43 +732,51 @@ scenario('picker preview sizes reflow the cards, persist and stay centered on to
   const assertSelection = (layout, size) => {
     assert.deepEqual(layout.options.filter(({ selected }) => selected).map((option) => option.size), [size]);
   };
-  const large = await pickerLayout();
-  assert.deepEqual(large.options.map(({ size }) => size), ['Medium', 'Large']);
-  assertSelection(large, 'Large');
-  assert.ok(large.options.every(({ icon, text }) => icon && !text));
-  assert.equal((large.options[0].x + large.options[1].x) / 2, 660);
-  assert.equal(large.columns, 2);
-  assert.equal(large.width, 560);
-  assert.equal(large.titleStyle, 'bold');
+  const full = await pickerLayout();
+  assert.deepEqual(full.options.map(({ size }) => size), ['Compact', 'Full']);
+  assertSelection(full, 'Full');
+  assert.ok(full.options.every(({ icon, text }) => icon && !text));
+  assert.equal((full.options[0].x + full.options[1].x) / 2, 660);
+  assert.equal(full.columns, 2);
+  assert.equal(full.width, 560);
+  assert.equal(full.titleStyle, 'bold');
 
-  await page.mouse.click(large.options[0].x, large.options[0].y);
-  const medium = await pickerLayout();
-  assertSelection(medium, 'Medium');
-  assert.equal(medium.columns, 5);
-  assert.equal(medium.width, 200);
-  assert.equal(medium.titleStyle, 'bold');
-  assert.ok(medium.height < large.height);
+  await page.mouse.click(full.options[0].x, full.options[0].y);
+  const compact = await pickerLayout();
+  assertSelection(compact, 'Compact');
+  assert.equal(compact.columns, 5);
+  assert.equal(compact.width, 200);
+  assert.equal(compact.titleStyle, 'bold');
+  assert.ok(compact.height < full.height);
 
   await page.reload();
   await waitForText('Select a Puzzle');
-  assert.deepEqual(await pickerLayout(), medium);
+  assert.deepEqual(await pickerLayout(), compact);
+
+  const save = await readSave(page);
+  const previous = { ...save, version: 11, settings: { ...save.settings, pickerPreviewSize: 'Medium' } };
+  await page.evaluate((value) => localStorage.setItem('live-jigsaw.save', JSON.stringify(value)), previous);
+  await page.reload();
+  await waitForText('Select a Puzzle');
+  assert.deepEqual(await pickerLayout(), compact);
+  assert.deepEqual(await readSave(page), save);
 
   await page.setViewportSize({ width: 375, height: 640 });
   await page.waitForFunction(() => document.querySelector('canvas').width === 375);
   const portrait = await pickerLayout();
-  assertSelection(portrait, 'Medium');
+  assertSelection(portrait, 'Compact');
   assert.equal(portrait.width, 148);
   assert.equal(portrait.columns, 2);
   assert.ok(Math.abs((portrait.options[0].x + portrait.options[1].x) / 2 - 375 / 2) <= 1);
   assert.ok(portrait.options.every(({ x, y }) => x > 0 && x < 375 && y < portrait.panelTop));
   await page.touchscreen.tap(portrait.options[1].x, portrait.options[1].y);
-  const portraitLarge = await pickerLayout();
-  assertSelection(portraitLarge, 'Large');
-  assert.ok(portraitLarge.width > portrait.width);
+  const portraitFull = await pickerLayout();
+  assertSelection(portraitFull, 'Full');
+  assert.ok(portraitFull.width > portrait.width);
   await page.reload();
   await waitForText('Select a Puzzle');
-  assert.deepEqual(await pickerLayout(), portraitLarge);
-  await page.touchscreen.tap(175, portraitLarge.panelTop + 70);
+  assert.deepEqual(await pickerLayout(), portraitFull);
+  await page.touchscreen.tap(175, portraitFull.panelTop + 70);
   await waitForText('Piece count');
   assert.deepEqual(errors, []);
 });
@@ -1943,7 +1951,7 @@ scenario('picker Settings remembers the theme and filter on a narrow touch scree
   await waitForText('Select a Puzzle');
   assert.deepEqual((await readSave(page)).settings, {
     theme: 'Slate', filter: 'sepia', trayFractions: { vertical: 0, horizontal: 0 }, allowLoosePiecesOnBoard: false,
-    pickerPreviewSize: 'Large',
+    pickerPreviewSize: 'Full',
   });
   assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 5, 105), [39, 51, 68, 255]);
   assert.deepEqual(errors, []);
@@ -1966,7 +1974,7 @@ scenario('version 1 through 10 saves migrate with settings, options, progress, a
   const storeSave = (data) => page.evaluate((value) => localStorage.setItem('live-jigsaw.save', JSON.stringify(value)), data);
   const trayFractions = { vertical: 0, horizontal: 0 };
   const settings = { ...original.settings, trayFractions };
-  const migratedSettings = { ...settings, allowLoosePiecesOnBoard: false, pickerPreviewSize: 'Large' };
+  const migratedSettings = { ...settings, allowLoosePiecesOnBoard: false, pickerPreviewSize: 'Full' };
   const sequentialCompletion = {
     setup: { ...setup, challengeMode: 'sequential' }, completedAt: '2025-01-02T12:00:00.000Z',
   };
@@ -2113,7 +2121,7 @@ scenario('version 1 through 10 saves migrate with settings, options, progress, a
     await waitForText('Completed');
     await waitForText('1 of 8 placed');
     assert.deepEqual(await readSave(page), {
-      ...version10, version: saveVersion, settings: { ...version10.settings, pickerPreviewSize: 'Large' },
+      ...version10, version: saveVersion, settings: { ...version10.settings, pickerPreviewSize: 'Full' },
     });
   }
 
@@ -3105,6 +3113,102 @@ scenario('touch Credits taps open the dialog but swipes and cancellation do not'
   const paintedText = await page.evaluate(() => window.paintedText);
   assert.ok(!paintedText.includes('Artwork credits'));
   assert.ok(!paintedText.includes('Piece count'));
+  assert.deepEqual(errors, []);
+});
+
+scenario('compact picker More shows the preview and inline credits without opening setup', async (t) => {
+  const { page, canvas, waitForText, errors } = await openPuzzle(t, {
+    viewport: { width: 1320, height: 780 }, hasTouch: true, isMobile: true,
+  });
+  const firstCard = () => page.evaluate(() => {
+    const scene = window.puzzlePickerScene;
+    const panel = scene.children.list.find(({ type }) => type === 'rexScrollablePanel');
+    const [card] = panel.getElement('panel.cards.items');
+    const children = card.getChildren();
+    const more = children.find(({ name }) => name === 'picker-more');
+    return {
+      title: children.find(({ type, visible }) => type === 'Text' && visible)?.text,
+      text: children.filter(({ type, visible }) => visible && (type === 'Text' || type === 'rexLabel'))
+        .map((child) => child.text),
+      sameRow: more.y === children.find(({ type }) => type === 'Text').y,
+      rightInset: card.x + card.width - more.x,
+      more: [more.x - more.width / 2, more.y],
+    };
+  });
+  const compact = await page.evaluate(() => {
+    const { x, y } = window.puzzlePickerScene.children.getByName('preview-size-Compact');
+    return [x, y];
+  });
+  await page.mouse.click(...compact);
+  const card = await firstCard();
+  assert.equal(card.title, 'Windmill');
+  assert.deepEqual(card.text, ['Windmill', 'More']);
+  assert.equal(card.sameRow, true);
+  assert.equal(card.rightInset, 12);
+
+  await page.mouse.click(...card.more);
+  await waitForText('Artwork credits');
+  await waitForText('Me');
+  await waitForText('Done');
+  const details = await page.evaluate(() => {
+    const scene = window.puzzlePickerScene;
+    const dialog = scene.children.list.find(({ type }) => type === 'rexDialog');
+    const [panel] = scene.children.list.filter(({ type }) => type === 'rexScrollablePanel');
+    const [card] = panel.getElement('panel.cards.items');
+    const preview = card.getChildren().find(({ type }) => type === 'RenderTexture');
+    const body = dialog.getElement('content.panel');
+    const image = dialog.getElement('title');
+    const [title, metadata, ...credits] = body.getChildren();
+    const artworkBounds = image.getBounds();
+    const borderBounds = dialog.getElement('background').getBounds();
+    return {
+      sameArtwork: image.texture === preview.texture,
+      artworkAboveTitle: artworkBounds.bottom <= title.getBounds().top,
+      artworkInsets: [artworkBounds.left - borderBounds.left, borderBounds.right - artworkBounds.right,
+        artworkBounds.top - borderBounds.top],
+      titleInset: title.getBounds().left - borderBounds.left,
+      metadata: metadata.text,
+      credits: credits.map(({ text }) => text),
+      actions: dialog.getElement('actions').map(({ text }) => text),
+    };
+  });
+  assert.equal(details.sameArtwork, true);
+  assert.equal(details.artworkAboveTitle, true);
+  assert.ok(details.artworkInsets.every((inset) => Math.abs(inset) < 1), `Artwork insets: ${details.artworkInsets}`);
+  assert.equal(details.titleInset, 20);
+  assert.match(details.metadata, / · Animated$/);
+  assert.deepEqual(details.credits, ['Artwork credits', 'Me', 'Place holder art from the prototype. Left it in for fun.']);
+  assert.deepEqual(details.actions, ['Done']);
+  const waitForDetails = (open) => page.waitForFunction((open) => {
+    const dialog = window.puzzlePickerScene.children.list.find(({ type }) => type === 'rexDialog');
+    return open ? Boolean(dialog?.getElement('title')?.texture) : !dialog;
+  }, open, { timeout: 4000 });
+  await page.keyboard.press('Escape');
+  await waitForDetails(false);
+
+  await page.touchscreen.tap(...card.more);
+  await waitForDetails(true);
+  const done = await page.evaluate(() => {
+    const dialog = window.puzzlePickerScene.children.list.find(({ type }) => type === 'rexDialog');
+    const [button] = dialog.getElement('actions');
+    const { centerX, centerY } = button.getBounds();
+    return [centerX, centerY];
+  });
+  await page.touchscreen.tap(...done);
+  await waitForDetails(false);
+
+  await page.touchscreen.tap(card.more[0], card.more[1] - 65);
+  await waitForText('Piece count');
+  await page.keyboard.press('Escape');
+  await waitForDetails(false);
+
+  const { dispatch, moveFinger } = await touchController(page);
+  const initial = await canvas.screenshot();
+  await dispatch('touchStart', card.more);
+  await dispatch('touchCancel');
+  await moveFinger(...card.more, card.more[0], card.more[1] - 80);
+  assert.ok(!initial.equals(await canvas.screenshot()), 'A swipe starting on More should scroll');
+  assert.equal(await page.evaluate(() => window.puzzlePickerScene.children.list.some(({ type }) => type === 'rexDialog')), false);
   assert.deepEqual(errors, []);
 });
 

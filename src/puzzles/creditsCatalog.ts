@@ -1,13 +1,16 @@
 import type { PuzzleAttribution } from './PuzzleSource';
 
 export const puzzleCredits = {
-  prototype: {
+  prototypeArtwork: {
     name: 'Me',
     description: 'Place holder art from the prototype. Left it in for fun.',
   },
-  pending: {
-    name: 'Artist credit pending',
-    description: 'Placeholder for the artwork credits.',
-    url: 'https://example.com',
+  kenney: {
+    name: 'Kenny',
+    url: 'https://kenney.nl/',
+  },
+  craftpix: {
+    name: 'Craftpix',
+    url: 'https://craftpix.net/',
   },
 } as const satisfies Record<string, PuzzleAttribution>;

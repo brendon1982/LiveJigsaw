@@ -51,14 +51,14 @@ import { windmillSource } from './windmill/windmillSource';
 import { witchlightHearthSource } from './witchlightHearth/witchlightHearthSource';
 
 const catalog: readonly PuzzleSource[] = [
-  { ...windmillSource, attribution: puzzleCredits.prototype },
-  { ...lighthouseSource, attribution: puzzleCredits.prototype },
-  { ...mountainsSource, attribution: puzzleCredits.prototype },
-  { ...meadowSource, attribution: puzzleCredits.prototype },
-  { ...desertSource, attribution: puzzleCredits.prototype },
-  { ...forestSource, attribution: puzzleCredits.prototype },
-  medievalVillageSource,
-  hexCoastSource,
+  { ...windmillSource, attribution: puzzleCredits.prototypeArtwork },
+  { ...lighthouseSource, attribution: puzzleCredits.prototypeArtwork },
+  { ...mountainsSource, attribution: puzzleCredits.prototypeArtwork },
+  { ...meadowSource, attribution: puzzleCredits.prototypeArtwork },
+  { ...desertSource, attribution: puzzleCredits.prototypeArtwork },
+  { ...forestSource, attribution: puzzleCredits.prototypeArtwork },
+  { ...medievalVillageSource, attribution: puzzleCredits.kenney },
+  { ...hexCoastSource, attribution: puzzleCredits.kenney },
   canyonDriftSource,
   twilightRidgeSource,
   pineHighlandsSource,
@@ -103,4 +103,4 @@ const catalog: readonly PuzzleSource[] = [
 ];
 
 export const puzzleSources: readonly PuzzleSource[] = catalog.map((source) =>
-  source.attribution ? source : { ...source, attribution: puzzleCredits.pending });
+  source.attribution ? source : { ...source, attribution: puzzleCredits.craftpix });

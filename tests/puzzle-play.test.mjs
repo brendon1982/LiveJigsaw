@@ -2858,9 +2858,10 @@ scenario('touch Credits taps open the dialog but swipes and cancellation do not'
   const credits = [590, 424];
   await page.touchscreen.tap(...credits);
   await waitForText('Artwork credits');
-  await waitForText('Artist credit pending');
-  await waitForText('Placeholder for the artwork credits.');
-  await waitForText('https://example.com');
+  await waitForText('Me');
+  const paintedCredits = await page.evaluate(() => window.paintedText.join(' '));
+  assert.ok(paintedCredits.includes('Place holder art from the prototype. Left it in for fun.'));
+  assert.ok(!paintedCredits.includes('https://example.com'));
   await clickDialog(119, 65); // Done
   await page.evaluate(() => { window.paintedText = []; });
 

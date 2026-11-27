@@ -8,6 +8,7 @@ import { chocolateHillsSource } from './chocolateHills/chocolateHillsSource';
 import { cobaltWorldSource } from './cobaltWorld/cobaltWorldSource';
 import { coralGardenSource } from './coralGarden/coralGardenSource';
 import { crescentCryptSource } from './crescentCrypt/crescentCryptSource';
+import { puzzleCredits } from './creditsCatalog';
 import { cupcakeCrossingSource } from './cupcakeCrossing/cupcakeCrossingSource';
 import { daybreakPassSource } from './daybreakPass/daybreakPassSource';
 import { desertSource } from './desert/desertSource';
@@ -50,12 +51,12 @@ import { windmillSource } from './windmill/windmillSource';
 import { witchlightHearthSource } from './witchlightHearth/witchlightHearthSource';
 
 const catalog: readonly PuzzleSource[] = [
-  windmillSource,
-  lighthouseSource,
-  mountainsSource,
-  meadowSource,
-  desertSource,
-  forestSource,
+  { ...windmillSource, attribution: puzzleCredits.prototype },
+  { ...lighthouseSource, attribution: puzzleCredits.prototype },
+  { ...mountainsSource, attribution: puzzleCredits.prototype },
+  { ...meadowSource, attribution: puzzleCredits.prototype },
+  { ...desertSource, attribution: puzzleCredits.prototype },
+  { ...forestSource, attribution: puzzleCredits.prototype },
   medievalVillageSource,
   hexCoastSource,
   canyonDriftSource,
@@ -101,12 +102,5 @@ const catalog: readonly PuzzleSource[] = [
   blueStarSource,
 ];
 
-// Temporary credits for the current catalog. Source-level attribution takes precedence.
-const placeholderAttribution = {
-  name: 'Artist credit pending',
-  description: 'Placeholder for the artwork credits.',
-  url: 'https://example.com',
-};
-
 export const puzzleSources: readonly PuzzleSource[] = catalog.map((source) =>
-  source.attribution ? source : { ...source, attribution: placeholderAttribution });
+  source.attribution ? source : { ...source, attribution: puzzleCredits.pending });

@@ -99,6 +99,7 @@ import { christmasStickersSource } from './christmasStickers/christmasStickersSo
 import { lemonStripesSource } from './lemonStripes/lemonStripesSource';
 import { thanksgivingLeavesSource } from './thanksgivingLeaves/thanksgivingLeavesSource';
 import { folkArtChristmasTreeSource } from './folkArtChristmasTree/folkArtChristmasTreeSource';
+import { meltingAppleSource } from './meltingApple/meltingAppleSource';
 
 export const puzzleSources: readonly PuzzleSource[] = [
   windmillSource,
@@ -201,4 +202,5 @@ export const puzzleSources: readonly PuzzleSource[] = [
   lemonStripesSource,
   thanksgivingLeavesSource,
   folkArtChristmasTreeSource,
+  meltingAppleSource,
 ];

@@ -61,8 +61,8 @@ import { marketMorningSource } from './marketMorning/marketMorningSource';
 import { moonOverMainStreetSource } from './moonOverMainStreet/moonOverMainStreetSource';
 import { roseBadlandsSource } from './roseBadlands/roseBadlandsSource';
 import { duneOasisSource } from './duneOasis/duneOasisSource';
-import { windcarvedDunesSource } from './windcarvedDunes/windcarvedDunesSource';
-import { cactusSeaSource } from './cactusSea/cactusSeaSource';
+import { halfBuriedRelicSource } from './halfBuriedRelic/halfBuriedRelicSource';
+import { cactusFlatsSource } from './cactusFlats/cactusFlatsSource';
 import { moonlitArroyoSource } from './moonlitArroyo/moonlitArroyoSource';
 import { coyoteCanyonSource } from './coyoteCanyon/coyoteCanyonSource';
 import { butterflyThicketSource } from './butterflyThicket/butterflyThicketSource';
@@ -155,8 +155,8 @@ export const puzzleSources: readonly PuzzleSource[] = [
   moonOverMainStreetSource,
   roseBadlandsSource,
   duneOasisSource,
-  windcarvedDunesSource,
-  cactusSeaSource,
+  halfBuriedRelicSource,
+  cactusFlatsSource,
   moonlitArroyoSource,
   coyoteCanyonSource,
   butterflyThicketSource,

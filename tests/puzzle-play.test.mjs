@@ -1883,9 +1883,28 @@ scenario('live pieces scroll, reflow, and snap to the pannable board', async (t)
   await page.mouse.down();
   await move(secondX, secondY, 8);
   assert.deepEqual(await pixelAt(page, await canvas.screenshot(), secondX, secondY), sky, 'The dragged piece should keep its original color');
+  await page.evaluate(() => {
+    const scene = window.puzzleArtworkScene.sys.game.scene.getScene('PlayPuzzle');
+    const camera = scene.cameras.getCamera('Puzzle board');
+    const layer = scene.children.list.find((object) => object.type === 'Layer' && !(object.cameraFilter & camera.id));
+    scene.input.once('pointerup', () => {
+      const highlights = layer.list.filter(({ texture }) => texture?.key.startsWith('placement-effect-'));
+      window.joinedPlacementOutlines = highlights.map((highlight) => {
+        const points = [[128, 15], [192, 0], [256, 15], [150, 144]];
+        return points.map(([x, y]) => {
+          const column = Math.floor((x - highlight.x) / highlight.scaleX + highlight.displayOriginX);
+          const row = Math.floor((y - highlight.y) / highlight.scaleY + highlight.displayOriginY);
+          return highlight.texture.context.getImageData(column, row, 1, 1).data[3];
+        });
+      });
+    });
+  });
   await page.mouse.up();
   const highlighted = await canvas.screenshot();
   await waitForText('2 of 8 placed');
+  const outlines = await page.evaluate(() => window.joinedPlacementOutlines);
+  assert.equal(outlines.length, 1, 'The shared edge should not be drawn separately from the piece outline');
+  assert.ok(outlines[0].every((alpha) => alpha > 128), `All four edges should light up together: ${outlines[0]}`);
   const seamPoints = [[63, -11], [67, -9], [76, -6], [80, 0], [74, 9]];
   const seamColors = (screenshot) => {
     const { width, data } = PNG.sync.read(screenshot);

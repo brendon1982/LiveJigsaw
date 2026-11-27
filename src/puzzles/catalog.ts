@@ -69,6 +69,7 @@ import { butterflyThicketSource } from './butterflyThicket/butterflyThicketSourc
 import { dragonflyDellSource } from './dragonflyDell/dragonflyDellSource';
 import { fireflyWoodSource } from './fireflyWood/fireflyWoodSource';
 import { snowboundPinesSource } from './snowboundPines/snowboundPinesSource';
+import { gildedSkylineSource } from './gildedSkyline/gildedSkylineSource';
 
 export const puzzleSources: readonly PuzzleSource[] = [
   windmillSource,
@@ -141,4 +142,5 @@ export const puzzleSources: readonly PuzzleSource[] = [
   dragonflyDellSource,
   fireflyWoodSource,
   snowboundPinesSource,
+  gildedSkylineSource,
 ];

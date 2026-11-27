@@ -83,6 +83,7 @@ import { ringfallSource } from './ringfall/ringfallSource';
 import { auroraGlacierSource } from './auroraGlacier/auroraGlacierSource';
 import { strawberrySummitSource } from './strawberrySummit/strawberrySummitSource';
 import { castleAmongStarsSource } from './castleAmongStars/castleAmongStarsSource';
+import { tealTreetopsSource } from './tealTreetops/tealTreetopsSource';
 
 export const puzzleSources: readonly PuzzleSource[] = [
   windmillSource,
@@ -169,4 +170,5 @@ export const puzzleSources: readonly PuzzleSource[] = [
   auroraGlacierSource,
   strawberrySummitSource,
   castleAmongStarsSource,
+  tealTreetopsSource,
 ];

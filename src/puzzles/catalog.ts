@@ -63,6 +63,7 @@ import { roseBadlandsSource } from './roseBadlands/roseBadlandsSource';
 import { duneOasisSource } from './duneOasis/duneOasisSource';
 import { windcarvedDunesSource } from './windcarvedDunes/windcarvedDunesSource';
 import { cactusSeaSource } from './cactusSea/cactusSeaSource';
+import { moonlitArroyoSource } from './moonlitArroyo/moonlitArroyoSource';
 
 export const puzzleSources: readonly PuzzleSource[] = [
   windmillSource,
@@ -129,4 +130,5 @@ export const puzzleSources: readonly PuzzleSource[] = [
   duneOasisSource,
   windcarvedDunesSource,
   cactusSeaSource,
+  moonlitArroyoSource,
 ];

@@ -2,22 +2,33 @@ import type { Size } from './geometry.ts';
 import { getPieceCount, pieceShapeIds, pieceShapes, puzzleSizePresets, type PuzzleSize, type PuzzleSizePreset } from './puzzleSizes.ts';
 
 const countVariance = 0.2;
-const targetPresets = puzzleSizePresets.map(({ square }) => ({ count: getPieceCount(square), snapTolerance: square.snapTolerance }));
+const targetPresets = puzzleSizePresets.map(({ square }) => ({
+  count: getPieceCount(square), area: square.width * square.height, snapTolerance: square.snapTolerance,
+}));
 export const maximumPuzzlePieceCount = Math.floor(Math.max(...targetPresets.map(({ count }) => count)) * (1 + countVariance));
 
 export function staticPuzzleSizes(artwork: Size) {
-  return targetPresets.flatMap(({ count, snapTolerance }) => {
-    const grids = candidateGrids(artwork, count);
+  return targetPresets.flatMap(({ count, area, snapTolerance }) => {
+    const board = fitArtworkToArea(artwork, area);
+    const grids = candidateGrids(board, count);
     if (!grids.length) return [];
 
     const preset = Object.fromEntries(pieceShapeIds.map((shape) => {
       const grid = bestFitGrid(grids, pieceShapes[shape], count);
       const tolerance = Math.min(snapTolerance, grid.cellWidth / 3, grid.cellHeight / 3);
-      const size: PuzzleSize = { ...artwork, columns: grid.columns, rows: grid.rows, snapTolerance: tolerance };
+      const size: PuzzleSize = { ...board, columns: grid.columns, rows: grid.rows, snapTolerance: tolerance };
       return [shape, size];
     })) as PuzzleSizePreset;
     return [{ targetCount: count, preset }];
   });
+}
+
+function fitArtworkToArea({ width, height }: Size, targetArea: number): Size {
+  const scale = Math.min(1, Math.sqrt(targetArea / (width * height)));
+  return {
+    width: Math.max(1, Math.round(width * scale)),
+    height: Math.max(1, Math.round(height * scale)),
+  };
 }
 
 function candidateGrids({ width, height }: Size, targetCount: number) {

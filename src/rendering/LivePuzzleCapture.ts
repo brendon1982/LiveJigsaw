@@ -18,7 +18,7 @@ export class LivePuzzleCapture {
     if (width > textureLimit || height > textureLimit) {
       throw new RangeError('The puzzle exceeds the available texture size');
     }
-    const texture = host.textures.addDynamicTexture('live-puzzle-output', width, height);
+    const texture = host.textures.addDynamicTexture('live-puzzle-output', width, height, false);
     if (!texture) throw new Error('Could not create the puzzle render target');
     texture.camera.setOrigin(0);
     texture.setFilter(Phaser.Textures.FilterMode.LINEAR);

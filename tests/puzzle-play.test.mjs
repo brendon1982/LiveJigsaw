@@ -280,6 +280,27 @@ function pieceTarget(layout, id, size) {
   return cellCenter(layout, column, row, size);
 }
 
+async function assertStaticCapture(page, { width, height }) {
+  await page.waitForFunction(() => window.puzzleArtworkScene?.sys.isActive());
+  const { textureSize, artwork } = await page.evaluate(() => {
+    const scene = window.puzzleArtworkScene;
+    const [image] = scene.children.list;
+    const texture = scene.textures.get('live-puzzle-output');
+    return {
+      textureSize: { width: texture.width, height: texture.height },
+      artwork: {
+        x: image.x, y: image.y, width: image.displayWidth, height: image.displayHeight,
+        scaleX: image.scaleX, scaleY: image.scaleY,
+      },
+    };
+  });
+  assert.deepEqual(textureSize, { width, height });
+  assert.deepEqual([artwork.x, artwork.y], [0, 0]);
+  assert.equal(artwork.scaleX, artwork.scaleY);
+  assert.ok(artwork.scaleX <= 1);
+  assert.ok(Math.abs(width - artwork.width) < 1 && Math.abs(height - artwork.height) < 1);
+}
+
 async function dragDivider(page, drag, destination) {
   const { divider } = await playLayout(page);
   await drag(divider.x, divider.y, destination.x ?? divider.x, destination.y ?? divider.y);
@@ -942,8 +963,9 @@ scenario('the Flowers and Static filters open Cherry Blossoms with an adaptive c
   await clickDialog(158, 295); // Play
   await waitForText('0 of 459 placed');
 
-  const size = { width: 1200, height: 1897, columns: 17, rows: 27, snapTolerance: 16 };
+  const size = { width: 1043, height: 1649, columns: 17, rows: 27, snapTolerance: 16 };
   const layout = await playLayout(page);
+  await assertStaticCapture(page, size);
   const piece = layout.tray[0];
   const target = pieceTarget(layout, piece.id, size);
   await moveFinger(piece.x, piece.y, target.x, target.y);
@@ -952,27 +974,36 @@ scenario('the Flowers and Static filters open Cherry Blossoms with an adaptive c
   assert.equal(save.recentOptions.pieceCount, 420);
   assert.deepEqual(save.progress.CherryBlossoms.setup.size, size);
 
-  await page.reload();
-  await waitForText('Select a Puzzle');
-  await page.touchscreen.tap(1120, 49);
-  await waitForText('Artwork motion');
-  await clickDialog(93, filterY.secondTheme); // Flowers
-  await clickDialog(-60, filterY.motion);
-  await clickDialog(125, filterY.action);
-  await waitForText('Filters (2)');
-  await page.touchscreen.tap(660, 220);
-  await waitForText('Resume');
-  await page.evaluate(() => { window.paintedText = []; });
-  await clickDialog(100, resumeActionY);
-  await waitForText('1 of 459 placed');
+  const resume = async (savedSize) => {
+    await page.reload();
+    await waitForText('Select a Puzzle');
+    await page.touchscreen.tap(1120, 49);
+    await waitForText('Artwork motion');
+    await clickDialog(93, filterY.secondTheme); // Flowers
+    await clickDialog(-60, filterY.motion);
+    await clickDialog(125, filterY.action);
+    await waitForText('Filters (2)');
+    await page.touchscreen.tap(660, 220);
+    await waitForText('Resume');
+    await page.evaluate(() => { window.paintedText = []; });
+    await clickDialog(100, resumeActionY);
+    await waitForText('1 of 459 placed');
+    await assertStaticCapture(page, savedSize);
+  };
+  await resume(size);
+
+  const originalSize = { ...size, width: 1200, height: 1897 };
+  save.progress.CherryBlossoms.setup.size = originalSize;
+  await page.evaluate((data) => localStorage.setItem('live-jigsaw.save', JSON.stringify(data)), save);
+  await resume(originalSize);
   assert.deepEqual(errors, []);
 });
 
-for (const { title, key, cardX, height, columns, rows } of [
-  { title: 'Gray Panther', key: 'GrayPanther', cardX: 360, height: 2834, columns: 6, rows: 7 },
-  { title: 'Jungle Rhinos', key: 'JungleRhinos', cardX: 940, height: 2000, columns: 8, rows: 6 },
+for (const { title, key, cardX, width, height, columns, rows } of [
+  { title: 'Gray Panther', key: 'GrayPanther', cardX: 360, width: 723, height: 1024, columns: 6, rows: 7 },
+  { title: 'Jungle Rhinos', key: 'JungleRhinos', cardX: 940, width: 860, height: 860, columns: 8, rows: 6 },
 ]) {
-  scenario(`${title} opens from the Wildlife filter and plays at native size`, async (t) => {
+  scenario(`${title} opens from the Wildlife filter and plays at the target area`, async (t) => {
     const { page, waitForText, errors, clickDialog } = await openPuzzle(t, {
       viewport: { width: 1320, height: 780 },
     });
@@ -999,13 +1030,8 @@ for (const { title, key, cardX, height, columns, rows } of [
     await clickDialog(158, 295);
     await waitForText(`0 of ${columns * rows} placed`);
     const layout = await playLayout(page);
-    const artwork = await page.evaluate(() => {
-      const [image] = window.puzzleArtworkScene.children.list;
-      return { x: image.x, y: image.y, width: image.displayWidth, height: image.displayHeight };
-    });
-    assert.deepEqual(artwork, { x: 0, y: 0, width: 2000, height });
-
-    const size = { width: 2000, height, columns, rows, snapTolerance: 28 };
+    const size = { width, height, columns, rows, snapTolerance: 28 };
+    await assertStaticCapture(page, size);
     const piece = layout.tray[0];
     const target = pieceTarget(layout, piece.id, size);
     await page.mouse.move(piece.x, piece.y);

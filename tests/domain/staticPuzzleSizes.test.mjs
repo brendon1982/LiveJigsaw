@@ -4,13 +4,29 @@ import { getPieceCount, pieceShapes, puzzleSizePresets } from '../../src/domain/
 import { maximumPuzzlePieceCount, staticPuzzleSizes } from '../../src/domain/staticPuzzleSizes.ts';
 import { puzzleSizeChoices } from '../../src/puzzles/puzzleSizeChoices.ts';
 
-test('static artwork keeps its full dimensions and shape choices stay within 20% of the target', () => {
-  const artwork = { width: 1200, height: 1897 };
-  const choices = staticPuzzleSizes(artwork);
+test('static artwork follows the square preset areas without changing proportions or depending on piece shape', () => {
+  for (const artwork of [{ width: 2000, height: 2834 }, { width: 4000, height: 1000 }]) {
+    const choices = staticPuzzleSizes(artwork);
+    assert.equal(choices.length, puzzleSizePresets.length);
+    for (const [index, { preset }] of choices.entries()) {
+      const target = puzzleSizePresets[index].square;
+      const { width, height } = preset.square;
+      assert.ok(Number.isInteger(width) && Number.isInteger(height));
+      assert.ok(width < artwork.width && height < artwork.height);
+      assert.ok(Math.abs(width * height / (target.width * target.height) - 1) < 0.003);
+      assert.ok(Math.abs(width / height / (artwork.width / artwork.height) - 1) < 0.003);
+      for (const size of Object.values(preset)) {
+        assert.deepEqual([size.width, size.height], [width, height]);
+      }
+    }
+  }
+});
+
+test('static shape choices stay within 20% of the target', () => {
+  const choices = staticPuzzleSizes({ width: 1200, height: 1897 });
   assert.deepEqual(choices.map(({ targetCount }) => targetCount), [40, 72, 144, 300, 420]);
   for (const { targetCount, preset } of choices) {
     for (const [shape, size] of Object.entries(preset)) {
-      assert.deepEqual({ width: size.width, height: size.height }, artwork);
       assert.ok(Math.abs(getPieceCount(size) - targetCount) <= targetCount * 0.2);
       const aspect = (size.width / size.columns) / (size.height / size.rows);
       const ideal = pieceShapes[shape].width / pieceShapes[shape].height;
@@ -31,7 +47,12 @@ test('square pieces favor the best proportions, breaking ties by distance from t
   assert.equal(getPieceCount(last), maximumPuzzlePieceCount);
 });
 
-test('a small image never needs to be enlarged to offer a cut', () => {
+test('small images are not enlarged to reach the target area or to offer a cut', () => {
+  const small = staticPuzzleSizes({ width: 400, height: 100 });
+  assert.equal(small.length, puzzleSizePresets.length);
+  for (const { preset } of small) {
+    assert.deepEqual([preset.square.width, preset.square.height], [400, 100]);
+  }
   const [only] = staticPuzzleSizes({ width: 5, height: 7 });
   assert.equal(only.targetCount, 40);
   assert.ok(Object.values(only.preset).every(({ columns, rows }) => columns <= 5 && rows <= 7));

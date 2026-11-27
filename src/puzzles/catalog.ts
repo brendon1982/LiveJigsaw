@@ -60,6 +60,7 @@ import { gumdropOrchardSource } from './gumdropOrchard/gumdropOrchardSource';
 import { marketMorningSource } from './marketMorning/marketMorningSource';
 import { moonOverMainStreetSource } from './moonOverMainStreet/moonOverMainStreetSource';
 import { roseBadlandsSource } from './roseBadlands/roseBadlandsSource';
+import { duneOasisSource } from './duneOasis/duneOasisSource';
 
 export const puzzleSources: readonly PuzzleSource[] = [
   windmillSource,
@@ -123,4 +124,5 @@ export const puzzleSources: readonly PuzzleSource[] = [
   marketMorningSource,
   moonOverMainStreetSource,
   roseBadlandsSource,
+  duneOasisSource,
 ];

@@ -53,6 +53,7 @@ import { windmillSource } from './windmill/windmillSource';
 import { witchlightHearthSource } from './witchlightHearth/witchlightHearthSource';
 import { palmshoreSource } from './palmshore/palmshoreSource';
 import { emberTideSource } from './emberTide/emberTideSource';
+import { frostedFirHillsSource } from './frostedFirHills/frostedFirHillsSource';
 
 export const puzzleSources: readonly PuzzleSource[] = [
   windmillSource,
@@ -109,4 +110,5 @@ export const puzzleSources: readonly PuzzleSource[] = [
   jungleRhinosSource,
   palmshoreSource,
   emberTideSource,
+  frostedFirHillsSource,
 ];

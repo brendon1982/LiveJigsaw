@@ -1,14 +1,18 @@
 import Phaser from 'phaser';
 import type { PuzzleSource, PuzzleSourceSceneData } from './PuzzleSource';
+import { imagePreview } from './imagePreview';
 
 type StaticImageOptions = Pick<PuzzleSource, 'title' | 'tags' | 'attribution'> & {
   sceneKey: string;
   artworkKey: string;
   artworkUrl: string;
   artworkSize: PuzzleSource['maxViewport'];
+  previewUrl: string;
 };
 
-export function staticImageSource({ sceneKey, artworkKey, artworkUrl, artworkSize, ...metadata }: StaticImageOptions): PuzzleSource {
+export function staticImageSource({
+  sceneKey, artworkKey, artworkUrl, artworkSize, previewUrl, ...metadata
+}: StaticImageOptions): PuzzleSource {
   class StaticImageScene extends Phaser.Scene {
     static readonly key = sceneKey;
 
@@ -31,12 +35,6 @@ export function staticImageSource({ sceneKey, artworkKey, artworkUrl, artworkSiz
     motion: 'Static',
     maxViewport: artworkSize,
     scene: StaticImageScene,
-    previewImage: { key: artworkKey, url: artworkUrl },
-    drawPreview(scene, { width, height }) {
-      const scale = Math.max(width / artworkSize.width, height / artworkSize.height);
-      const left = (width - artworkSize.width * scale) / 2;
-      const top = (height - artworkSize.height * scale) / 2;
-      return [scene.add.image(left, top, artworkKey).setOrigin(0).setScale(scale)];
-    },
+    ...imagePreview(`${artworkKey}-preview`, previewUrl),
   };
 }

@@ -769,10 +769,15 @@ scenario('the picker shows newest puzzles first and only loads nearby previews',
     reducedMotion: 'reduce',
   });
   const gameScript = /\/assets\/index-[\w-]+\.js$/;
-  const previewAsset = /\/assets\/(?:preview|cherry-blossoms-on-branch|gray-panther|jungle-rhinos)-[\w-]+\.png$/;
+  const staticArtwork = /\/assets\/(?:cherry-blossoms-on-branch|gray-panther|jungle-rhinos)-[\w-]+\.png$/;
+  const previewAsset = /\/assets\/(?:preview-[\w-]+\.png|(?:cherry-blossoms|gray-panther|jungle-rhinos)-preview-[\w-]+\.jpg)$/;
+  const requestedArtwork = [];
   const requestedPreviews = [];
   const scriptGate = Promise.withResolvers();
   const previewGate = Promise.withResolvers();
+  page.on('request', (request) => {
+    if (staticArtwork.test(request.url())) requestedArtwork.push(request.url());
+  });
   await page.route(gameScript, async (route) => {
     await scriptGate.promise;
     await route.continue();
@@ -796,11 +801,12 @@ scenario('the picker shows newest puzzles first and only loads nearby previews',
     await page.emulateMedia({ reducedMotion: 'no-preference' });
     assert.equal(await spinner.evaluate((element) => getComputedStyle(element).animationName), 'startup-spin');
 
-    const previewRequested = page.waitForRequest(previewAsset, { timeout: 4000 });
+    const firstCardRequested = page.waitForRequest(/\/assets\/jungle-rhinos(?:-preview)?-[\w-]+\.(?:png|jpg)$/, { timeout: 4000 });
     scriptGate.resolve();
     await waitForText('Select a Puzzle');
     await status.waitFor({ state: 'detached', timeout: 4000 });
-    await previewRequested;
+    await firstCardRequested;
+    assert.deepEqual(requestedArtwork, [], 'The picker must not request full-size static artwork');
     const placeholder = [48, 69, 63, 255];
     const topPreview = async () => pixelAt(page, await canvas.screenshot(), 380, 220);
     assert.deepEqual(await topPreview(), placeholder, 'A pending preview should leave the card in place');
@@ -828,6 +834,7 @@ scenario('the picker shows newest puzzles first and only loads nearby previews',
     await page.mouse.wheel(0, -30000);
     assert.deepEqual(await topPreview(), artwork);
     assert.equal(new Set(requestedPreviews).size, requestedPreviews.length, 'Revisited cards should reuse their preview');
+    assert.deepEqual(requestedArtwork, [], 'Opening options and scrolling must not load full-size static artwork');
     assert.deepEqual(errors, []);
   } finally {
     scriptGate.resolve();

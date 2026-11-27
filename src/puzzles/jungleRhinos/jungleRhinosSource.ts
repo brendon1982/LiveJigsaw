@@ -1,5 +1,6 @@
 import { staticImageSource } from '../staticImageSource';
 import artworkUrl from './jungle-rhinos.png';
+import previewUrl from './jungle-rhinos-preview.jpg';
 
 export const jungleRhinosSource = staticImageSource({
   sceneKey: 'JungleRhinos',
@@ -13,4 +14,5 @@ export const jungleRhinosSource = staticImageSource({
   artworkKey: 'jungle-rhinos',
   artworkUrl,
   artworkSize: { width: 2000, height: 2000 },
+  previewUrl,
 });

@@ -1,5 +1,6 @@
 import { staticImageSource } from '../staticImageSource';
 import artworkUrl from './gray-panther.png';
+import previewUrl from './gray-panther-preview.jpg';
 
 export const grayPantherSource = staticImageSource({
   sceneKey: 'GrayPanther',
@@ -13,4 +14,5 @@ export const grayPantherSource = staticImageSource({
   artworkKey: 'gray-panther',
   artworkUrl,
   artworkSize: { width: 2000, height: 2834 },
+  previewUrl,
 });

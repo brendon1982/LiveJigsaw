@@ -19,6 +19,7 @@ Apply cohesion, readability, and simplicity at every level, from modules and cla
 - Use `makeOptionTile` from [button.ts](src/ui/button.ts) for selectable dialog options. Use regular buttons for actions such as Play, Apply, and Done.
 - [Rendering](src/rendering/LivePuzzleCapture.ts) owns source scene startup and shutdown and texture capture. Remove callbacks and owned textures on shutdown so returning to the picker and reopening a puzzle works.
 - Each source in [puzzles](src/puzzles) has its own folder for its scene, artwork, assets, and animation. Export one entry per folder using [PuzzleSource.ts](src/puzzles/PuzzleSource.ts) and add it to [catalog.ts](src/puzzles/catalog.ts). The entry supplies a Phaser scene class with a stable key, a picker preview, and its maximum viewport. The host passes the chosen logical viewport as scene data. Draw from its top-left corner and leave input, capture, and camera setup to the host.
+- Every puzzle must supply an optimized picker preview. For image previews, ship a separate, compressed 16:9 thumbnail sized for the picker cards. Crop around the main subject without stretching the artwork. Drawn previews should be lightweight and self-contained. Never load full-size gameplay artwork or start a puzzle scene just to display its preview.
 
 Keep extensions small. Add board layouts and cut rules to the domain when a concrete game mode requires them. Keep a specific TODO next to any prototype assumption that blocks that work.
 

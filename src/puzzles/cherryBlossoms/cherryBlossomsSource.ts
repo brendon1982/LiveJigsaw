@@ -1,5 +1,6 @@
 import { staticImageSource } from '../staticImageSource';
 import artworkUrl from './cherry-blossoms-on-branch.png';
+import previewUrl from './cherry-blossoms-preview.jpg';
 
 export const cherryBlossomsSource = staticImageSource({
   sceneKey: 'CherryBlossoms',
@@ -13,4 +14,5 @@ export const cherryBlossomsSource = staticImageSource({
   artworkKey: 'cherry-blossoms-on-branch',
   artworkUrl,
   artworkSize: { width: 1200, height: 1897 },
+  previewUrl,
 });

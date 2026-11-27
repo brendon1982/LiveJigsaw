@@ -1,3 +1,4 @@
+import { puzzleCredits } from '../creditsCatalog';
 import { parallaxSource } from '../parallax/parallaxSource';
 import sky from './assets/sky.png';
 import sun from './assets/sun.png';
@@ -14,6 +15,7 @@ export const sunsetReefSource = parallaxSource({
   key: 'SunsetReef',
   title: 'Sunset Reef',
   theme: 'Ocean',
+  attribution: puzzleCredits.craftpix,
   preview,
   layers: [
     { name: 'sky', url: sky, travel: 0, anchorY: 0.5 },

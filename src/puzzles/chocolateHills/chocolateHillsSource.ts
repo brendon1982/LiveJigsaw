@@ -1,3 +1,4 @@
+import { puzzleCredits } from '../creditsCatalog';
 import { parallaxSource } from '../parallax/parallaxSource';
 import sky from './assets/sky.png';
 import clouds from './assets/clouds.png';
@@ -10,6 +11,7 @@ export const chocolateHillsSource = parallaxSource({
   key: 'ChocolateHills',
   title: 'Chocolate Hills',
   theme: 'Candy',
+  attribution: puzzleCredits.craftpix,
   preview,
   layers: [
     { name: 'sky', url: sky, travel: 0, anchorY: 0.5 },

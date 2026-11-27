@@ -1,3 +1,4 @@
+import { puzzleCredits } from '../creditsCatalog';
 import { parallaxSource } from '../parallax/parallaxSource';
 import air from './assets/air.png';
 import distantClouds from './assets/clouds-bg.png';
@@ -15,6 +16,7 @@ export const twilightRidgeSource = parallaxSource({
   key: 'TwilightRidge',
   title: 'Twilight Ridge',
   theme: 'Mountains',
+  attribution: puzzleCredits.craftpix,
   preview,
   layers: [
     { name: 'sky', url: sky, travel: 0 },

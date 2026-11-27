@@ -1,3 +1,4 @@
+import { puzzleCredits } from '../creditsCatalog';
 import { parallaxSource } from '../parallax/parallaxSource';
 import sky from './assets/sky.png';
 import celestialLight from './assets/celestial-light.png';
@@ -11,6 +12,7 @@ export const blueMoonValleySource = parallaxSource({
   key: 'BlueMoonValley',
   title: 'Blue Moon Valley',
   theme: 'Mountains',
+  attribution: puzzleCredits.craftpix,
   preview,
   artworkSize: { width: 2019, height: 1020 },
   layers: [

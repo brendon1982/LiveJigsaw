@@ -1,3 +1,4 @@
+import { puzzleCredits } from '../creditsCatalog';
 import { parallaxSource } from '../parallax/parallaxSource';
 import nebula from './assets/nebula.png';
 import stars from './assets/stars.png';
@@ -11,6 +12,7 @@ export const eclipseOrbitSource = parallaxSource({
   key: 'EclipseOrbit',
   title: 'Eclipse Orbit',
   theme: 'Space',
+  attribution: puzzleCredits.craftpix,
   preview,
   layers: [
     { name: 'nebula', url: nebula, travel: 0, anchorY: 0.5 },

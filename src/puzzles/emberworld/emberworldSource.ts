@@ -1,3 +1,4 @@
+import { puzzleCredits } from '../creditsCatalog';
 import { parallaxSource } from '../parallax/parallaxSource';
 import sky from './assets/sky.png';
 import fieryClouds from './assets/fiery-clouds.png';
@@ -11,6 +12,7 @@ export const emberworldSource = parallaxSource({
   key: 'Emberworld',
   title: 'Emberworld',
   theme: 'Alien Worlds',
+  attribution: puzzleCredits.craftpix,
   preview,
   layers: [
     { name: 'sky', url: sky, travel: 0, anchorY: 0.5 },

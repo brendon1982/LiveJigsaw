@@ -1,3 +1,4 @@
+import { puzzleCredits } from '../creditsCatalog';
 import { parallaxSource } from '../parallax/parallaxSource';
 import sky from './assets/sky.png';
 import distantBranches from './assets/distant-branches.png';
@@ -11,6 +12,7 @@ export const thornwoodHollowSource = parallaxSource({
   key: 'ThornwoodHollow',
   title: 'Thornwood Hollow',
   theme: 'Halloween',
+  attribution: puzzleCredits.craftpix,
   preview,
   layers: [
     { name: 'sky', url: sky, travel: 0, anchorY: 0.5 },

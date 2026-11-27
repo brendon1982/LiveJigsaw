@@ -1,3 +1,4 @@
+import { puzzleCredits } from '../creditsCatalog';
 import { parallaxSource } from '../parallax/parallaxSource';
 import nebula from './assets/nebula.png';
 import stars from './assets/stars.png';
@@ -8,6 +9,7 @@ export const violetNebulaSource = parallaxSource({
   key: 'VioletNebula',
   title: 'Violet Nebula',
   theme: 'Space',
+  attribution: puzzleCredits.craftpix,
   preview,
   layers: [
     { name: 'nebula', url: nebula, travel: 0, anchorY: 0.5 },

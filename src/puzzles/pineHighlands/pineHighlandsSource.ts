@@ -1,3 +1,4 @@
+import { puzzleCredits } from '../creditsCatalog';
 import { parallaxSource } from '../parallax/parallaxSource';
 import distantClouds from './assets/clouds-bg.png';
 import nearClouds from './assets/clouds-fg.png';
@@ -14,6 +15,7 @@ export const pineHighlandsSource = parallaxSource({
   key: 'PineHighlands',
   title: 'Pine Highlands',
   theme: 'Mountains',
+  attribution: puzzleCredits.craftpix,
   preview,
   layers: [
     { name: 'sky', url: sky, travel: 0 },

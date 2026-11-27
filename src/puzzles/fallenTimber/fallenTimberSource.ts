@@ -1,3 +1,4 @@
+import { puzzleCredits } from '../creditsCatalog';
 import { parallaxSource } from '../parallax/parallaxSource';
 import sky from './assets/7.png';
 import distantPines from './assets/6.png';
@@ -12,6 +13,7 @@ export const fallenTimberSource = parallaxSource({
   key: 'FallenTimber',
   title: 'Fallen Timber',
   theme: 'Woodland',
+  attribution: puzzleCredits.craftpix,
   preview,
   layers: [
     { name: 'sky', url: sky, travel: 0, anchorY: 0.5 },

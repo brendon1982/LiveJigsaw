@@ -1,3 +1,4 @@
+import { puzzleCredits } from '../creditsCatalog';
 import { parallaxSource } from '../parallax/parallaxSource';
 import sky from './assets/sky.png';
 import outdoorWoods from './assets/outdoor-woods.png';
@@ -12,6 +13,7 @@ export const witchlightHearthSource = parallaxSource({
   key: 'WitchlightHearth',
   title: 'Witchlight Hearth',
   theme: 'Halloween',
+  attribution: puzzleCredits.craftpix,
   preview,
   layers: [
     { name: 'sky', url: sky, travel: 0, anchorY: 0.5 },

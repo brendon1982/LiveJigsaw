@@ -1,3 +1,4 @@
+import { puzzleCredits } from '../creditsCatalog';
 import { parallaxSource } from '../parallax/parallaxSource';
 import sky from './assets/sky.png';
 import nightClouds from './assets/night-clouds.png';
@@ -14,6 +15,7 @@ export const crescentCryptSource = parallaxSource({
   key: 'CrescentCrypt',
   title: 'Crescent Crypt',
   theme: 'Halloween',
+  attribution: puzzleCredits.craftpix,
   preview,
   layers: [
     { name: 'sky', url: sky, travel: 0, anchorY: 0.5 },

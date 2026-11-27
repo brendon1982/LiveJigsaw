@@ -1,3 +1,4 @@
+import { puzzleCredits } from '../creditsCatalog';
 import { parallaxSource } from '../parallax/parallaxSource';
 import nearCloud from './assets/cloud-fg.png';
 import distantClouds from './assets/clouds-bg.png';
@@ -14,6 +15,7 @@ export const emberMesaSource = parallaxSource({
   key: 'EmberMesa',
   title: 'Ember Mesa',
   theme: 'Desert',
+  attribution: puzzleCredits.craftpix,
   preview,
   layers: [
     { name: 'sky', url: sky, travel: 0 },

@@ -1,3 +1,4 @@
+import { puzzleCredits } from '../creditsCatalog';
 import { parallaxSource } from '../parallax/parallaxSource';
 import sky from './assets/sky.png';
 import distantRidges from './assets/distant-ridges.png';
@@ -11,6 +12,7 @@ export const evergreenHorizonSource = parallaxSource({
   key: 'EvergreenHorizon',
   title: 'Evergreen Horizon',
   theme: 'Woodland',
+  attribution: puzzleCredits.craftpix,
   preview,
   artworkSize: { width: 2019, height: 1020 },
   layers: [

@@ -8,7 +8,6 @@ import { chocolateHillsSource } from './chocolateHills/chocolateHillsSource';
 import { cobaltWorldSource } from './cobaltWorld/cobaltWorldSource';
 import { coralGardenSource } from './coralGarden/coralGardenSource';
 import { crescentCryptSource } from './crescentCrypt/crescentCryptSource';
-import { puzzleCredits } from './creditsCatalog';
 import { cupcakeCrossingSource } from './cupcakeCrossing/cupcakeCrossingSource';
 import { daybreakPassSource } from './daybreakPass/daybreakPassSource';
 import { desertSource } from './desert/desertSource';
@@ -50,15 +49,15 @@ import { violetNebulaSource } from './violetNebula/violetNebulaSource';
 import { windmillSource } from './windmill/windmillSource';
 import { witchlightHearthSource } from './witchlightHearth/witchlightHearthSource';
 
-const catalog: readonly PuzzleSource[] = [
-  { ...windmillSource, attribution: puzzleCredits.prototypeArtwork },
-  { ...lighthouseSource, attribution: puzzleCredits.prototypeArtwork },
-  { ...mountainsSource, attribution: puzzleCredits.prototypeArtwork },
-  { ...meadowSource, attribution: puzzleCredits.prototypeArtwork },
-  { ...desertSource, attribution: puzzleCredits.prototypeArtwork },
-  { ...forestSource, attribution: puzzleCredits.prototypeArtwork },
-  { ...medievalVillageSource, attribution: puzzleCredits.kenney },
-  { ...hexCoastSource, attribution: puzzleCredits.kenney },
+export const puzzleSources: readonly PuzzleSource[] = [
+  windmillSource,
+  lighthouseSource,
+  mountainsSource,
+  meadowSource,
+  desertSource,
+  forestSource,
+  medievalVillageSource,
+  hexCoastSource,
   canyonDriftSource,
   twilightRidgeSource,
   pineHighlandsSource,
@@ -101,6 +100,3 @@ const catalog: readonly PuzzleSource[] = [
   eclipseOrbitSource,
   blueStarSource,
 ];
-
-export const puzzleSources: readonly PuzzleSource[] = catalog.map((source) =>
-  source.attribution ? source : { ...source, attribution: puzzleCredits.craftpix });

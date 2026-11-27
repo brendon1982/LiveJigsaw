@@ -1,3 +1,4 @@
+import { puzzleCredits } from '../creditsCatalog';
 import { parallaxSource } from '../parallax/parallaxSource';
 import cactus from './assets/cactus.png';
 import clouds from './assets/clouds.png';
@@ -13,6 +14,7 @@ export const canyonDriftSource = parallaxSource({
   key: 'CanyonDrift',
   title: 'Canyon Drift',
   theme: 'Desert',
+  attribution: puzzleCredits.craftpix,
   preview,
   layers: [
     { name: 'sky', url: sky, travel: 0 },

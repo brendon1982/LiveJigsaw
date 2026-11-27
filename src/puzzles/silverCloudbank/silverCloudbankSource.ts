@@ -1,3 +1,4 @@
+import { puzzleCredits } from '../creditsCatalog';
 import { parallaxSource } from '../parallax/parallaxSource';
 import sky from './assets/1.png';
 import highClouds from './assets/2.png';
@@ -10,6 +11,7 @@ export const silverCloudbankSource = parallaxSource({
   key: 'SilverCloudbank',
   title: 'Silver Cloudbank',
   theme: 'Sky',
+  attribution: puzzleCredits.craftpix,
   preview,
   layers: [
     { name: 'sky', url: sky, travel: 0, anchorY: 0.5 },

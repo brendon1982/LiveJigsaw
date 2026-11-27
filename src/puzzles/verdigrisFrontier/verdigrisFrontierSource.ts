@@ -1,3 +1,4 @@
+import { puzzleCredits } from '../creditsCatalog';
 import { parallaxSource } from '../parallax/parallaxSource';
 import sky from './assets/sky.png';
 import moonAndRuins from './assets/moon-and-ruins.png';
@@ -11,6 +12,7 @@ export const verdigrisFrontierSource = parallaxSource({
   key: 'VerdigrisFrontier',
   title: 'Verdigris Frontier',
   theme: 'Alien Worlds',
+  attribution: puzzleCredits.craftpix,
   preview,
   layers: [
     { name: 'sky', url: sky, travel: 0, anchorY: 0.5 },

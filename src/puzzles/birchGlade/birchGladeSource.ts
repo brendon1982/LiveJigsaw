@@ -1,3 +1,4 @@
+import { puzzleCredits } from '../creditsCatalog';
 import { parallaxSource } from '../parallax/parallaxSource';
 import sky from './assets/7.png';
 import mist from './assets/6.png';
@@ -12,6 +13,7 @@ export const birchGladeSource = parallaxSource({
   key: 'BirchGlade',
   title: 'Birch Glade',
   theme: 'Woodland',
+  attribution: puzzleCredits.craftpix,
   preview,
   layers: [
     { name: 'sky', url: sky, travel: 0, anchorY: 0.5 },

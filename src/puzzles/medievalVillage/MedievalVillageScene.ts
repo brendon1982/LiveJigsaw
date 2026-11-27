@@ -55,49 +55,14 @@ export class MedievalVillageScene extends Phaser.Scene {
     super(MedievalVillageScene.key);
   }
 
-  create(data: PuzzleSourceSceneData) {
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => { this.animate = undefined; });
-    if (this.textures.exists(atlasKey)) {
-      this.drawVillage(data);
-      return;
-    }
-
-    this.loadVillageArtwork(data);
+  preload() {
+    if (!this.textures.exists(atlasKey)) this.load.atlasXML(atlasKey, atlasImage, atlasData);
   }
 
-  private loadVillageArtwork(data: PuzzleSourceSceneData) {
-    const { width, height } = data;
-    const centerX = width / 2;
-    const centerY = height / 2;
-    const backdrop = this.add.rectangle(0, 0, width, height, 0x17392d).setOrigin(0);
-    const label = this.add.text(centerX, centerY - 26, 'Loading village…', {
-      fontFamily: 'system-ui', fontSize: '44px', color: '#f9e6af',
-    }).setOrigin(0.5);
-    const track = this.add.rectangle(centerX, centerY + 32, 300, 10, 0x355c48);
-    const bar = this.add.rectangle(track.x - track.width / 2, track.y, track.width, track.height, 0xdca352)
-      .setOrigin(0, 0.5).setScale(0, 1);
-    const showProgress = (progress: number) => bar.setScale(progress, 1);
-    const cleanUp = () => {
-      this.load.off(Phaser.Loader.Events.PROGRESS, showProgress);
-      this.load.off(Phaser.Loader.Events.COMPLETE, onComplete);
-    };
-    const onComplete = () => {
-      cleanUp();
-      this.events.off(Phaser.Scenes.Events.SHUTDOWN, cleanUp);
-      if (!this.textures.exists(atlasKey)) {
-        label.setText('Could not load the village');
-        track.destroy();
-        bar.destroy();
-        return;
-      }
-      [backdrop, label, track, bar].forEach((object) => object.destroy());
-      this.drawVillage(data);
-    };
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, cleanUp);
-    this.load.on(Phaser.Loader.Events.PROGRESS, showProgress);
-    this.load.once(Phaser.Loader.Events.COMPLETE, onComplete);
-    // Start inside create so the scene can be captured while the loader is running.
-    this.load.atlasXML(atlasKey, atlasImage, atlasData).start();
+  create(data: PuzzleSourceSceneData) {
+    if (!this.textures.exists(atlasKey)) return;
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => { this.animate = undefined; });
+    this.drawVillage(data);
   }
 
   private drawVillage({ width, height, seed, animationSpeed }: PuzzleSourceSceneData) {

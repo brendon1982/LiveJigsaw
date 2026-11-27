@@ -4,6 +4,8 @@ import type { PuzzleSource, PuzzleSourceSceneData } from '../puzzles/PuzzleSourc
 export class LivePuzzleCapture {
   readonly texture: Phaser.Textures.DynamicTexture;
   private readonly sourceScene: Phaser.Scene;
+  private onSourceCreated?: () => void;
+  private loadFailed = false;
 
   constructor(
     private readonly host: Phaser.Scene,
@@ -25,24 +27,34 @@ export class LivePuzzleCapture {
     this.texture = texture;
   }
 
-  start() {
+  start(onReady: () => void, onLoadFailed: () => void) {
+    this.onSourceCreated = () => {
+      this.sourceScene.input.enabled = false;
+      if (this.sourceScene.input.keyboard) this.sourceScene.input.keyboard.enabled = false;
+      this.sourceScene.scene.setVisible(false);
+      if (this.loadFailed) {
+        onLoadFailed();
+        return;
+      }
+      this.refresh();
+      if (this.source.motion === 'Animated') this.host.game.events.on(Phaser.Core.Events.POST_STEP, this.refresh);
+      onReady();
+    };
+    this.sourceScene.load.once(Phaser.Loader.Events.COMPLETE, this.onLoadComplete);
     this.sourceScene.events.once(Phaser.Scenes.Events.CREATE, this.onSourceCreated);
     this.host.scene.launch(this.sourceScene, this.data);
   }
 
   destroy() {
     this.host.game.events.off(Phaser.Core.Events.POST_STEP, this.refresh);
-    this.sourceScene.events.off(Phaser.Scenes.Events.CREATE, this.onSourceCreated);
+    if (this.onSourceCreated) this.sourceScene.events.off(Phaser.Scenes.Events.CREATE, this.onSourceCreated);
+    this.sourceScene.load.off(Phaser.Loader.Events.COMPLETE, this.onLoadComplete);
     this.host.scene.stop(this.sourceScene);
     this.host.textures.remove(this.texture);
   }
 
-  private readonly onSourceCreated = () => {
-    this.sourceScene.input.enabled = false;
-    if (this.sourceScene.input.keyboard) this.sourceScene.input.keyboard.enabled = false;
-    this.sourceScene.scene.setVisible(false);
-    this.refresh();
-    if (this.source.motion === 'Animated') this.host.game.events.on(Phaser.Core.Events.POST_STEP, this.refresh);
+  private readonly onLoadComplete = (_loader: Phaser.Loader.LoaderPlugin, _loaded: number, failed: number) => {
+    this.loadFailed = failed > 0;
   };
 
   private readonly refresh = () => {

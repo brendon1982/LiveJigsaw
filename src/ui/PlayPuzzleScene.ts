@@ -13,6 +13,7 @@ import { playWorkspace } from './playLayout';
 import { makeDetailsArtwork, showPuzzleDetails } from './puzzleDetailsDialog';
 import { headerControlGap, headerInset, makeBackButton, makeSettingsButton, puzzleSpacing } from './puzzleHeader';
 import { PuzzleBoardView } from './PuzzleBoardView';
+import { showPuzzleLoading } from './puzzleLoading';
 import { fitLabel } from './PuzzlePickerCard';
 import { SelectPuzzleScene } from './SelectPuzzleScene';
 import { openSettings } from './SettingsScene';
@@ -44,13 +45,15 @@ export class PlayPuzzleScene extends Phaser.Scene {
     const capture = new LivePuzzleCapture(this, source, {
       ...puzzle.board.size, seed: puzzle.seed, animationSpeed,
     });
+    let board: PuzzleBoardView | undefined;
+    let loading: ReturnType<typeof showPuzzleLoading> | undefined = showPuzzleLoading(this);
 
     const backButton = makeBackButton(this, () => this.scene.start(SelectPuzzleScene.key));
     const settings = makeSettingsButton(this, () => {
-      board.cancelInteraction();
+      board?.cancelInteraction();
       openSettings(this, {
-        onTrayPositionChange: (position) => board.setTrayPosition(position),
-        onAllowLoosePiecesOnBoardChange: (allow) => board.setAllowLoosePiecesOnBoard(allow),
+        onTrayPositionChange: (position) => board?.setTrayPosition(position),
+        onAllowLoosePiecesOnBoardChange: (allow) => board?.setAllowLoosePiecesOnBoard(allow),
       });
     });
     const title = this.add.text(0, 0, source.title, {
@@ -62,7 +65,7 @@ export class PlayPuzzleScene extends Phaser.Scene {
       this.rexUI.add.click(link, { threshold: 10, clickInterval: 0 })
         .on('click', (_button: unknown, _object: unknown, pointer: Phaser.Input.Pointer) => {
           if (pointer.wasCanceled) return;
-          board.cancelInteraction();
+          board?.cancelInteraction();
           open();
         });
       link.input!.cursor = 'pointer';
@@ -86,6 +89,7 @@ export class PlayPuzzleScene extends Phaser.Scene {
     });
     const pieceCount = puzzle.pieces.length;
     let headerBottom = 0;
+    const workspace = () => playWorkspace(this.scale.gameSize, headerBottom);
     const layoutHeader = () => {
       const { width } = this.scale.gameSize;
       const narrow = width < 620;
@@ -115,6 +119,7 @@ export class PlayPuzzleScene extends Phaser.Scene {
         artist.setPosition(linkX, progressY);
       }
       headerBottom = narrow ? textTop + textHeight : puzzleSpacing + rowHeight;
+      loading?.layout(workspace());
     };
     this.scale.on(Phaser.Scale.Events.RESIZE, layoutHeader);
     const updateProgress = () => {
@@ -127,7 +132,7 @@ export class PlayPuzzleScene extends Phaser.Scene {
       updateProgress();
       if (puzzle.isComplete) {
         gameSave.completeAttempt(source.scene.key, { setup, completedAt: new Date().toISOString() });
-        board.showCompletion();
+        board?.showCompletion();
         completionAction = this.time.delayedCall(completionPreviewDuration, () => {
           backButton.setData('primary', true);
         });
@@ -135,20 +140,23 @@ export class PlayPuzzleScene extends Phaser.Scene {
         saveProgress();
       }
     };
-    const { trayPosition = 'Auto', trayFractions, allowLoosePiecesOnBoard } = gameSave.settings;
     updateProgress();
-    const board = new PuzzleBoardView(this, play, capture, trayPieceArea, {
-      position: trayPosition,
-      fractions: trayFractions,
-      onResize: (fractions) => gameSave.updateSettings({ trayFractions: fractions }),
-    }, { onPlacement, onWorkspaceChange: saveProgress }, allowLoosePiecesOnBoard,
-    () => playWorkspace(this.scale.gameSize, headerBottom));
-    capture.start();
+    capture.start(() => {
+      loading?.destroy();
+      loading = undefined;
+      const { trayPosition = 'Auto', trayFractions, allowLoosePiecesOnBoard } = gameSave.settings;
+      board = new PuzzleBoardView(this, play, capture, trayPieceArea, {
+        position: trayPosition,
+        fractions: trayFractions,
+        onResize: (fractions) => gameSave.updateSettings({ trayFractions: fractions }),
+      }, { onPlacement, onWorkspaceChange: saveProgress }, allowLoosePiecesOnBoard, workspace);
+    }, () => loading?.fail());
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.scale.off(Phaser.Scale.Events.RESIZE, layoutHeader);
       completionAction?.remove(false);
-      board.destroy();
+      loading?.destroy();
+      board?.destroy();
       capture.destroy();
     });
   }

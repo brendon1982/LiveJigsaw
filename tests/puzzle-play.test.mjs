@@ -1127,8 +1127,18 @@ for (const { title, key, cardX, width, height, columns, rows } of [
     await page.mouse.click(cardX, 220);
     await waitForText(title);
     await waitForText(`${columns * rows} pieces · ${columns} × ${rows}`);
+    const artwork = new RegExp(`/${key === 'GrayPanther' ? 'gray-panther' : 'jungle-rhinos'}-[^/]+\\.png$`);
+    const releaseArtwork = Promise.withResolvers();
+    t.after(() => releaseArtwork.resolve());
+    await page.route(artwork, async (route) => {
+      await releaseArtwork.promise;
+      await route.continue();
+    }, { times: 1 });
     await pressAction(page, 'Play');
     await waitForText(`0 of ${columns * rows} placed`);
+    await waitForPuzzleLoading(page);
+    releaseArtwork.resolve();
+    await waitForPuzzleArtwork(page);
     const layout = await playLayout(page);
     const size = { width, height, columns, rows, snapTolerance: 28 };
     await assertStaticCapture(page, size);
@@ -1876,8 +1886,25 @@ scenario('parallax seeds place both foreground and background artwork', async (t
   assert.deepEqual(errors, []);
 });
 
-scenario('the full-HD medieval village is captured during loading and animates after reopening', async (t) => {
-  const { page, canvas, waitForText, errors, clickDialog } = await openPuzzle(t, {
+function waitForPuzzleLoading(page, message = 'Loading puzzle…') {
+  return page.waitForFunction((message) => {
+    const play = window.puzzlePickerScene?.sys.game.scene.getScene('PlayPuzzle');
+    const spinner = play?.children.getByName('Puzzle loading spinner');
+    return play?.children.getByName('Puzzle load status')?.text === message
+      && spinner?.visible === (message === 'Loading puzzle…');
+  }, message, { timeout: 5000 });
+}
+
+function waitForPuzzleArtwork(page) {
+  return page.waitForFunction(() => {
+    const play = window.puzzlePickerScene?.sys.game.scene.getScene('PlayPuzzle');
+    return play?.sys.isActive() && !play.children.getByName('Puzzle load status')
+      && !play.children.getByName('Puzzle loading spinner');
+  });
+}
+
+scenario('the full-HD medieval village shows shared loading and animates after reopening', async (t) => {
+  const { page, waitForText, errors, clickDialog } = await openPuzzle(t, {
     viewport: { width: 1320, height: 780 },
   });
   await saveFullHDPuzzle(page, 'MedievalVillage', 233);
@@ -1885,11 +1912,6 @@ scenario('the full-HD medieval village is captured during loading and animates a
   const atlas = /medievalRTS_spritesheet[^/]*\.png(?:\?|$)/;
   const loading = Promise.withResolvers();
   const release = Promise.withResolvers();
-  await page.route(atlas, async (route) => {
-    loading.resolve();
-    await release.promise;
-    await route.abort();
-  });
   t.after(() => release.resolve());
 
   const openVillage = async () => {
@@ -1901,27 +1923,33 @@ scenario('the full-HD medieval village is captured during loading and animates a
     await waitForText('Medieval Village');
     await waitForText('1 of 32 placed');
   };
+
+  const failAtlas = (route) => route.fulfill({ status: 503 });
+  await page.route(atlas, failAtlas);
+  await openVillage();
+  await waitForPuzzleLoading(page, 'Could not load the puzzle.');
+  await pressHeader(page, 'All puzzles');
+  await waitForPicker(page);
+  await page.unroute(atlas, failAtlas);
+
+  await page.route(atlas, async (route) => {
+    loading.resolve();
+    await release.promise;
+    await route.abort();
+  });
   await openVillage();
   await loading.promise;
-  await waitForText('Loading village…');
-  const indicator = await canvas.screenshot();
-  assert.deepEqual(await pixelAt(page, indicator, 85, 140), [23, 57, 45, 255], 'The tray should show the loading backdrop');
-  assert.notDeepEqual(await pixelAt(page, indicator, 542, 348), [32, 46, 42, 255], 'The board guide should show the loading backdrop');
+  await waitForPuzzleLoading(page);
 
   await pressHeader(page, 'All puzzles');
   await waitForPicker(page);
   // Returning to the picker can cancel the browser request before the held route resumes.
   await page.unrouteAll({ behavior: 'ignoreErrors' });
   release.resolve();
-  const loaded = page.waitForResponse((response) => atlas.test(response.url()) && response.ok());
+
   await openVillage();
-  await loaded;
+  await waitForPuzzleArtwork(page);
   const board = { x: 197, y: 90, width: 1060, height: 660 };
-  for (let frame = 0; frame < 30; frame += 1) {
-    const artwork = await canvas.screenshot();
-    if (!(await pixelAt(page, artwork, 85, 140)).every((channel, index) => channel === [23, 57, 45, 255][index])) break;
-    assert.ok(frame < 29, 'The artwork should replace the loading backdrop');
-  }
   const before = await page.screenshot({ clip: board });
   await page.evaluate(async () => {
     for (let frame = 0; frame < 12; frame += 1) await new Promise(requestAnimationFrame);

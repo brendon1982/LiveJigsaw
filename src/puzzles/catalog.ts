@@ -56,6 +56,7 @@ import { emberTideSource } from './emberTide/emberTideSource';
 import { frostedFirHillsSource } from './frostedFirHills/frostedFirHillsSource';
 import { sundaeSandsSource } from './sundaeSands/sundaeSandsSource';
 import { sugarplumVillageSource } from './sugarplumVillage/sugarplumVillageSource';
+import { gumdropOrchardSource } from './gumdropOrchard/gumdropOrchardSource';
 
 export const puzzleSources: readonly PuzzleSource[] = [
   windmillSource,
@@ -115,4 +116,5 @@ export const puzzleSources: readonly PuzzleSource[] = [
   frostedFirHillsSource,
   sundaeSandsSource,
   sugarplumVillageSource,
+  gumdropOrchardSource,
 ];

@@ -103,6 +103,7 @@ import { meltingAppleSource } from './meltingApple/meltingAppleSource';
 import { festiveFavoritesSource } from './festiveFavorites/festiveFavoritesSource';
 import { bedtimeWithCatsSource } from './bedtimeWithCats/bedtimeWithCatsSource';
 import { tableForTwoSource } from './tableForTwo/tableForTwoSource';
+import { yellowEyedCatSource } from './yellowEyedCat/yellowEyedCatSource';
 
 export const puzzleSources: readonly PuzzleSource[] = [
   windmillSource,
@@ -209,4 +210,5 @@ export const puzzleSources: readonly PuzzleSource[] = [
   festiveFavoritesSource,
   bedtimeWithCatsSource,
   tableForTwoSource,
+  yellowEyedCatSource,
 ];

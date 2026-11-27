@@ -80,6 +80,7 @@ import { highlandBasinSource } from './highlandBasin/highlandBasinSource';
 import { graniteRangeSource } from './graniteRange/graniteRangeSource';
 import { meteorBasinSource } from './meteorBasin/meteorBasinSource';
 import { ringfallSource } from './ringfall/ringfallSource';
+import { auroraGlacierSource } from './auroraGlacier/auroraGlacierSource';
 
 export const puzzleSources: readonly PuzzleSource[] = [
   windmillSource,
@@ -163,4 +164,5 @@ export const puzzleSources: readonly PuzzleSource[] = [
   graniteRangeSource,
   meteorBasinSource,
   ringfallSource,
+  auroraGlacierSource,
 ];

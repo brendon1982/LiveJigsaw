@@ -72,6 +72,7 @@ import { snowboundPinesSource } from './snowboundPines/snowboundPinesSource';
 import { gildedSkylineSource } from './gildedSkyline/gildedSkylineSource';
 import { luminousFallsSource } from './luminousFalls/luminousFallsSource';
 import { sentinelPassSource } from './sentinelPass/sentinelPassSource';
+import { sunspireCanyonSource } from './sunspireCanyon/sunspireCanyonSource';
 
 export const puzzleSources: readonly PuzzleSource[] = [
   windmillSource,
@@ -147,4 +148,5 @@ export const puzzleSources: readonly PuzzleSource[] = [
   gildedSkylineSource,
   luminousFallsSource,
   sentinelPassSource,
+  sunspireCanyonSource,
 ];

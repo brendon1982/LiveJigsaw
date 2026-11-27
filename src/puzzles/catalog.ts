@@ -100,6 +100,7 @@ import { lemonStripesSource } from './lemonStripes/lemonStripesSource';
 import { thanksgivingLeavesSource } from './thanksgivingLeaves/thanksgivingLeavesSource';
 import { folkArtChristmasTreeSource } from './folkArtChristmasTree/folkArtChristmasTreeSource';
 import { meltingAppleSource } from './meltingApple/meltingAppleSource';
+import { festiveFavoritesSource } from './festiveFavorites/festiveFavoritesSource';
 
 export const puzzleSources: readonly PuzzleSource[] = [
   windmillSource,
@@ -203,4 +204,5 @@ export const puzzleSources: readonly PuzzleSource[] = [
   thanksgivingLeavesSource,
   folkArtChristmasTreeSource,
   meltingAppleSource,
+  festiveFavoritesSource,
 ];

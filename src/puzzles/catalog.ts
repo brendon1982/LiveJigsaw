@@ -21,8 +21,10 @@ import { fernwoodGroveSource } from './fernwoodGrove/fernwoodGroveSource';
 import { forestSource } from './forest/forestSource';
 import { forestLanternSource } from './forestLantern/forestLanternSource';
 import { goldenPeaksSource } from './goldenPeaks/goldenPeaksSource';
+import { grayPantherSource } from './grayPanther/grayPantherSource';
 import { hexCoastSource } from './hexCoast/hexCoastSource';
 import { jadeRidgeSource } from './jadeRidge/jadeRidgeSource';
+import { jungleRhinosSource } from './jungleRhinos/jungleRhinosSource';
 import { lanternManorSource } from './lanternManor/lanternManorSource';
 import { lavenderMesaSource } from './lavenderMesa/lavenderMesaSource';
 import { lighthouseSource } from './lighthouse/lighthouseSource';
@@ -101,4 +103,6 @@ export const puzzleSources: readonly PuzzleSource[] = [
   eclipseOrbitSource,
   blueStarSource,
   cherryBlossomsSource,
+  grayPantherSource,
+  jungleRhinosSource,
 ];

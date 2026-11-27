@@ -769,7 +769,7 @@ scenario('the picker shows newest puzzles first and only loads nearby previews',
     reducedMotion: 'reduce',
   });
   const gameScript = /\/assets\/index-[\w-]+\.js$/;
-  const previewAsset = /\/assets\/(?:preview|cherry-blossoms-on-branch)-[\w-]+\.png$/;
+  const previewAsset = /\/assets\/(?:preview|cherry-blossoms-on-branch|gray-panther|jungle-rhinos)-[\w-]+\.png$/;
   const requestedPreviews = [];
   const scriptGate = Promise.withResolvers();
   const previewGate = Promise.withResolvers();
@@ -819,8 +819,8 @@ scenario('the picker shows newest puzzles first and only loads nearby previews',
       await waitForText(title);
       await page.keyboard.press('Escape');
     };
-    await expectPuzzleAt(220, 'Cherry Blossoms', 'Target piece count');
-    await expectPuzzleAt(610, 'Blue Star');
+    await expectPuzzleAt(220, 'Jungle Rhinos', 'Target piece count');
+    await expectPuzzleAt(610, 'Gray Panther', 'Target piece count');
     await page.mouse.move(380, 400);
     await page.mouse.wheel(0, 30000);
     await canvas.screenshot();
@@ -881,9 +881,10 @@ scenario('the Flowers and Static filters open Cherry Blossoms with an adaptive c
   await waitForText('Select a Puzzle');
   await page.touchscreen.tap(1120, 49);
   await waitForText('Artwork motion');
+  await clickDialog(93, filterY.secondTheme); // Flowers
   await clickDialog(-60, filterY.motion);
   await clickDialog(125, filterY.action);
-  await waitForText('Filters (1)');
+  await waitForText('Filters (2)');
   await page.touchscreen.tap(660, 220);
   await waitForText('Resume');
   await page.evaluate(() => { window.paintedText = []; });
@@ -891,6 +892,56 @@ scenario('the Flowers and Static filters open Cherry Blossoms with an adaptive c
   await waitForText('1 of 459 placed');
   assert.deepEqual(errors, []);
 });
+
+for (const { title, key, cardX, height, columns, rows } of [
+  { title: 'Gray Panther', key: 'GrayPanther', cardX: 360, height: 2834, columns: 6, rows: 7 },
+  { title: 'Jungle Rhinos', key: 'JungleRhinos', cardX: 940, height: 2000, columns: 8, rows: 6 },
+]) {
+  scenario(`${title} opens from the Wildlife filter and plays at native size`, async (t) => {
+    const { page, waitForText, errors, clickDialog } = await openPuzzle(t, {
+      viewport: { width: 1320, height: 780 },
+    });
+    await page.mouse.click(1120, 49);
+    await waitForText('Wildlife');
+    await clickDialog(-119, filterY.firstTheme + 4 * 62); // Wildlife
+    await clickDialog(-60, filterY.motion); // Static
+    await clickDialog(125, filterY.action);
+    await waitForText('Filters (2)');
+
+    if (key === 'GrayPanther') {
+      await page.mouse.click(600, 430);
+      await waitForText('Swipe 👋😍');
+      const credits = await page.evaluate(() => window.paintedText.join(''));
+      assert.ok(credits.includes('https://unsplash.com/@swipe9/illustrations'));
+      assert.ok(credits.includes('abstract-gray-background-gSR-qSYfJmc'));
+      await page.keyboard.press('Escape');
+    }
+
+    await page.evaluate(() => { window.paintedText = []; });
+    await page.mouse.click(cardX, 220);
+    await waitForText(title);
+    await waitForText(`${columns * rows} pieces · ${columns} × ${rows}`);
+    await clickDialog(158, 295);
+    await waitForText(`0 of ${columns * rows} placed`);
+    const layout = await playLayout(page);
+    const artwork = await page.evaluate(() => {
+      const [image] = window.puzzleArtworkScene.children.list;
+      return { x: image.x, y: image.y, width: image.displayWidth, height: image.displayHeight };
+    });
+    assert.deepEqual(artwork, { x: 0, y: 0, width: 2000, height });
+
+    const size = { width: 2000, height, columns, rows, snapTolerance: 28 };
+    const piece = layout.tray[0];
+    const target = pieceTarget(layout, piece.id, size);
+    await page.mouse.move(piece.x, piece.y);
+    await page.mouse.down();
+    await page.mouse.move(target.x, target.y, { steps: 8 });
+    await page.mouse.up();
+    await waitForText(`1 of ${columns * rows} placed`);
+    assert.deepEqual((await readSave(page)).progress[key].setup.size, size);
+    assert.deepEqual(errors, []);
+  });
+}
 
 function trackPieceMaskDraws(page) {
   return page.addInitScript(() => {

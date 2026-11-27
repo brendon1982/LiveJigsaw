@@ -109,6 +109,7 @@ import { dalaHorseChristmasSource } from './dalaHorseChristmas/dalaHorseChristma
 import { catsAtChristmasSource } from './catsAtChristmas/catsAtChristmasSource';
 import { hollyBellsSource } from './hollyBells/hollyBellsSource';
 import { pineAndBaublesSource } from './pineAndBaubles/pineAndBaublesSource';
+import { choosingTheTreeSource } from './choosingTheTree/choosingTheTreeSource';
 
 export const puzzleSources: readonly PuzzleSource[] = [
   windmillSource,
@@ -221,4 +222,5 @@ export const puzzleSources: readonly PuzzleSource[] = [
   catsAtChristmasSource,
   hollyBellsSource,
   pineAndBaublesSource,
+  choosingTheTreeSource,
 ];

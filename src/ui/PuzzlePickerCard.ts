@@ -46,7 +46,9 @@ export function makePuzzlePickerCard(
   let preview: Phaser.GameObjects.RenderTexture | undefined;
   let previewRequested = false;
   const metadata = `${source.tags.theme} · ${source.tags.type}`;
-  const title = scene.add.text(0, 0, source.title, { fontFamily: 'system-ui', fontSize: '22px' }).setOrigin(0, 0.5);
+  const title = scene.add.text(0, 0, source.title, {
+    fontFamily: 'system-ui', fontSize: '22px', fontStyle: 'bold',
+  }).setOrigin(0, 0.5);
   const tags = scene.add.text(0, 0, metadata, metadataTextStyle).setOrigin(0, 0.5);
   const statusLabel = scene.add.text(0, 0, status, metadataTextStyle).setOrigin(1, 0.5);
   const inlineStatusWidth = status ? tags.width + headerControlGap + statusLabel.width : 0;

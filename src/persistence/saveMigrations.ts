@@ -66,6 +66,13 @@ const migrations: readonly Migration[] = [
     }
     return { ...document, settings };
   },
+  (document) => ({
+    ...document,
+    settings: {
+      ...(isRecord(document.settings) ? document.settings : {}),
+      pickerPreviewSize: 'Large',
+    },
+  }),
 ];
 
 function withRotationOff(value: unknown): unknown {

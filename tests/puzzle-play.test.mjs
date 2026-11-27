@@ -684,7 +684,7 @@ scenario('the board keeps fixed pan bounds through zoom with a parked piece', as
   assert.deepEqual(errors, []);
 });
 
-scenario('picker preview sizes reflow the cards and stay centered on touch screens', async (t) => {
+scenario('picker preview sizes reflow the cards, persist and stay centered on touch screens', async (t) => {
   const { page, waitForText, errors } = await openPuzzle(t, {
     viewport: { width: 1320, height: 780 }, hasTouch: true,
   });
@@ -702,7 +702,11 @@ scenario('picker preview sizes reflow the cards and stay centered on touch scree
         icon: Boolean(tile.getElement('icon')), text: Boolean(tile.getElement('text')),
       };
     });
-    return { options, columns: grid.columnCount, width: card.width, height: card.height, panelTop: panel.y };
+    const [title] = card.getChildren().filter(({ type }) => type === 'Text');
+    return {
+      options, columns: grid.columnCount, width: card.width, height: card.height, panelTop: panel.y,
+      titleStyle: title.style.fontStyle,
+    };
   });
   const assertSelection = (layout, size) => {
     assert.deepEqual(layout.options.filter(({ selected }) => selected).map((option) => option.size), [size]);
@@ -714,13 +718,19 @@ scenario('picker preview sizes reflow the cards and stay centered on touch scree
   assert.equal((large.options[0].x + large.options[1].x) / 2, 660);
   assert.equal(large.columns, 2);
   assert.equal(large.width, 560);
+  assert.equal(large.titleStyle, 'bold');
 
   await page.mouse.click(large.options[0].x, large.options[0].y);
   const medium = await pickerLayout();
   assertSelection(medium, 'Medium');
   assert.equal(medium.columns, 5);
   assert.equal(medium.width, 200);
+  assert.equal(medium.titleStyle, 'bold');
   assert.ok(medium.height < large.height);
+
+  await page.reload();
+  await waitForText('Select a Puzzle');
+  assert.deepEqual(await pickerLayout(), medium);
 
   await page.setViewportSize({ width: 375, height: 640 });
   await page.waitForFunction(() => document.querySelector('canvas').width === 375);
@@ -734,6 +744,9 @@ scenario('picker preview sizes reflow the cards and stay centered on touch scree
   const portraitLarge = await pickerLayout();
   assertSelection(portraitLarge, 'Large');
   assert.ok(portraitLarge.width > portrait.width);
+  await page.reload();
+  await waitForText('Select a Puzzle');
+  assert.deepEqual(await pickerLayout(), portraitLarge);
   await page.touchscreen.tap(175, portraitLarge.panelTop + 70);
   await waitForText('Piece count');
   assert.deepEqual(errors, []);
@@ -1904,12 +1917,13 @@ scenario('picker Settings remembers the theme and filter on a narrow touch scree
   await waitForText('Select a Puzzle');
   assert.deepEqual((await readSave(page)).settings, {
     theme: 'Slate', filter: 'sepia', trayFractions: { vertical: 0, horizontal: 0 }, allowLoosePiecesOnBoard: false,
+    pickerPreviewSize: 'Large',
   });
   assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 5, 105), [39, 51, 68, 255]);
   assert.deepEqual(errors, []);
 });
 
-scenario('version 1 through 9 saves migrate with settings, options, progress, and history intact', async (t) => {
+scenario('version 1 through 10 saves migrate with settings, options, progress, and history intact', async (t) => {
   const { page, canvas, waitForText, errors, clickDialog } = await openPuzzle(t, { viewport: { width: 1320, height: 780 } });
   const size = { width: 512, height: 288, columns: 4, rows: 2, snapTolerance: 28 };
   const setup = {
@@ -1926,7 +1940,7 @@ scenario('version 1 through 9 saves migrate with settings, options, progress, an
   const storeSave = (data) => page.evaluate((value) => localStorage.setItem('live-jigsaw.save', JSON.stringify(value)), data);
   const trayFractions = { vertical: 0, horizontal: 0 };
   const settings = { ...original.settings, trayFractions };
-  const migratedSettings = { ...settings, allowLoosePiecesOnBoard: false };
+  const migratedSettings = { ...settings, allowLoosePiecesOnBoard: false, pickerPreviewSize: 'Large' };
   const sequentialCompletion = {
     setup: { ...setup, challengeMode: 'sequential' }, completedAt: '2025-01-02T12:00:00.000Z',
   };
@@ -2056,7 +2070,7 @@ scenario('version 1 through 9 saves migrate with settings, options, progress, an
   await waitForText('Completed');
   await waitForText('1 of 8 placed');
   assert.deepEqual(await readSave(page), {
-    ...version8, version: saveVersion, settings: { ...version8.settings, allowLoosePiecesOnBoard: false },
+    ...version8, version: saveVersion, settings: { ...migratedSettings, trayFractions: version8.settings.trayFractions },
     progress: { Windmill: { ...version8.progress.Windmill, parkedGroups: [] } },
   });
 
@@ -2064,13 +2078,18 @@ scenario('version 1 through 9 saves migrate with settings, options, progress, an
     ...version8, version: 9, settings: { ...version8.settings, missedDropMode: 'park-on-board' },
     progress: { Windmill: { ...version8.progress.Windmill, parkedGroups: [] } },
   };
-  await storeSave(version9);
-  await page.reload();
-  await waitForText('Completed');
-  await waitForText('1 of 8 placed');
-  assert.deepEqual(await readSave(page), {
-    ...version9, version: saveVersion, settings: { ...version8.settings, allowLoosePiecesOnBoard: true },
-  });
+  const version10 = {
+    ...version9, version: 10, settings: { ...version8.settings, allowLoosePiecesOnBoard: true },
+  };
+  for (const previous of [version9, version10]) {
+    await storeSave(previous);
+    await page.reload();
+    await waitForText('Completed');
+    await waitForText('1 of 8 placed');
+    assert.deepEqual(await readSave(page), {
+      ...version10, version: saveVersion, settings: { ...version10.settings, pickerPreviewSize: 'Large' },
+    });
+  }
 
   const future = { ...original, version: 99, futureField: { keep: true } };
   await storeSave(future);

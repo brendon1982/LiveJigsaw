@@ -5,7 +5,7 @@ import { createPuzzle, defaultPieceShape, getPieceCount, pieceShapeIds, type Puz
 import { maximumPuzzlePieceCount } from '../domain/staticPuzzleSizes';
 import { puzzleAnimationSpeeds, type PuzzleAnimationSpeed } from '../puzzles/PuzzleSource';
 import {
-  defaultAllowLoosePiecesOnBoard, defaultTrayFractions, hasProgress, trayPositions,
+  defaultAllowLoosePiecesOnBoard, defaultPickerPreviewSize, defaultTrayFractions, hasProgress, pickerPreviewSizes, trayPositions,
   type PuzzleCompletion, type PuzzleOptions, type PuzzleProgress, type PuzzleSetup, type SaveData, type SaveStorage,
 } from './GameSave';
 import { isRecord, migrateSave, saveVersion } from './saveMigrations';
@@ -14,7 +14,11 @@ const storageKey = 'live-jigsaw.save';
 const themeKey = 'live-jigsaw.theme';
 const filterKey = 'live-jigsaw.puzzle-filter';
 const emptySave: SaveData = {
-  settings: { trayFractions: defaultTrayFractions, allowLoosePiecesOnBoard: defaultAllowLoosePiecesOnBoard },
+  settings: {
+    pickerPreviewSize: defaultPickerPreviewSize,
+    trayFractions: defaultTrayFractions,
+    allowLoosePiecesOnBoard: defaultAllowLoosePiecesOnBoard,
+  },
   progress: {}, history: {},
 };
 
@@ -87,6 +91,7 @@ function readSave(data: Record<string, unknown>): SaveData {
     settings: {
       theme: typeof settings.theme === 'string' ? settings.theme : undefined,
       filter: typeof settings.filter === 'string' ? settings.filter : undefined,
+      pickerPreviewSize: pickerPreviewSizes.find((size) => size === settings.pickerPreviewSize) ?? defaultPickerPreviewSize,
       trayPosition: trayPositions.find((position) => position === settings.trayPosition),
       allowLoosePiecesOnBoard: typeof allowLoosePiecesOnBoard === 'boolean'
         ? allowLoosePiecesOnBoard : defaultAllowLoosePiecesOnBoard,

@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import type RexUIPlugin from 'phaser4-rex-plugins/templates/ui/ui-plugin.js';
 import { getPieceCount } from '../domain/puzzleSizes';
 import { gameSave } from '../persistence';
-import type { PuzzleProgress } from '../persistence/GameSave';
+import { pickerPreviewSizes, type PickerPreviewSize, type PuzzleProgress } from '../persistence/GameSave';
 import { puzzleSources } from '../puzzles/catalog';
 import type { PuzzleSource } from '../puzzles/PuzzleSource';
 import { makeButton, makeOptionTile, type UIScene } from './button';
@@ -24,9 +24,8 @@ const previewSizes = {
   Medium: { maxWidth: 200, widthFraction: 0.465, iconGridSize: 2 },
   Large: { maxWidth: maxPickerCardWidth, widthFraction: 1, iconGridSize: 1 },
 } as const;
-type PreviewSize = keyof typeof previewSizes;
 
-function drawPreviewSizeIcon(scene: UIScene, size: PreviewSize) {
+function drawPreviewSizeIcon(scene: UIScene, size: PickerPreviewSize) {
   const { iconGridSize } = previewSizes[size];
   const width = 28;
   const height = 18;
@@ -62,7 +61,6 @@ export class SelectPuzzleScene extends Phaser.Scene {
   static readonly key = 'SelectPuzzle';
   declare rexUI: RexUIPlugin;
   private filters = noPuzzleFilters;
-  private previewSize: PreviewSize = 'Large';
   private scrollOffset = 0;
 
   constructor() {
@@ -175,7 +173,7 @@ export class SelectPuzzleScene extends Phaser.Scene {
       });
     }, 130);
     const previewSizeRow = this.rexUI.add.sizer({ space: { item: headerControlGap } }).setOrigin(0.5, 0);
-    const previewSizeTiles = (Object.keys(previewSizes) as PreviewSize[]).map((size) => {
+    const previewSizeTiles = pickerPreviewSizes.map((size) => {
       const tile = makeOptionTile(this, {
         name: `preview-size-${size}`, width: 70, height: filtersButton.height,
         drawIcon: () => drawPreviewSizeIcon(this, size),
@@ -211,13 +209,13 @@ export class SelectPuzzleScene extends Phaser.Scene {
       filtersButton.setText(count ? `Filters (${count})` : 'Filters').layout();
     };
     const updatePreviewSizeTiles = () => {
-      for (const { size, tile } of previewSizeTiles) tile.setSelected(this.previewSize === size);
+      for (const { size, tile } of previewSizeTiles) tile.setSelected(gameSave.settings.pickerPreviewSize === size);
     };
-    const changePreviewSize = (size: PreviewSize) => {
-      if (this.previewSize === size) return;
+    const changePreviewSize = (size: PickerPreviewSize) => {
+      if (gameSave.settings.pickerPreviewSize === size) return;
       const firstInView = panel.childOY < 0 && visibleCards.find(({ card: { container } }) =>
         container.y + container.height > listBounds.top);
-      this.previewSize = size;
+      gameSave.updateSettings({ pickerPreviewSize: size });
       updatePreviewSizeTiles();
       layoutPicker(0);
       if (firstInView) panel.setChildOY(listBounds.top - firstInView.card.container.y, true);
@@ -251,7 +249,7 @@ export class SelectPuzzleScene extends Phaser.Scene {
       const panelHeight = Math.max(1, height - panelTop);
       const listWidth = width - scrollbarSpace;
       const availableWidth = listWidth - 2 * puzzleSpacing;
-      const { maxWidth, widthFraction } = previewSizes[this.previewSize];
+      const { maxWidth, widthFraction } = previewSizes[gameSave.settings.pickerPreviewSize];
       const cardWidth = Phaser.Math.Clamp(Math.floor(availableWidth * widthFraction), 1, maxWidth);
       const fittingColumns = Math.floor((availableWidth + puzzleSpacing) / (cardWidth + puzzleSpacing));
       const columns = Math.min(Math.max(1, fittingColumns), Math.max(1, visibleCards.length));

@@ -7,6 +7,10 @@ import type { PuzzleAnimationSpeed } from '../puzzles/PuzzleSource';
 export const trayPositions = ['Left', 'Right', 'Bottom', 'Top', 'Auto'] as const;
 export type TrayPosition = typeof trayPositions[number];
 
+export const pickerPreviewSizes = ['Medium', 'Large'] as const;
+export type PickerPreviewSize = typeof pickerPreviewSizes[number];
+export const defaultPickerPreviewSize: PickerPreviewSize = 'Large';
+
 export const defaultAllowLoosePiecesOnBoard = true;
 
 export type TrayFractions = Readonly<{ vertical: number; horizontal: number }>;
@@ -15,6 +19,7 @@ export const defaultTrayFractions: TrayFractions = { vertical: 0, horizontal: 0 
 export type SavedSettings = Readonly<{
   theme?: string;
   filter?: string;
+  pickerPreviewSize: PickerPreviewSize;
   trayPosition?: TrayPosition;
   trayFractions: TrayFractions;
   allowLoosePiecesOnBoard: boolean;

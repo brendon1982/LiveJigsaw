@@ -77,6 +77,7 @@ import { sunsetCragSource } from './sunsetCrag/sunsetCragSource';
 import { paleSummitsSource } from './paleSummits/paleSummitsSource';
 import { cloudcapPeakSource } from './cloudcapPeak/cloudcapPeakSource';
 import { highlandBasinSource } from './highlandBasin/highlandBasinSource';
+import { graniteRangeSource } from './graniteRange/graniteRangeSource';
 
 export const puzzleSources: readonly PuzzleSource[] = [
   windmillSource,
@@ -157,4 +158,5 @@ export const puzzleSources: readonly PuzzleSource[] = [
   paleSummitsSource,
   cloudcapPeakSource,
   highlandBasinSource,
+  graniteRangeSource,
 ];

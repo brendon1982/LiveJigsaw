@@ -11,12 +11,12 @@ import { saveVersion } from '../src/persistence/saveMigrations.ts';
 const scenarios = [];
 const scenario = (name, run, minimumTimeout = 0) => scenarios.push({ name, run, minimumTimeout });
 
-const filterY = { firstTheme: -256, secondTheme: -194, type: 83, completion: 174, motion: 262, action: 333 };
 const resumeActionY = 114;
 const compactPuzzlePath = '/compact-fixture/tests/fixtures/compact-puzzle.html';
 const currentSizesPuzzlePath = `${compactPuzzlePath}?currentSizes`;
 const compactSize = { width: 512, height: 288, columns: 4, rows: 2, snapTolerance: 28 };
 let compactPuzzleBuild;
+let catalogueCaptureBuild;
 
 async function seedNextAttempt(page, seed) {
   await page.evaluate((seed) => {
@@ -1038,14 +1038,14 @@ scenario('the picker shows newest puzzles first and only loads nearby previews',
       artwork = await topPreview();
     }
     assert.notDeepEqual(artwork, placeholder, 'The preview should appear in the same card when it loads');
-    const expectPuzzleAt = async (y, title) => {
+    const expectPuzzleAt = async (y, title, countLabel = 'Piece count') => {
       await page.evaluate(() => { window.paintedText = []; });
       await page.mouse.click(380, y);
-      await waitForText('Piece count');
+      await waitForText(countLabel);
       await waitForText(title);
       await page.keyboard.press('Escape');
     };
-    await expectPuzzleAt(220, 'Neon Circuit');
+    await expectPuzzleAt(220, 'Among the Evergreens', 'Target piece count');
     await page.mouse.move(380, 400);
     await page.mouse.wheel(0, 100_000);
     await canvas.screenshot();
@@ -1061,8 +1061,8 @@ scenario('the picker shows newest puzzles first and only loads nearby previews',
   }
 });
 
-scenario('all 40 new Parallax puzzles capture a first frame and representative artwork moves', async (t) => {
-  await build({
+async function openCatalogueCapture(t) {
+  catalogueCaptureBuild ??= build({
     base: '/parallax-fixture/',
     logLevel: 'warn',
     build: {
@@ -1070,10 +1070,42 @@ scenario('all 40 new Parallax puzzles capture a first frame and representative a
       rollupOptions: { input: 'tests/fixtures/parallax-catalog.html' },
     },
   });
+  await catalogueCaptureBuild;
   const { page, errors, origin } = await openGamePage(t, { viewport: { width: 320, height: 240 } });
   await page.goto(`${origin}/parallax-fixture/tests/fixtures/parallax-catalog.html`);
-  await page.waitForFunction(() => window.parallaxSmoke, undefined, { timeout: 8000 });
-  const catalogue = await page.evaluate(() => window.parallaxSmoke.catalogue);
+  await page.waitForFunction(() => window.catalogueSmoke, undefined, { timeout: 8000 });
+  const catalogue = await page.evaluate(() => window.catalogueSmoke.catalogue);
+  return { page, errors, catalogue };
+}
+
+async function assertArtworkCapture(page, { key, title }, checkMotion = false) {
+  const { firstFrame, laterFrame, stopped, released } = await page.evaluate(async ({ key, title, checkMotion }) => {
+    try {
+      return await window.catalogueSmoke.capture(key, checkMotion);
+    } catch (error) {
+      throw new Error(`${title} (${key}): ${error.message}`);
+    }
+  }, { key, title, checkMotion });
+
+  const colors = new Set();
+  let opaquePixels = 0;
+  for (let pixel = 0; pixel < firstFrame.length; pixel += 4) {
+    const [red, green, blue, alpha] = firstFrame.slice(pixel, pixel + 4);
+    if (alpha < 250) continue;
+    opaquePixels++;
+    colors.add((red << 16) | (green << 8) | blue);
+  }
+  assert.ok(opaquePixels >= 0.95 * firstFrame.length / 4 && colors.size >= 8,
+    `${title} should fill the first capture with artwork (got ${opaquePixels} opaque pixels and ${colors.size} colors)`);
+  if (checkMotion) {
+    assert.ok(laterFrame.some((channel, i) => i % 4 !== 3 && Math.abs(channel - firstFrame[i]) > 4),
+      `${title} artwork should move between captures`);
+  }
+  assert.ok(stopped && released, `${title} should stop and release the capture before the next source loads`);
+}
+
+scenario('all 40 new Parallax puzzles capture a first frame and representative artwork moves', async (t) => {
+  const { page, errors, catalogue } = await openCatalogueCapture(t);
   const first = catalogue.findIndex(({ key }) => key === 'Palmshore');
   const last = catalogue.findIndex(({ key }) => key === 'NeonCircuit');
   assert.ok(first >= 0 && last >= first, 'The catalogue should include the Palmshore–Neon Circuit batch');
@@ -1082,49 +1114,81 @@ scenario('all 40 new Parallax puzzles capture a first frame and representative a
   assert.equal(new Set(batch.map(({ key }) => key)).size, batch.length, 'The batch should have unique scene keys');
   const motionSamples = new Set([0, Math.floor(batch.length / 2), batch.length - 1]);
 
-  for (const [index, { key, title, type, motion }] of batch.entries()) {
+  for (const [index, source] of batch.entries()) {
+    const { title, type, motion } = source;
     assert.equal(type, 'Parallax', title);
     assert.equal(motion, 'Animated', title);
-    const checkMotion = motionSamples.has(index);
-    const { firstFrame, laterFrame, stopped, released } = await page.evaluate(async ({ key, title, checkMotion }) => {
-      try {
-        return await window.parallaxSmoke.capture(key, checkMotion);
-      } catch (error) {
-        throw new Error(`${title} (${key}): ${error.message}`);
-      }
-    }, { key, title, checkMotion });
-
-    const colors = new Set();
-    let opaquePixels = 0;
-    for (let pixel = 0; pixel < firstFrame.length; pixel += 4) {
-      const [red, green, blue, alpha] = firstFrame.slice(pixel, pixel + 4);
-      if (alpha < 250) continue;
-      opaquePixels++;
-      colors.add((red << 16) | (green << 8) | blue);
-    }
-    assert.ok(opaquePixels >= 0.95 * firstFrame.length / 4 && colors.size >= 8,
-      `${title} should fill the first capture with artwork (got ${opaquePixels} opaque pixels and ${colors.size} colors)`);
-    if (checkMotion) {
-      assert.ok(laterFrame.some((channel, i) => i % 4 !== 3 && Math.abs(channel - firstFrame[i]) > 4),
-        `${title} artwork should move between captures`);
-    }
-    assert.ok(stopped && released, `${title} should stop and release the capture before the next source loads`);
+    await assertArtworkCapture(page, source, motionSamples.has(index));
   }
   assert.deepEqual(errors, []);
 }, 90_000);
+
+scenario('all 27 new Unsplash puzzles capture a first frame and have artwork credits', async (t) => {
+  const { page, errors, catalogue } = await openCatalogueCapture(t);
+  const first = catalogue.findIndex(({ key }) => key === 'PastriesAndCoffee');
+  const last = catalogue.findIndex(({ key }) => key === 'AmongTheEvergreens');
+  assert.ok(first >= 0 && last >= first, 'The catalogue should include the Pastries and Coffee–Among the Evergreens batch');
+  const batch = catalogue.slice(first, last + 1);
+  assert.equal(batch.length, 27);
+  assert.equal(new Set(catalogue.map(({ key }) => key)).size, catalogue.length, 'Scene keys must be unique');
+
+  for (const source of batch) {
+    const { title, type, motion, attribution } = source;
+    assert.equal(type, 'Flat Illustration', title);
+    assert.equal(motion, 'Static', title);
+    assert.ok(attribution?.name?.trim(), `${title} should name the artist`);
+    assert.match(attribution?.sourceUrl ?? '', /^https:\/\/unsplash\.com\/illustrations\/.+/, title);
+    assert.match(attribution?.artistUrl ?? '', /^https:\/\/unsplash\.com\/@.+/, title);
+    await assertArtworkCapture(page, source);
+  }
+  assert.deepEqual(errors, []);
+}, 90_000);
+
+scenario('Folk Art Christmas Tree shows Sara Oliveira’s full wrapped artwork credit', async (t) => {
+  const { page, waitForText, errors } = await openPuzzle(t, { viewport: { width: 1320, height: 780 } });
+  await pressHeader(page, 'Filters');
+  await clickControl(page, { text: 'Christmas' });
+  await pressAction(page, 'Apply');
+  await waitForFilterCount(page, 1);
+
+  const artist = await page.evaluate(() => {
+    const panel = window.puzzlePickerScene.children.list.find(({ type }) => type === 'rexScrollablePanel');
+    const card = panel.getElement('panel.cards.items').find((card) => card?.getChildren()
+      .some(({ type, text }) => type === 'Text' && text === 'Folk Art Christmas Tree'));
+    const button = card?.getChildren().find(({ name }) => name === 'picker-credits');
+    if (!button) return;
+    panel.setChildOY(panel.childOY + panel.getBounds().centerY - button.y, true);
+    const { centerX: x, centerY: y } = button.getBounds();
+    window.paintedText = [];
+    return { x, y, text: button.text };
+  });
+  assert.ok(artist, 'Folk Art Christmas Tree should have a credits button in the Christmas results');
+  assert.equal(artist.text, 'Sara Oliveira');
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  await page.mouse.click(artist.x, artist.y);
+  await waitForText('Artwork credits');
+  await waitForText('Sara Oliveira');
+  const paintedCredits = await page.evaluate(() => window.paintedText);
+  const sourceUrl = 'https://unsplash.com/illustrations/folk-art-christmas-tree-illustration-2Q4GUNelC5w';
+  assert.ok(paintedCredits.join('').includes(sourceUrl), 'The wrapped lines should contain the complete source URL');
+  assert.ok(!paintedCredits.includes(sourceUrl), 'The long source URL should wrap across lines');
+  assert.ok(paintedCredits.join('').includes('https://unsplash.com/@shireillustrations/illustrations'));
+  assert.deepEqual(errors, []);
+});
 
 scenario('the Flowers and Static filters open Cherry Blossoms with an adaptive cut that survives reload', async (t) => {
   const { page, waitForText, errors, clickDialog } = await openPuzzle(t, {
     viewport: { width: 1320, height: 780 }, hasTouch: true,
   });
   const { moveFinger } = await touchController(page);
-  await waitForText('Flowers · Flat Illustration');
-  await pressHeader(page, 'Filters', true);
-  await waitForText('Artwork motion');
-  await clickDialog(93, filterY.secondTheme); // Flowers
-  await clickDialog(-60, filterY.motion); // Static
-  await clickDialog(125, filterY.action); // Apply
-  await waitForFilterCount(page, 2);
+  const filterFlowers = async () => {
+    await pressHeader(page, 'Filters', true);
+    await clickControl(page, { text: 'Flowers' }, true);
+    await clickControl(page, { text: 'Static' }, true);
+    await pressAction(page, 'Apply', true);
+    await waitForFilterCount(page, 2);
+  };
+  await filterFlowers();
   await page.touchscreen.tap(900, 430);
   await waitForText('Artwork credits');
   await waitForText('Umme Hani Ali');
@@ -1159,12 +1223,7 @@ scenario('the Flowers and Static filters open Cherry Blossoms with an adaptive c
   const resume = async (savedSize) => {
     await page.reload();
     await waitForPicker(page);
-    await pressHeader(page, 'Filters', true);
-    await waitForText('Artwork motion');
-    await clickDialog(93, filterY.secondTheme); // Flowers
-    await clickDialog(-60, filterY.motion);
-    await clickDialog(125, filterY.action);
-    await waitForFilterCount(page, 2);
+    await filterFlowers();
     await page.touchscreen.tap(660, 220);
     await waitForText('Resume');
     await page.evaluate(() => { window.paintedText = []; });
@@ -1186,14 +1245,13 @@ for (const { title, key, cardX, width, height, columns, rows } of [
   { title: 'Jungle Rhinos', key: 'JungleRhinos', cardX: 940, width: 860, height: 860, columns: 8, rows: 6 },
 ]) {
   scenario(`${title} opens from the Wildlife filter and plays at the target area`, async (t) => {
-    const { page, waitForText, errors, clickDialog } = await openPuzzle(t, {
+    const { page, waitForText, errors } = await openPuzzle(t, {
       viewport: { width: 1320, height: 780 },
     });
     await pressHeader(page, 'Filters');
-    await waitForText('Wildlife');
-    await clickDialog(-119, filterY.firstTheme + 4 * 62); // Wildlife
-    await clickDialog(-60, filterY.motion); // Static
-    await clickDialog(125, filterY.action);
+    await clickControl(page, { text: 'Wildlife' });
+    await clickControl(page, { text: 'Static' });
+    await pressAction(page, 'Apply');
     await waitForFilterCount(page, 2);
 
     if (key === 'GrayPanther') {
@@ -3302,8 +3360,7 @@ scenario('picker tag and completion filters combine and refresh after play', asy
   };
   await page.evaluate((save) => localStorage.setItem('live-jigsaw.save', JSON.stringify(save)), original);
   await page.reload();
-  await waitForText('Countryside · Flat Illustration');
-  await waitForText('Coast · Flat Illustration');
+  await waitForPicker(page);
 
   const clickFilters = paceRepeatClicks(() => pressHeader(page, 'Filters'));
   const openFilters = async () => {
@@ -3322,15 +3379,17 @@ scenario('picker tag and completion filters combine and refresh after play', asy
   };
 
   await openFilters();
-  await clickDialog(93, filterY.firstTheme); // Coast
-  await clickDialog(-119, filterY.secondTheme); // Countryside
+  await clickControl(page, { text: 'Coast' });
+  await clickControl(page, { text: 'Countryside' });
   const selectedTiles = await canvas.screenshot();
   const selectedFill = [75, 108, 94, 255];
-  assert.deepEqual(await pixelAt(page, selectedTiles, 753, 390 + filterY.firstTheme - 14), selectedFill, 'Coast should use the selected tile fill');
-  assert.deepEqual(await pixelAt(page, selectedTiles, 541, 390 + filterY.secondTheme - 14), selectedFill, 'Countryside should stay selected alongside Coast');
-  await clickDialog(-109, filterY.type); // Flat Illustration
-  await clickDialog(-66, filterY.completion); // Completed
-  await clickDialog(125, filterY.action);
+  for (const text of ['Coast', 'Countryside']) {
+    const { x, y, height } = await uiControl(page, { text });
+    assert.deepEqual(await pixelAt(page, selectedTiles, x, y - height / 4), selectedFill, `${text} should use the selected tile fill`);
+  }
+  await clickControl(page, { text: 'Flat Illustration' });
+  await clickControl(page, { text: 'Completed' });
+  await pressAction(page, 'Apply');
   await waitForFilterCount(page, 4);
   assert.deepEqual(await readSave(page), original);
   await pickFirst(660);
@@ -3339,18 +3398,18 @@ scenario('picker tag and completion filters combine and refresh after play', asy
   await page.keyboard.press('Escape');
 
   await openFilters();
-  await clickDialog(-61, filterY.action); // Clear the draft
-  await clickDialog(29, filterY.action); // Cancel
+  await pressAction(page, 'Clear'); // Clear the draft
+  await pressAction(page, 'Cancel');
   await pickFirst(660);
   await waitForText('Lighthouse');
   await page.keyboard.press('Escape');
 
   await openFilters();
-  await clickDialog(-61, filterY.action);
-  await clickDialog(93, filterY.firstTheme); // Coast
-  await clickDialog(2, filterY.type); // Parallax
-  await clickDialog(-66, filterY.completion); // Only Lighthouse has been completed, and it isn't Parallax.
-  await clickDialog(125, filterY.action);
+  await pressAction(page, 'Clear');
+  await clickControl(page, { text: 'Coast' });
+  await clickControl(page, { text: 'Parallax' });
+  await clickControl(page, { text: 'Completed' }); // Only Lighthouse has been completed, and it isn't Parallax.
+  await pressAction(page, 'Apply');
   await waitForText('No puzzles match your filters');
   const emptyImage = PNG.sync.read(await canvas.screenshot());
   const centerOfVisibleContent = (startY, endY) => {
@@ -3379,12 +3438,12 @@ scenario('picker tag and completion filters combine and refresh after play', asy
   await page.mouse.click(button.x, button.y);
 
   await openFilters();
-  await clickDialog(93, filterY.firstTheme); // Coast
-  await clickDialog(-119, filterY.secondTheme); // Countryside
+  await clickControl(page, { text: 'Coast' });
+  await clickControl(page, { text: 'Countryside' });
   await clickControl(page, { text: 'Flat Illustration' });
   await clickControl(page, { text: 'Procedural' });
-  await clickDialog(65, filterY.completion); // Never completed
-  await clickDialog(125, filterY.action);
+  await clickControl(page, { text: 'Never completed' });
+  await pressAction(page, 'Apply');
   await waitForFilterCount(page, 5);
   const topOfResults = await canvas.screenshot();
   await scrollPickerTo(page, 200);
@@ -3414,13 +3473,12 @@ scenario('picker tag and completion filters combine and refresh after play', asy
 });
 
 scenario('the picker preserves an active filter and its scroll offset until reload', async (t) => {
-  const { page, canvas, waitForText, errors, clickDialog, playSelection } = await openPuzzle(t, {
+  const { page, canvas, waitForText, errors, playSelection } = await openPuzzle(t, {
     viewport: { width: 1320, height: 780 },
   });
   await pressHeader(page, 'Filters');
-  await waitForText('Type');
-  await clickDialog(2, filterY.type); // Parallax
-  await clickDialog(125, filterY.action);
+  await clickControl(page, { text: 'Parallax' });
+  await pressAction(page, 'Apply');
   await waitForFilterCount(page, 1);
   await scrollPickerTo(page, 1000);
   const scrolled = await canvas.screenshot();
@@ -3445,51 +3503,48 @@ scenario('the picker preserves an active filter and its scroll offset until relo
 });
 
 scenario('touch can scroll the filter dialog and apply choices on a short screen', async (t) => {
-  const { page, canvas, waitForText, errors } = await openPuzzle(t, {
+  const { page, canvas, errors } = await openPuzzle(t, {
     viewport: { width: 640, height: 375 }, hasTouch: true, isMobile: true,
   });
   const { moveFinger } = await touchController(page);
   const firstPreview = await pixelAt(page, await canvas.screenshot(), 120, 165);
   await pressHeader(page, 'Filters', true);
-  await waitForText('Theme');
-  await page.touchscreen.tap(413, 135); // Coast
-  await moveFinger(311, 247, 311, 90);
-  await moveFinger(311, 247, 311, 90);
-  await moveFinger(311, 247, 311, 90);
-  await page.touchscreen.tap(385, 247); // Animated, after scrolling the dialog body.
-  await page.touchscreen.tap(445, 317);
+  await clickControl(page, { text: 'Coast' }, true);
+  await swipeToOption(page, moveFinger, { text: 'Animated' }, { text: 'Apply', action: true });
+  await pressAction(page, 'Apply', true);
   await waitForFilterCount(page, 2);
   assert.notDeepEqual(await pixelAt(page, await canvas.screenshot(), 120, 165), firstPreview);
   assert.deepEqual(errors, []);
 });
+
+async function swipeToOption(page, moveFinger, selector, footer) {
+  let option = await uiControl(page, selector);
+  assert.ok(option.y > option.clip.bottom, 'The lower option should start outside the scrollable body');
+  const action = await uiControl(page, footer);
+  const { x, top, bottom } = option.clip;
+  for (let swipe = 0; swipe < 8 && option.y > option.clip.bottom; swipe += 1) {
+    await moveFinger(x, bottom - 10, x, top + 10);
+    option = await uiControl(page, selector);
+  }
+  assert.ok(option.y >= option.clip.top && option.y <= option.clip.bottom, 'Swiping should bring the option into view');
+  assert.equal((await uiControl(page, footer)).y, action.y, 'The footer should stay in place while the body scrolls');
+  await page.touchscreen.tap(option.x, option.y);
+}
 
 scenario('touch can reach lower Settings and setup options on a short screen', async (t) => {
   const { page, waitForText, errors } = await openCompactPuzzle(t, {
     viewport: { width: 640, height: 375 }, hasTouch: true, isMobile: true,
   });
   const { moveFinger } = await touchController(page);
-  const revealOption = async (selector, footer) => {
-    let option = await uiControl(page, selector);
-    assert.ok(option.y > option.clip.bottom, 'The lower option should start outside the scrollable body');
-    const action = await uiControl(page, footer);
-    const { x, top, bottom } = option.clip;
-    for (let swipe = 0; swipe < 8 && option.y > option.clip.bottom; swipe += 1) {
-      await moveFinger(x, bottom - 10, x, top + 10);
-      option = await uiControl(page, selector);
-    }
-    assert.ok(option.y >= option.clip.top && option.y <= option.clip.bottom, 'Swiping should bring the option into view');
-    assert.equal((await uiControl(page, footer)).y, action.y, 'The footer should stay in place while the body scrolls');
-    await page.touchscreen.tap(option.x, option.y);
-  };
 
   await pressHeader(page, 'Settings', true);
-  await revealOption({ sceneKey: 'Settings', text: 'Yes' }, { sceneKey: 'Settings', text: 'Done', action: true });
+  await swipeToOption(page, moveFinger, { sceneKey: 'Settings', text: 'Yes' }, { sceneKey: 'Settings', text: 'Done', action: true });
   assert.equal((await readSave(page)).settings.allowLoosePiecesOnBoard, true);
   await pressSetting(page, 'Done', true);
   await waitForDialogClosed(page, 'Settings');
 
   await page.touchscreen.tap(320, 180);
-  await revealOption({ name: 'no-guide' }, { text: 'Play', action: true });
+  await swipeToOption(page, moveFinger, { name: 'no-guide' }, { text: 'Play', action: true });
   await pressAction(page, 'Play', true);
   await waitForText('0 of 8 placed');
   assert.equal((await readSave(page)).recentOptions.challengeMode, 'no-guide');

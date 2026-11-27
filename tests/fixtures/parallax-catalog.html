@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8">
-    <title>Live Jigsaw parallax catalogue fixture</title>
+    <title>Live Jigsaw artwork capture fixture</title>
   </head>
   <body>
     <main id="game"></main>
@@ -33,8 +33,10 @@
         }
 
         create() {
-          window.parallaxSmoke = {
-            catalogue: puzzleSources.map(({ scene, title, tags, motion }) => ({ key: scene.key, title, type: tags.type, motion })),
+          window.catalogueSmoke = {
+            catalogue: puzzleSources.map(({ scene, title, tags, motion, attribution }) => ({
+              key: scene.key, title, type: tags.type, motion, attribution,
+            })),
             capture: (key, checkMotion) => this.captureSource(key, checkMotion),
           };
         }

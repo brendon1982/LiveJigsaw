@@ -1596,7 +1596,8 @@ scenario('live pieces scroll, reflow, and snap to the pannable board', async (t)
       return [...data.subarray(offset, offset + 4)];
     });
   };
-  assert.ok(seamColors(highlighted).some(([red]) => red > sky[0]), 'The newly joined seam should briefly light up');
+  assert.ok(seamColors(highlighted).some(([red, , blue]) => red - blue > 25),
+    'The newly joined seam should briefly flash warm gold against the cool artwork');
   let joined = highlighted;
   const fadeDeadline = Date.now() + 2000;
   const isSky = (color) => color.every((channel, index) => channel === sky[index]);

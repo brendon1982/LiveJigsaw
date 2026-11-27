@@ -1,7 +1,21 @@
 import type Phaser from 'phaser';
 import { Bounds, type Point } from '../domain/geometry';
 import type { PuzzlePiece } from '../domain/Puzzle';
-import { drawEffectImage, drawOutlineEffect, traceEffectPath } from './effectImage';
+import { drawEffectImage, traceEffectPath } from './effectImage';
+
+const highlightPadding = 4;
+
+function strokePlacementHighlight(context: CanvasRenderingContext2D) {
+  context.lineWidth = 7;
+  context.strokeStyle = 'rgba(66, 36, 16, 0.6)';
+  context.stroke();
+  context.lineWidth = 4.5;
+  context.strokeStyle = '#ffc76b';
+  context.stroke();
+  context.lineWidth = 2;
+  context.strokeStyle = '#fff6dc';
+  context.stroke();
+}
 
 export class PlacementEffects {
   private readonly active = new Map<Phaser.GameObjects.GameObject, Phaser.Tweens.Tween>();
@@ -27,28 +41,33 @@ export class PlacementEffects {
   }
 
   private playSettle(piece: PuzzlePiece) {
-    const pulse = drawOutlineEffect(this.scene, piece, 'rgba(17, 27, 34, 0.26)', 'rgba(245, 250, 255, 0.5)');
+    const { outline, target } = piece;
+    const pulse = drawEffectImage(this.scene, outline.frame, highlightPadding, target, (context) => {
+      context.beginPath();
+      traceEffectPath(context, outline.points);
+      context.closePath();
+      strokePlacementHighlight(context);
+    });
     const settledScale = pulse.scale;
-    pulse.setScale(settledScale * 1.045);
-    this.animate({ targets: pulse, scale: settledScale, alpha: 0, duration: 280, ease: 'Cubic.Out' });
+    pulse.setScale(settledScale * 1.12);
+    this.animate({
+      targets: pulse,
+      scale: { value: settledScale, duration: 190, ease: 'Back.Out' },
+      alpha: { value: 0, duration: 340, ease: 'Sine.In' },
+    });
   }
 
   private playEdgeFade(paths: readonly (readonly Point[])[], closed = false) {
     const bounds = Bounds.around(paths.flat());
-    const highlight = drawEffectImage(this.scene, bounds, 3, bounds.center, (context) => {
+    const highlight = drawEffectImage(this.scene, bounds, highlightPadding, bounds.center, (context) => {
       context.beginPath();
       for (const points of paths) {
         traceEffectPath(context, points);
         if (closed) context.closePath();
       }
-      context.lineWidth = 4;
-      context.strokeStyle = 'rgba(215, 241, 255, 0.22)';
-      context.stroke();
-      context.lineWidth = 1.5;
-      context.strokeStyle = 'rgba(245, 250, 255, 0.68)';
-      context.stroke();
+      strokePlacementHighlight(context);
     }).setName('Placement edge highlight');
-    this.animate({ targets: highlight, alpha: 0, duration: 300, ease: 'Quad.Out' });
+    this.animate({ targets: highlight, alpha: 0, duration: 380, ease: 'Sine.In' });
   }
 
   private animate(animation: Phaser.Types.Tweens.TweenBuilderConfig & { targets: Phaser.GameObjects.GameObject }) {

@@ -106,6 +106,7 @@ import { tableForTwoSource } from './tableForTwo/tableForTwoSource';
 import { yellowEyedCatSource } from './yellowEyedCat/yellowEyedCatSource';
 import { pinkSkyOverJapanSource } from './pinkSkyOverJapan/pinkSkyOverJapanSource';
 import { dalaHorseChristmasSource } from './dalaHorseChristmas/dalaHorseChristmasSource';
+import { catsAtChristmasSource } from './catsAtChristmas/catsAtChristmasSource';
 
 export const puzzleSources: readonly PuzzleSource[] = [
   windmillSource,
@@ -215,4 +216,5 @@ export const puzzleSources: readonly PuzzleSource[] = [
   yellowEyedCatSource,
   pinkSkyOverJapanSource,
   dalaHorseChristmasSource,
+  catsAtChristmasSource,
 ];

@@ -3,6 +3,7 @@ import { puzzleThemes, puzzleTypes } from '../puzzles/PuzzleTags';
 import { makeButtonLabel, makeOptionTile, type UIScene } from './button';
 import { completionFilters, motionFilters, noPuzzleFilters, type PuzzleFilters } from './puzzleFilters';
 import { pickerControlDepth, showPickerDialog } from './puzzleOptions';
+import { makeScrollableDialogBody } from './scrollableDialogBody';
 import { palette } from './theme';
 
 const contentWidth = 326;
@@ -37,7 +38,7 @@ export function showPuzzleFilters(
         const tile = makeOptionTile(scene, {
           label: choice, width: widths[column], fontSize: '14px', depth: pickerControlDepth, dragThreshold: 10,
           onClick: (pointer) => {
-            if (!isInsideBody(pointer)) return;
+            if (!scroll.containsTap(pointer)) return;
             select(choice);
             refreshButtons.forEach((refresh) => refresh());
           },
@@ -62,43 +63,15 @@ export function showPuzzleFilters(
   });
   refreshButtons.forEach((refresh) => refresh());
 
-  const fullHeight = content.layout().height;
-  const body = scene.rexUI.add.scrollablePanel({
-    width: contentWidth, height: fullHeight,
-    panel: { child: content, mask: { maskType: 'stencil' } },
-    clampChildOY: true,
-    scrollDetectionMode: 'rectBounds',
-    scroller: { threshold: 10 },
-    mouseWheelScroller: { focus: 2, speed: 0.75 },
-    slider: {
-      track: scene.rexUI.add.roundRectangle(0, 0, 6, 10, 3, palette.scrollbarTrack).setDepth(pickerControlDepth),
-      thumb: scene.rexUI.add.roundRectangle(0, 0, 6, 28, 3, palette.scrollbarThumb).setDepth(pickerControlDepth),
-      adaptThumbSize: true,
-      hideUnscrollableSlider: true,
-    },
-    space: { sliderY: gap },
-  });
-  // The scrollable block renders its clipped children at the block's depth.
-  body.setDepth(pickerControlDepth);
-
-  function isInsideBody(pointer: Phaser.Input.Pointer) {
-    const camera = scene.cameras.main;
-    const bounds = body.getBounds();
-    const start = camera.getWorldPoint(pointer.downX, pointer.downY);
-    const end = camera.getWorldPoint(pointer.x, pointer.y);
-    return bounds.contains(start.x, start.y) && bounds.contains(end.x, end.y);
-  }
+  const scroll = makeScrollableDialogBody(scene, content, pickerControlDepth);
 
   const actions = [
     makeButtonLabel(scene, 'Clear', 76, 52),
     makeButtonLabel(scene, 'Cancel', 88, 52),
     makeButtonLabel(scene, 'Apply', 88, 52, true),
   ];
-  return showPickerDialog(scene, 'Filters', body, actions, (action) => onClose(action === 2 ? draft : undefined), {
-    fitContent: (height) => {
-      const offset = body.childOY;
-      body.setMinSize(contentWidth, Math.min(fullHeight, height)).layout().setChildOY(offset, true);
-    },
+  return showPickerDialog(scene, 'Filters', scroll.body, actions, (action) => onClose(action === 2 ? draft : undefined), {
+    fitContent: scroll.fitContent,
     handleAction: (action) => {
       if (action !== 0) return false;
       draft = noPuzzleFilters;

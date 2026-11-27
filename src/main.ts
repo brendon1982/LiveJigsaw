@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import RexUIPlugin from 'phaser4-rex-plugins/templates/ui/ui-plugin.js';
 import { puzzleSources } from './puzzles/catalog';
+import { PlayInfoScene } from './ui/PlayInfoScene';
 import { PlayPuzzleScene } from './ui/PlayPuzzleScene';
 import { SelectPuzzleScene } from './ui/SelectPuzzleScene';
 import { SettingsScene } from './ui/SettingsScene';
@@ -23,7 +24,7 @@ const game = new Phaser.Game({
   input: { activePointers: 2 },
   disableContextMenu: true,
   plugins: { scene: [{ key: 'rexUI', plugin: RexUIPlugin, mapping: 'rexUI' }] },
-  scene: [SelectPuzzleScene, PlayPuzzleScene, SettingsScene, ...puzzleSources.map(({ scene }) => scene)],
+  scene: [SelectPuzzleScene, PlayPuzzleScene, SettingsScene, PlayInfoScene, ...puzzleSources.map(({ scene }) => scene)],
 });
 
 function dismissStartupLoading() {

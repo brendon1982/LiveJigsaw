@@ -11,9 +11,6 @@ import { saveVersion } from '../src/persistence/saveMigrations.ts';
 const scenarios = [];
 const scenario = (name, run) => scenarios.push({ name, run });
 
-const settingsY = { theme: -207, firstFilter: -108, secondFilter: -46, firstTray: 50, secondTray: 112, loosePieces: 208, done: 280 };
-const themeX = { forest: -118, slate: -40, dark: 38, rose: 116 };
-const setupY = { size: -251, shape: -155, connector: -44, speed: 67, rotation: 163, challenge: 259, action: 329 };
 const filterY = { firstTheme: -256, secondTheme: -194, type: 83, completion: 174, motion: 262, action: 333 };
 const resumeActionY = 114;
 const compactPuzzlePath = '/compact-fixture/tests/fixtures/compact-puzzle.html';
@@ -95,6 +92,87 @@ async function scrollPickerTo(page, wheelDelta) {
   await page.mouse.wheel(0, wheelDelta);
 }
 
+function waitForPicker(page) {
+  return page.waitForFunction(() => window.puzzlePickerScene?.sys.isActive()
+    && window.puzzlePickerScene.children.getByName('Settings')?.input?.enabled, undefined, { timeout: 4000 });
+}
+
+function uiControl(page, { sceneKey, name, text, action, filterCount, primary }) {
+  return page.waitForFunction(({ sceneKey, name, text, action, filterCount, primary }) => {
+    const game = window.puzzlePickerScene?.sys.game;
+    if (!game) return;
+    const play = game.scene.getScene('PlayPuzzle');
+    const scene = sceneKey ? game.scene.getScene(sceneKey) : play.sys.isActive() ? play : window.puzzlePickerScene;
+    if (!scene?.sys.isActive()) return;
+    const dialog = scene.children.list.find(({ type }) => type === 'rexDialog');
+    const body = dialog?.getElement('content');
+    const candidates = action ? dialog?.getElement('actions') : dialog?.getAllChildren() ?? scene.children.list;
+    const clip = !action && body?.type === 'rexScrollablePanel' ? body.getBounds() : undefined;
+    const control = candidates?.find((object) => (object.visible || clip) && object.input?.enabled
+      && (name === undefined || object.name === name)
+      && (text === undefined || object.text === text)
+      && (filterCount === undefined || object.getData('filterCount') === filterCount)
+      && (primary === undefined || object.getData('primary') === primary));
+    if (!control) return;
+    const bounds = control.getBounds();
+    const camera = scene.cameras.main;
+    const { left, top, width, height } = game.canvas.getBoundingClientRect();
+    const scaleX = width / game.scale.gameSize.width;
+    const scaleY = height / game.scale.gameSize.height;
+    return {
+      x: left + bounds.centerX * camera.zoom * scaleX,
+      y: top + bounds.centerY * camera.zoom * scaleY,
+      width: bounds.width * camera.zoom * scaleX,
+      height: bounds.height * camera.zoom * scaleY,
+      clip: clip && {
+        x: left + clip.centerX * camera.zoom * scaleX,
+        top: top + clip.top * camera.zoom * scaleY,
+        bottom: top + clip.bottom * camera.zoom * scaleY,
+      },
+    };
+  }, { sceneKey, name, text, action, filterCount, primary }, { timeout: 4000 }).then((handle) => handle.jsonValue());
+}
+
+async function clickControl(page, selector, touch = false) {
+  let point = await uiControl(page, selector);
+  if (point.clip && (point.y < point.clip.top || point.y > point.clip.bottom)) {
+    const { x, top, bottom } = point.clip;
+    const center = (top + bottom) / 2;
+    await page.mouse.move(x, center);
+    await page.mouse.wheel(0, (point.y - center) * 2);
+    await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    point = await uiControl(page, selector);
+    assert.ok(point.y >= point.clip.top && point.y <= point.clip.bottom, 'The dialog control should be in view');
+  }
+  const { x, y } = point;
+  // Phaser uses the camera's render list for hit testing.
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  if (touch) await page.touchscreen.tap(x, y);
+  else await page.mouse.click(x, y);
+}
+
+const pressHeader = (page, name, touch = false) => clickControl(page, { name }, touch);
+const pressSetting = (page, text, touch = false) => clickControl(page, { sceneKey: 'Settings', text, action: text === 'Done' }, touch);
+const pressAction = (page, text, touch = false) => clickControl(page, { text, action: true }, touch);
+
+function waitForDialogClosed(page, sceneKey) {
+  return page.waitForFunction((key) => {
+    const scene = window.puzzlePickerScene.sys.game.scene.getScene(key);
+    return !scene.sys.isActive() || !scene.children.list.some(({ type }) => type === 'rexDialog');
+  }, sceneKey, { timeout: 4000 });
+}
+
+async function waitForFilterCount(page, filterCount) {
+  await uiControl(page, { sceneKey: 'SelectPuzzle', name: 'Filters', filterCount });
+  assert.ok(await page.evaluate((count) => {
+    const { children } = window.puzzlePickerScene;
+    const button = children.getByName('Filters').getBounds();
+    return children.list.some((object) => object.type === 'Text' && object.visible && object.text === String(count)
+      && button.contains(object.getBounds().centerX, object.getBounds().centerY));
+  }, filterCount),
+    `The Filters badge should render ${filterCount}`);
+}
+
 async function openGamePage(t, options) {
   const server = await preview({ preview: { host: '127.0.0.1', port: 0 } });
   t.after(() => server.close());
@@ -151,7 +229,8 @@ async function openPuzzle(t, options, path = currentSizesPuzzlePath, initPage) {
   const { page, canvas, waitForText, errors, origin } = await openGamePage(t, options);
   await initPage?.(page);
   await page.goto(`${origin}${path}`);
-  await waitForText('Windmill');
+  await waitForPicker(page);
+  const press = (selector) => clickControl(page, selector, options.hasTouch);
   const clickDialog = async (dx, dy) => {
     // Phaser uses the camera's render list for hit testing.
     await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
@@ -159,62 +238,28 @@ async function openPuzzle(t, options, path = currentSizesPuzzlePath, initPage) {
     const tap = options.hasTouch ? page.touchscreen.tap.bind(page.touchscreen) : page.mouse.click.bind(page.mouse);
     await tap(x + width / 2 + dx, y + height / 2 + dy);
   };
-  const clickSetting = async (dx, dy) => {
-    const { height } = await canvas.boundingBox();
-    const scale = Math.min(1, (height - 24) / 654);
-    await clickDialog(dx * scale, dy * scale);
-  };
+  const clickSetting = (text) => pressSetting(page, text, options.hasTouch);
   const setAllowLoosePiecesOnBoard = async (allow) => {
-    const { width, height } = await canvas.boundingBox();
-    await page.evaluate(() => { window.paintedText = []; });
-    await clickDialog(width / 2 - 74, 43 - height / 2);
-    await waitForText('Allow loose pieces on board');
-    await waitForText('Yes');
-    await waitForText('No');
-    await clickSetting(allow ? -77 : 77, settingsY.loosePieces);
+    await pressHeader(page, 'Settings', options.hasTouch);
+    await pressSetting(page, allow ? 'Yes' : 'No', options.hasTouch);
     assert.equal((await readSave(page)).settings.allowLoosePiecesOnBoard, allow);
-    await clickSetting(101, settingsY.done);
-  };
-  const clickSetup = async (dx, dy) => {
-    const { width, height } = await canvas.boundingBox();
-    const scale = Math.min(1, (width - 24) / 448, (height - 24) / 750);
-    await clickDialog(dx * scale, dy * scale);
+    await pressSetting(page, 'Done', options.hasTouch);
+    await waitForDialogClosed(page, 'Settings');
+    await page.waitForFunction(() => {
+      const { game } = window.puzzlePickerScene.sys;
+      return game.scene.getScenes(true).some((scene) => ['PlayPuzzle', 'SelectPuzzle'].includes(scene.sys.settings.key) && scene.input.enabled);
+    });
   };
   const playSelection = async ({ size, pieceShape, connectorStyle, animationSpeed, challengeMode, pieceRotation } = {}) => {
-    await waitForText('Challenge mode');
-    if (size) {
-      const compact = path === compactPuzzlePath;
-      const sizes = compact ? [8, 32, 64, 128] : [40, 72, 144, 300, 420];
-      const index = sizes.indexOf(size);
-      assert.ok(index >= 0);
-      await waitForText(String(size));
-      const x = compact ? -156 + 104 * index : -169.6 + 84.8 * index;
-      await clickSetup(x, setupY.size);
-    }
-    if (pieceShape) {
-      const index = ['vertical-short', 'horizontal-short', 'vertical-long', 'horizontal-long', 'square'].indexOf(pieceShape);
-      assert.ok(index >= 0);
-      await clickSetup(-169.6 + 84.8 * index, setupY.shape);
-    }
-    if (connectorStyle) {
-      const index = ['Classic', 'Rounded', 'Angular', 'None'].indexOf(connectorStyle);
-      assert.ok(index >= 0);
-      await clickSetup(-156 + 104 * index, setupY.connector);
-    }
-    if (animationSpeed) {
-      const index = ['Slow', 'Normal', 'Fast'].indexOf(animationSpeed);
-      assert.ok(index >= 0);
-      await clickSetup(-156 + 104 * index, setupY.speed);
-    }
-    if (pieceRotation !== undefined) await clickSetup(pieceRotation ? -52 : -156, setupY.rotation);
-    if (challengeMode) {
-      const index = ['none', 'sequential', 'sequential-window', 'no-guide', 'seed'].indexOf(challengeMode);
-      assert.ok(index >= 0);
-      await clickSetup(-169.6 + 84.8 * index, setupY.challenge);
-    }
-    await clickSetup(158, setupY.action);
+    if (size) await press({ text: String(size) });
+    if (pieceShape) await press({ name: pieceShape });
+    if (connectorStyle) await press({ name: connectorStyle.toLowerCase(), text: '' });
+    if (animationSpeed) await press({ text: animationSpeed });
+    if (pieceRotation !== undefined) await press({ text: pieceRotation ? 'On' : 'Off' });
+    if (challengeMode) await press(challengeMode === 'none' ? { name: 'none', text: 'None' } : { name: challengeMode });
+    await press({ text: 'Play', action: true });
   };
-  return { page, canvas, waitForText, errors, clickDialog, clickSetting, clickSetup, playSelection, setAllowLoosePiecesOnBoard };
+  return { page, canvas, waitForText, errors, clickDialog, clickSetting, playSelection, setAllowLoosePiecesOnBoard };
 }
 
 async function openCompactPuzzle(t, options, path = compactPuzzlePath) {
@@ -626,23 +671,68 @@ scenario('the play workspace fills the viewport beneath the padded header', asyn
     const scene = window.puzzleArtworkScene.sys.game.scene.getScene('PlayPuzzle');
     const objects = scene.children.list;
     const heading = objects.find(({ text }) => text === 'Windmill');
-    const settings = objects.find((object) => object.type === 'rexLabel' && object.getElement('text')?.text === 'Settings');
     const progress = objects.find(({ text }) => text === '0 of 8 placed');
-    const headerBounds = [heading, settings, progress].map((object) => object.getBounds());
+    const controls = ['All puzzles', 'Settings', 'Artwork details'].map((name) => scene.children.getByName(name));
+    const headerBounds = [heading, progress, ...controls].map((object) => object.getBounds());
     const top = Math.min(...headerBounds.map(({ top }) => top));
     const bottom = Math.max(...headerBounds.map(({ bottom }) => bottom));
     const [tray, board] = objects.filter(({ type, depth }) => type === 'Rectangle' && depth === -1)
       .map((panel) => panel.getBounds());
     return {
-      top, below: Math.min(board.y, tray.y) - bottom,
+      top, below: Math.min(board.y, tray.y) - bottom, titleAboveProgress: heading.y < progress.y,
       left: Math.min(board.x, tray.x), right: Math.max(board.x + board.width, tray.x + tray.width),
       bottom: Math.max(board.y + board.height, tray.y + tray.height),
     };
   });
-  assert.deepEqual(await measure(), { top: 16, below: 16, left: 0, right: 1320, bottom: 780 });
+  assert.deepEqual(await measure(), { top: 16, below: 16, titleAboveProgress: true, left: 0, right: 1320, bottom: 780 });
   await page.setViewportSize({ width: 460, height: 820 });
   await page.waitForFunction(() => document.querySelector('canvas').width === 460);
-  assert.deepEqual(await measure(), { top: 16, below: 16, left: 0, right: 460, bottom: 820 });
+  assert.deepEqual(await measure(), { top: 16, below: 16, titleAboveProgress: true, left: 0, right: 460, bottom: 820 });
+  assert.deepEqual(errors, []);
+});
+
+scenario('play opens artwork details and the active challenge rules without changing progress', async (t) => {
+  const { page, errors, waitForText, playSelection } = await openCompactPuzzle(t, {
+    viewport: { width: 460, height: 780 }, hasTouch: true, isMobile: true,
+  });
+  await page.touchscreen.tap(230, 180);
+  await playSelection({ challengeMode: 'sequential' });
+  await waitForText('0 of 8 placed');
+  const originalSave = await readSave(page);
+  const playInfo = () => page.evaluate(() => {
+    const { scene } = window.puzzlePickerScene.sys.game;
+    const play = scene.getScene('PlayPuzzle');
+    const info = scene.getScene('PlayInfo');
+    const dialog = info.children.list.find(({ type }) => type === 'rexDialog');
+    return {
+      boardInputEnabled: play.input.enabled,
+      artwork: dialog.getElement('title').type === 'Image',
+      description: dialog.getElement('content').text,
+      progress: dialog.getElement('actionsSizer.footerLabel')?.text,
+    };
+  });
+  const dismiss = async () => {
+    await clickControl(page, { sceneKey: 'PlayInfo', text: 'Close', action: true }, true);
+    await waitForDialogClosed(page, 'PlayInfo');
+    await page.waitForFunction(() => window.puzzlePickerScene.sys.game.scene.getScene('PlayPuzzle').input.enabled);
+  };
+
+  await uiControl(page, { name: 'Artwork details', text: '· Me' });
+  await pressHeader(page, 'Artwork details', true);
+  await waitForText('Artwork credits');
+  const details = await playInfo();
+  assert.equal(details.artwork, true);
+  assert.equal(details.progress, '0 of 8 placed');
+  assert.equal(details.boardInputEnabled, false);
+  await dismiss();
+
+  await pressHeader(page, 'Challenge rules', true);
+  await waitForText('Sequential challenge');
+  const rules = await playInfo();
+  assert.equal(rules.boardInputEnabled, false);
+  assert.match(rules.description, /only one piece is unlocked at a time/i);
+  await dismiss();
+  assert.deepEqual(await readSave(page), originalSave);
   assert.deepEqual(errors, []);
 });
 
@@ -751,14 +841,14 @@ scenario('picker preview sizes reflow the cards, persist and stay left aligned o
   assert.ok(compact.height < full.height);
 
   await page.reload();
-  await waitForText('Settings');
+  await waitForPicker(page);
   assert.deepEqual(await pickerLayout(), compact);
 
   const save = await readSave(page);
   const previous = { ...save, version: 11, settings: { ...save.settings, pickerPreviewSize: 'Medium' } };
   await page.evaluate((value) => localStorage.setItem('live-jigsaw.save', JSON.stringify(value)), previous);
   await page.reload();
-  await waitForText('Settings');
+  await waitForPicker(page);
   assert.deepEqual(await pickerLayout(), compact);
   assert.deepEqual(await readSave(page), save);
 
@@ -775,7 +865,7 @@ scenario('picker preview sizes reflow the cards, persist and stay left aligned o
   assertSelection(portraitFull, 'Full');
   assert.ok(portraitFull.width > portrait.width);
   await page.reload();
-  await waitForText('Settings');
+  await waitForPicker(page);
   assert.deepEqual(await pickerLayout(), portraitFull);
   await page.touchscreen.tap(175, portraitFull.panelTop + 70);
   await waitForText('Piece count');
@@ -783,7 +873,7 @@ scenario('picker preview sizes reflow the cards, persist and stay left aligned o
 });
 
 scenario('the touch picker stays usable while the viewport width changes', async (t) => {
-  const { page, waitForText, errors, clickDialog } = await openPuzzle(t, {
+  const { page, waitForText, errors } = await openPuzzle(t, {
     viewport: { width: 1320, height: 780 }, hasTouch: true, isMobile: true,
   });
   const { moveFinger } = await touchController(page);
@@ -797,18 +887,19 @@ scenario('the touch picker stays usable while the viewport width changes', async
   const widths = [1319, 1299, 1255, 1240, 1201, 1024, 801, 680, 559, 480, 390, 320, 280, 560, 760, 1241, 1320];
   for (const width of widths) await resize(width);
 
-  await clickDialog(460, -347);
+  await pressHeader(page, 'Filters', true);
   await waitForText('Type');
   for (const width of widths) await resize(width);
   await page.keyboard.press('Escape');
+  await waitForDialogClosed(page, 'SelectPuzzle');
 
-  await clickDialog(586, -347);
+  await pressHeader(page, 'Settings', true);
   await waitForText('Allow loose pieces on board');
   assert.deepEqual(errors, []);
 });
 
 scenario('a touch scrollbar survives a resize that leaves no thumb travel', async (t) => {
-  const { page, waitForText, errors, clickDialog } = await openPuzzle(t, {
+  const { page, waitForText, errors } = await openPuzzle(t, {
     viewport: { width: 680, height: 200 }, hasTouch: true, isMobile: true,
   });
   const { dispatch } = await touchController(page);
@@ -823,7 +914,8 @@ scenario('a touch scrollbar survives a resize that leaves no thumb travel', asyn
   }
   await dispatch('touchEnd');
   await page.setViewportSize({ width: 680, height: 780 });
-  await clickDialog(266, -347);
+  await page.waitForFunction(() => document.querySelector('canvas').height === 780);
+  await pressHeader(page, 'Settings', true);
   await waitForText('Allow loose pieces on board');
   assert.deepEqual(errors, []);
 });
@@ -901,7 +993,6 @@ scenario('the picker shows newest puzzles first and only loads nearby previews',
 
     const firstCardRequested = page.waitForRequest(/\/assets\/jungle-rhinos(?:-preview)?-[\w-]+\.(?:png|jpg)$/, { timeout: 4000 });
     scriptGate.resolve();
-    await waitForText('Settings');
     await status.waitFor({ state: 'detached', timeout: 4000 });
     await firstCardRequested;
     assert.deepEqual(requestedArtwork, [], 'The picker must not request full-size static artwork');
@@ -946,12 +1037,12 @@ scenario('the Flowers and Static filters open Cherry Blossoms with an adaptive c
   });
   const { moveFinger } = await touchController(page);
   await waitForText('Flowers · Flat Illustration');
-  await page.touchscreen.tap(1120, 49);
+  await pressHeader(page, 'Filters', true);
   await waitForText('Artwork motion');
   await clickDialog(93, filterY.secondTheme); // Flowers
   await clickDialog(-60, filterY.motion); // Static
   await clickDialog(125, filterY.action); // Apply
-  await waitForText('Filters (2)');
+  await waitForFilterCount(page, 2);
   await page.touchscreen.tap(900, 430);
   await waitForText('Artwork credits');
   await waitForText('Umme Hani Ali');
@@ -964,12 +1055,12 @@ scenario('the Flowers and Static filters open Cherry Blossoms with an adaptive c
   await waitForText('Target piece count');
   await waitForText('48 pieces · 6 × 8');
   assert.ok(!await page.evaluate(() => window.paintedText.includes('Animation speed')));
-  await clickDialog(170, -217); // Target 420
+  await clickControl(page, { text: '420' }, true);
   await waitForText('456 pieces · 19 × 24');
-  await clickDialog(170, -101); // Square
+  await clickControl(page, { name: 'square' }, true);
   await waitForText('459 pieces · 17 × 27');
-  await clickDialog(156, 10); // No connectors
-  await clickDialog(158, 295); // Play
+  await clickControl(page, { name: 'none', text: '' }, true);
+  await pressAction(page, 'Play', true);
   await waitForText('0 of 459 placed');
 
   const size = { width: 1043, height: 1649, columns: 17, rows: 27, snapTolerance: 16 };
@@ -985,13 +1076,13 @@ scenario('the Flowers and Static filters open Cherry Blossoms with an adaptive c
 
   const resume = async (savedSize) => {
     await page.reload();
-    await waitForText('Settings');
-    await page.touchscreen.tap(1120, 49);
+    await waitForPicker(page);
+    await pressHeader(page, 'Filters', true);
     await waitForText('Artwork motion');
     await clickDialog(93, filterY.secondTheme); // Flowers
     await clickDialog(-60, filterY.motion);
     await clickDialog(125, filterY.action);
-    await waitForText('Filters (2)');
+    await waitForFilterCount(page, 2);
     await page.touchscreen.tap(660, 220);
     await waitForText('Resume');
     await page.evaluate(() => { window.paintedText = []; });
@@ -1016,12 +1107,12 @@ for (const { title, key, cardX, width, height, columns, rows } of [
     const { page, waitForText, errors, clickDialog } = await openPuzzle(t, {
       viewport: { width: 1320, height: 780 },
     });
-    await page.mouse.click(1120, 49);
+    await pressHeader(page, 'Filters');
     await waitForText('Wildlife');
     await clickDialog(-119, filterY.firstTheme + 4 * 62); // Wildlife
     await clickDialog(-60, filterY.motion); // Static
     await clickDialog(125, filterY.action);
-    await waitForText('Filters (2)');
+    await waitForFilterCount(page, 2);
 
     if (key === 'GrayPanther') {
       await page.mouse.click(600, 430);
@@ -1036,7 +1127,7 @@ for (const { title, key, cardX, width, height, columns, rows } of [
     await page.mouse.click(cardX, 220);
     await waitForText(title);
     await waitForText(`${columns * rows} pieces · ${columns} × ${rows}`);
-    await clickDialog(158, 295);
+    await pressAction(page, 'Play');
     await waitForText(`0 of ${columns * rows} placed`);
     const layout = await playLayout(page);
     const size = { width, height, columns, rows, snapTolerance: 28 };
@@ -1367,7 +1458,7 @@ scenario('live pieces scroll, reflow, and snap to the pannable board', async (t)
   assert.equal(bounds.height, 780);
   const move = (x, y, steps) => page.mouse.move(bounds.x + x, bounds.y + y, { steps });
   const click = (x, y) => page.mouse.click(bounds.x + x, bounds.y + y);
-  const clickSettings = paceRepeatClicks(() => click(1246, 43));
+  const clickSettings = paceRepeatClicks(() => pressHeader(page, 'Settings'));
   const drag = async (x, y, endX, endY) => {
     await move(x, y);
     await page.mouse.down();
@@ -1380,7 +1471,8 @@ scenario('live pieces scroll, reflow, and snap to the pannable board', async (t)
   await playSelection();
   await waitForText('0 of 8 placed');
   const header = await page.evaluate(() => window.paintedText);
-  assert.ok(header.includes('All puzzles') && header.includes('Windmill'));
+  await uiControl(page, { sceneKey: 'PlayPuzzle', name: 'All puzzles' });
+  assert.ok(header.includes('Windmill'));
   assert.ok(!header.includes('· None'), 'No challenge label is shown for None');
   assert.ok(!header.includes('Pieces') && !header.includes('Drag to pan · Scroll to zoom'));
   const initial = await canvas.screenshot();
@@ -1435,21 +1527,21 @@ scenario('live pieces scroll, reflow, and snap to the pannable board', async (t)
   assert.deepEqual(await pixelAt(page, placed, dropX, dropY), sky, 'Zooming at the drop target should keep it under the pointer');
   await clickSettings();
   await waitForText('Color theme');
-  await clickDialog(themeX.slate, settingsY.theme);
-  await clickDialog(101, settingsY.done);
+  await pressSetting(page, 'Slate');
+  await pressSetting(page, 'Done');
   const slate = await canvas.screenshot();
   assert.deepEqual(await pixelAt(page, slate, 1317, 100), [33, 44, 59, 255], 'Settings should restyle the active board');
   assert.deepEqual(await pixelAt(page, slate, dropX, dropY), sky, 'The placed piece should stay at its zoomed position');
   await page.evaluate(() => { window.paintedText = []; });
   await clickSettings();
   await waitForText('Color theme');
-  await clickDialog(themeX.dark, settingsY.theme);
-  await clickDialog(101, settingsY.done);
+  await pressSetting(page, 'Dark');
+  await pressSetting(page, 'Done');
   assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 1317, 100), [27, 28, 30, 255], 'Dark should use its own board colour');
   await page.evaluate(() => { window.paintedText = []; });
   await clickSettings();
   await waitForText('Color theme');
-  await clickDialog(themeX.forest, settingsY.theme);
+  await pressSetting(page, 'Forest');
   await page.waitForFunction(() => JSON.parse(localStorage.getItem('live-jigsaw.save')).settings.theme === 'Forest');
   await page.keyboard.press('Escape');
   await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
@@ -1465,26 +1557,26 @@ scenario('live pieces scroll, reflow, and snap to the pannable board', async (t)
   };
   assertGuideColor(originalGuide, [67, 85, 81, 255], 'The original guide should blend with the board at 22% opacity');
 
-  const selectFilter = async (x, y, name) => {
+  const selectFilter = async (label, name) => {
     await page.evaluate(() => { window.paintedText = []; });
     await clickSettings();
     await waitForText('Black and White');
     const before = await guidePixel(await canvas.screenshot());
-    await clickDialog(x, y);
+    await pressSetting(page, label);
     await page.waitForFunction((expected) => {
       return (JSON.parse(localStorage.getItem('live-jigsaw.save')).settings.filter ?? null) === expected;
     }, name);
     assert.notDeepEqual(await guidePixel(await canvas.screenshot()), before, 'The guide should change while Settings is still open');
-    await clickDialog(101, settingsY.done);
+    await pressSetting(page, 'Done');
     const screenshot = await canvas.screenshot();
     assert.deepEqual(await pixelAt(page, screenshot, 1317, 100), panelBackground, 'The area outside the guide should keep the theme color');
     assert.deepEqual(await pixelAt(page, screenshot, dropX, dropY), sky, 'The placed piece should keep its original color');
     assert.deepEqual(await pixelAt(page, screenshot, 85, 140), trayPieceColor, 'The tray piece should keep its original color');
     return guidePixel(screenshot);
   };
-  assertGuideColor(await selectFilter(-65, settingsY.firstFilter, 'grayscale'), [107, 116, 113, 255], 'Black and White should blend with the board at 42% opacity');
-  assertGuideColor(await selectFilter(88, settingsY.firstFilter, 'sepia'), [88, 92, 76, 255], 'Sepia should blend with the board at 22% opacity');
-  assertGuideColor(await selectFilter(-65, settingsY.secondFilter, 'faded'), [94, 108, 105, 255], 'Faded should blend with the board at 42% opacity');
+  assertGuideColor(await selectFilter('Black and White', 'grayscale'), [107, 116, 113, 255], 'Black and White should blend with the board at 42% opacity');
+  assertGuideColor(await selectFilter('Sepia', 'sepia'), [88, 92, 76, 255], 'Sepia should blend with the board at 22% opacity');
+  assertGuideColor(await selectFilter('Faded', 'faded'), [94, 108, 105, 255], 'Faded should blend with the board at 42% opacity');
 
   await move(dropX, dropY);
   await page.mouse.wheel(0, 200);
@@ -1515,7 +1607,7 @@ scenario('live pieces scroll, reflow, and snap to the pannable board', async (t)
   for (const color of seamColors(joined)) {
     assert.deepEqual(color, sky, 'The live guide should not show through joined pieces');
   }
-  assert.deepEqual(await selectFilter(88, settingsY.secondFilter, null), originalGuide, 'Clearing the filter should restore the original guide');
+  assert.deepEqual(await selectFilter('Clear filter', null), originalGuide, 'Clearing the filter should restore the original guide');
 
   await page.setViewportSize({ width: 1500, height: 850 });
   await page.waitForFunction(() => document.querySelector('canvas').height === 850);
@@ -1524,8 +1616,8 @@ scenario('live pieces scroll, reflow, and snap to the pannable board', async (t)
   await page.setViewportSize({ width: 1320, height: 780 });
   await page.waitForFunction(() => document.querySelector('canvas').height === 780);
   await page.evaluate(() => { window.paintedText = []; });
-  await click(99, 43);
-  await waitForText('Windmill');
+  await pressHeader(page, 'All puzzles');
+  await waitForPicker(page);
   await click(1160, 180);
   await seedNextAttempt(page, 49);
   await playSelection({ size: 32 });
@@ -1556,8 +1648,8 @@ scenario('live pieces scroll, reflow, and snap to the pannable board', async (t)
   await page.setViewportSize({ width: 900, height: 620 });
   await page.waitForFunction(() => document.querySelector('canvas').width === 900);
   await page.evaluate(() => { window.paintedText = []; });
-  await click(99, 43);
-  await waitForText('Windmill');
+  await pressHeader(page, 'All puzzles');
+  await waitForPicker(page);
   await click(460, 180);
   await waitForText('Resume');
   await clickDialog(-6, resumeActionY);
@@ -1568,8 +1660,8 @@ scenario('live pieces scroll, reflow, and snap to the pannable board', async (t)
   assert.deepEqual(await pixelAt(page, replay, 85, 140), sky);
   assert.notDeepEqual(await pixelAt(page, initial, 85, 140), sky, 'Resetting with a fresh seed should change the tray order');
   await page.evaluate(() => { window.paintedText = []; });
-  await click(99, 43);
-  await waitForText('Windmill');
+  await pressHeader(page, 'All puzzles');
+  await waitForPicker(page);
   await click(340, 180);
   await playSelection({ size: 64 });
   await waitForText('0 of 64 placed');
@@ -1616,8 +1708,8 @@ scenario('the landscape scenes animate on the board', async (t) => {
     assert.ok(firstArtwork, `${title} should fill the board guide`);
     assert.ok(animated, `${title} should animate the captured artwork`);
     await page.evaluate(() => { window.paintedText = []; });
-    await page.mouse.click(99, 43);
-    await waitForText('Windmill');
+    await pressHeader(page, 'All puzzles');
+    await waitForPicker(page);
   }
   assert.deepEqual(errors, []);
 });
@@ -1651,8 +1743,8 @@ scenario('source artwork fills the capture without stretching or enlarging raste
   };
   const backToPicker = async () => {
     await page.evaluate(() => { window.paintedText = []; });
-    await page.mouse.click(99, 43);
-    await waitForText('Windmill');
+    await pressHeader(page, 'All puzzles');
+    await waitForPicker(page);
   };
 
   for (const [key, x] of [['Windmill', 340], ['Lighthouse', 935]]) {
@@ -1758,8 +1850,8 @@ scenario('parallax seeds place both foreground and background artwork', async (t
     const position = (artworkPixels[0] + artworkPixels.at(-1)) / 2 / width;
 
     await page.evaluate(() => { window.paintedText = []; });
-    await page.mouse.click(99, 43);
-    await waitForText('Windmill');
+    await pressHeader(page, 'All puzzles');
+    await waitForPicker(page);
     return position;
   };
 
@@ -1815,8 +1907,8 @@ scenario('the full-HD medieval village is captured during loading and animates a
   assert.deepEqual(await pixelAt(page, indicator, 85, 140), [23, 57, 45, 255], 'The tray should show the loading backdrop');
   assert.notDeepEqual(await pixelAt(page, indicator, 542, 348), [32, 46, 42, 255], 'The board guide should show the loading backdrop');
 
-  await page.mouse.click(99, 43);
-  await waitForText('Windmill');
+  await pressHeader(page, 'All puzzles');
+  await waitForPicker(page);
   // Returning to the picker can cancel the browser request before the held route resumes.
   await page.unrouteAll({ behavior: 'ignoreErrors' });
   release.resolve();
@@ -1911,7 +2003,7 @@ scenario('picker Settings remembers the theme and filter on a narrow touch scree
   const { page, canvas, waitForText, errors, clickSetting } = await openPuzzle(t, {
     viewport: { width: 375, height: 640 }, hasTouch: true, isMobile: true,
   });
-  await waitForText('Settings');
+  await waitForPicker(page);
   const previewY = await page.evaluate(() => {
     const panel = window.puzzlePickerScene.children.list.find(({ type }) => type === 'rexScrollablePanel');
     const [firstCard] = panel.getElement('panel.cards.items');
@@ -1919,40 +2011,42 @@ scenario('picker Settings remembers the theme and filter on a narrow touch scree
   });
   const forest = await canvas.screenshot();
   assert.deepEqual(await pixelAt(page, forest, 5, 105), [38, 58, 54, 255]);
-  await page.touchscreen.tap(301, 39);
+  await pressHeader(page, 'Settings', true);
   await waitForText('Color theme');
-  await clickSetting(themeX.slate, settingsY.theme);
-  await clickSetting(-65, settingsY.secondFilter);
-  await clickSetting(101, settingsY.done);
+  await clickSetting('Slate');
+  await clickSetting('Faded');
+  await clickSetting('Done');
   const slate = await canvas.screenshot();
   assert.deepEqual(await pixelAt(page, slate, 5, 105), [39, 51, 68, 255]);
   assert.deepEqual(await pixelAt(page, slate, 5, 130), [39, 51, 68, 255], 'The Phaser canvas background should change too');
   assert.deepEqual(await pixelAt(page, slate, 75, previewY), await pixelAt(page, forest, 75, previewY), 'Preview artwork should keep its colors');
   await page.reload();
-  await waitForText('Settings');
+  await waitForPicker(page);
   assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 5, 105), [39, 51, 68, 255]);
-  await page.touchscreen.tap(301, 39);
+  await pressHeader(page, 'Settings', true);
   await waitForText('Faded');
-  assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 72, 277), [76, 102, 135, 255], 'The saved filter should use the Slate selected tile fill after reload');
-  await clickSetting(themeX.dark, settingsY.theme);
+  const faded = await uiControl(page, { sceneKey: 'Settings', text: 'Faded' });
+  assert.deepEqual(await pixelAt(page, await canvas.screenshot(), faded.x - faded.width / 4, faded.y + faded.height / 4),
+    [76, 102, 135, 255], 'The saved filter should use the Slate selected tile fill after reload');
+  await clickSetting('Dark');
   await page.waitForFunction(() => JSON.parse(localStorage.getItem('live-jigsaw.save')).settings.theme === 'Dark');
-  await clickSetting(101, settingsY.done);
+  await clickSetting('Done');
   const dark = await canvas.screenshot();
   assert.deepEqual(await pixelAt(page, dark, 5, 105), [33, 33, 33, 255]);
   assert.deepEqual(await pixelAt(page, dark, 75, previewY), await pixelAt(page, forest, 75, previewY), 'Dark should preserve preview artwork');
   await page.reload();
-  await waitForText('Settings');
+  await waitForPicker(page);
   assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 5, 105), [33, 33, 33, 255]);
-  await page.touchscreen.tap(301, 39);
+  await pressHeader(page, 'Settings', true);
   await waitForText('Rose');
-  await clickSetting(themeX.rose, settingsY.theme);
+  await clickSetting('Rose');
   assert.equal((await readSave(page)).settings.theme, 'Rose');
-  await clickSetting(101, settingsY.done);
+  await clickSetting('Done');
   const rose = await canvas.screenshot();
   assert.deepEqual(await pixelAt(page, rose, 5, 105), [250, 233, 238, 255]);
   assert.deepEqual(await pixelAt(page, rose, 75, previewY), await pixelAt(page, forest, 75, previewY), 'Rose should preserve preview artwork');
   await page.reload();
-  await waitForText('Settings');
+  await waitForPicker(page);
   assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 5, 105), [250, 233, 238, 255]);
   await page.evaluate(() => {
     localStorage.removeItem('live-jigsaw.save');
@@ -1960,7 +2054,7 @@ scenario('picker Settings remembers the theme and filter on a narrow touch scree
     localStorage.setItem('live-jigsaw.puzzle-filter', 'sepia');
   });
   await page.reload();
-  await waitForText('Settings');
+  await waitForPicker(page);
   assert.deepEqual((await readSave(page)).settings, {
     theme: 'Slate', filter: 'sepia', trayFractions: { vertical: 0, horizontal: 0 }, allowLoosePiecesOnBoard: false,
     pickerPreviewSize: 'Full',
@@ -2147,10 +2241,10 @@ scenario('version 1 through 10 saves migrate with settings, options, progress, a
   await storeSave(future);
   await page.reload();
   await waitForText('Windmill');
-  await page.mouse.click(1246, 43);
+  await pressHeader(page, 'Settings');
   await waitForText('Color theme');
-  await clickDialog(themeX.dark, settingsY.theme);
-  await clickDialog(101, settingsY.done);
+  await pressSetting(page, 'Dark');
+  await pressSetting(page, 'Done');
   assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 5, 105), [33, 33, 33, 255], 'The new setting should apply in memory');
   assert.deepEqual(await readSave(page), future, 'A settings change should leave a newer save intact');
   assert.deepEqual(errors, []);
@@ -2217,7 +2311,7 @@ scenario('piece rotation distinguishes clicks and taps from drag, scroll, and ca
   await pickWindmill();
   await waitForText('Piece rotation: On');
   await clickDialog(100, resumeActionY);
-  await waitForText('All puzzles');
+  await uiControl(page, { sceneKey: 'PlayPuzzle', name: 'All puzzles' });
   assert.notDeepEqual(await sample(rotatedEdge, y), trayColor, 'Reload restores the sideways piece');
   await page.touchscreen.tap(rotatedEdge, y);
   turns = (turns + 1) % 4;
@@ -2232,8 +2326,8 @@ scenario('piece rotation distinguishes clicks and taps from drag, scroll, and ca
   assert.deepEqual((await getAttempt()).placedPieceIds, [id]);
   assert.equal(Object.hasOwn((await getAttempt()).trayOrientations, id), false);
 
-  await clickDialog(-561, -347);
-  await waitForText('Settings');
+  await pressHeader(page, 'All puzzles', true);
+  await waitForPicker(page);
   await clickDialog(343, -210);
   await playSelection();
   assert.equal((await readSave(page)).recentOptions.pieceRotation, true, 'The next puzzle should default to the persisted choice');
@@ -2582,7 +2676,7 @@ scenario('Sequential locks tray pieces while keeping touch scrolling and saves t
   await page.touchscreen.tap(340, 180);
   await playSelection({ connectorStyle: 'None', challengeMode: 'sequential' });
   await waitForText('0 of 8 placed');
-  await waitForText('· Sequential');
+  await uiControl(page, { name: 'Challenge rules' });
   const save = () => readSave(page);
   assert.equal((await save()).recentOptions.challengeMode, 'sequential');
   assert.equal((await save()).progress.Windmill, undefined);
@@ -2754,14 +2848,14 @@ scenario('Seed previews an on-target disconnected drop without saving it', async
 });
 
 scenario('No Guide progress resumes, resets, and records each completion', async (t) => {
-  const { page, canvas, waitForText, errors, clickDialog, clickSetup, playSelection } = await openCompactPuzzle(t, {
+  const { page, canvas, waitForText, errors, clickDialog, playSelection } = await openCompactPuzzle(t, {
     viewport: { width: 1320, height: 780 },
   });
   const pickWindmill = () => clickDialog(-320, -210);
   const backToPicker = async () => {
     await page.evaluate(() => { window.paintedText = []; });
-    await page.mouse.click(99, 43);
-    await waitForText('Settings');
+    await pressHeader(page, 'All puzzles');
+    await waitForPicker(page);
   };
   const drag = async (x, y, targetX, targetY) => {
     await page.mouse.move(x, y);
@@ -2804,17 +2898,17 @@ scenario('No Guide progress resumes, resets, and records each completion', async
   const boardBackground = [32, 46, 42, 255];
   assert.deepEqual(await pixelAt(page, guide, emptyCell.x, emptyCell.y), boardBackground);
   assert.deepEqual(await pixelAt(page, guide, Math.floor(layout.artwork.x), 400), [113, 137, 126, 255], 'A border should mark the puzzle bounds');
-  await page.mouse.click(1246, 43);
+  await pressHeader(page, 'Settings');
   await waitForText('Black and White');
-  await clickDialog(themeX.slate, settingsY.theme);
-  await clickDialog(-65, settingsY.firstFilter);
-  await clickDialog(101, settingsY.done);
+  await pressSetting(page, 'Slate');
+  await pressSetting(page, 'Black and White');
+  await pressSetting(page, 'Done');
   assert.deepEqual(await pixelAt(page, await canvas.screenshot(), emptyCell.x, emptyCell.y), [33, 44, 59, 255],
     'Theme and filter changes should keep the guide hidden');
-  await page.mouse.click(1246, 43);
+  await pressHeader(page, 'Settings');
   await waitForText('Color theme');
-  await clickDialog(themeX.forest, settingsY.theme);
-  await clickDialog(101, settingsY.done);
+  await pressSetting(page, 'Forest');
+  await pressSetting(page, 'Done');
   const firstTarget = await placeNextPiece();
   const firstSave = await getAttempt();
   assert.deepEqual(firstSave.placedPieceIds, [firstTarget.id]);
@@ -2827,7 +2921,7 @@ scenario('No Guide progress resumes, resets, and records each completion', async
   assert.notDeepEqual(placedColor, await pixelAt(page, guide, firstTarget.x, firstTarget.y));
 
   await page.reload();
-  await waitForText('Settings');
+  await waitForPicker(page);
   await pickWindmill();
   await waitForText('Resume');
   const resumeText = await page.evaluate(() => window.paintedText);
@@ -2838,7 +2932,7 @@ scenario('No Guide progress resumes, resets, and records each completion', async
   assert.ok(!resumeText.includes('1 of 8 pieces placed'));
   await clickDialog(-6, resumeActionY);
   await waitForText('Piece count');
-  await clickSetup(-52, setupY.size);
+  await clickControl(page, { text: '32' });
   await page.keyboard.press('Escape');
   await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   assert.deepEqual(await getAttempt(), firstSave);
@@ -2851,7 +2945,7 @@ scenario('No Guide progress resumes, resets, and records each completion', async
   await page.evaluate(() => { window.paintedText = []; });
   await clickDialog(100, resumeActionY);
   await waitForText('1 of 8 placed');
-  await waitForText('· No Guide');
+  await uiControl(page, { name: 'Challenge rules' });
   await widenTray();
   assert.deepEqual(await pixelAt(page, await canvas.screenshot(), firstTarget.x, firstTarget.y), placedColor);
   for (let count = 1; count < pieceCount; count += 1) await placeNextPiece();
@@ -2869,12 +2963,10 @@ scenario('No Guide progress resumes, resets, and records each completion', async
   if (findBoardEdge(sliding) === startingEdge) sliding = await canvas.screenshot();
   const boardEdge = findBoardEdge(sliding);
   assert.ok(boardEdge > 24 && boardEdge < startingEdge, 'The board should grow while the tray is still sliding away');
-  assert.deepEqual(await pixelAt(page, sliding, 37, 43), [58, 81, 75, 255], 'Navigation should stay visible during the reveal');
+  await uiControl(page, { name: 'All puzzles', primary: false });
   assert.equal(await getAttempt(), undefined);
   assert.deepEqual((await getHistory()).map(({ setup }) => setup), [firstSave.setup]);
-  assert.equal(await page.evaluate(() => window.paintedText.includes('Choose puzzle')), false,
-    'The completed scene should have a moment before the next action');
-  await waitForText('Choose puzzle');
+  await uiControl(page, { name: 'All puzzles', primary: true });
   const finished = await canvas.screenshot();
   assert.deepEqual(await pixelAt(page, finished, 75, 136), [32, 46, 42, 255], 'The board should reclaim the empty tray');
   assert.deepEqual(await pixelAt(page, finished, 470, 305), [192, 221, 219, 255], 'The finished artwork should be centered in the reclaimed space');
@@ -2953,7 +3045,7 @@ scenario('picker tag and completion filters combine and refresh after play', asy
   await waitForText('Countryside · Flat Illustration');
   await waitForText('Coast · Flat Illustration');
 
-  const clickFilters = paceRepeatClicks(() => clickDialog(460, -347));
+  const clickFilters = paceRepeatClicks(() => pressHeader(page, 'Filters'));
   const openFilters = async () => {
     await clickFilters();
     await waitForText('Completion');
@@ -2979,7 +3071,7 @@ scenario('picker tag and completion filters combine and refresh after play', asy
   await clickDialog(-109, filterY.type); // Flat Illustration
   await clickDialog(-66, filterY.completion); // Completed
   await clickDialog(125, filterY.action);
-  await waitForText('Filters (4)');
+  await waitForFilterCount(page, 4);
   assert.deepEqual(await readSave(page), original);
   await pickFirst(660);
   await waitForText('Lighthouse');
@@ -3030,7 +3122,7 @@ scenario('picker tag and completion filters combine and refresh after play', asy
   await clickDialog(-119, filterY.secondTheme); // Countryside
   await clickDialog(65, filterY.completion); // Never completed
   await clickDialog(125, filterY.action);
-  await waitForText('Filters (3)');
+  await waitForFilterCount(page, 3);
   const topOfResults = await canvas.screenshot();
   await scrollPickerTo(page, 200);
   assert.ok(!topOfResults.equals(await canvas.screenshot()), 'Three results should scroll across two rows');
@@ -3045,10 +3137,10 @@ scenario('picker tag and completion filters combine and refresh after play', asy
   await drag(piece.x, piece.y, target.x, target.y);
   await waitForText('8 of 8 placed');
   assert.equal((await readSave(page)).history.Windmill.length, 1);
-  await waitForText('Choose puzzle');
+  await uiControl(page, { name: 'All puzzles', primary: true });
   await page.evaluate(() => { window.paintedText = []; });
-  await page.mouse.click(99, 43);
-  await waitForText('Filters (3)');
+  await pressHeader(page, 'All puzzles');
+  await waitForFilterCount(page, 3);
   const shortenedResults = await canvas.screenshot();
   assert.notDeepEqual(await pixelAt(page, shortenedResults, 120, 405),
     await pixelAt(page, shortenedResults, 20, 405), 'The shorter result list should clamp back to the top');
@@ -3062,19 +3154,19 @@ scenario('the picker preserves an active filter and its scroll offset until relo
   const { page, canvas, waitForText, errors, clickDialog, playSelection } = await openPuzzle(t, {
     viewport: { width: 1320, height: 780 },
   });
-  await page.mouse.click(1120, 43);
+  await pressHeader(page, 'Filters');
   await waitForText('Type');
   await clickDialog(2, filterY.type); // Parallax
   await clickDialog(125, filterY.action);
-  await waitForText('Filters (1)');
+  await waitForFilterCount(page, 1);
   await scrollPickerTo(page, 1000);
   const scrolled = await canvas.screenshot();
   await page.mouse.click(340, 340);
   await playSelection();
   await waitForText('0 of 40 placed');
   await page.evaluate(() => { window.paintedText = []; });
-  await page.mouse.click(99, 43);
-  await waitForText('Filters (1)');
+  await pressHeader(page, 'All puzzles');
+  await waitForFilterCount(page, 1);
   let restored;
   for (const deadline = Date.now() + 4000; Date.now() < deadline;) {
     restored = await canvas.screenshot();
@@ -3095,7 +3187,7 @@ scenario('touch can scroll the filter dialog and apply choices on a short screen
   });
   const { moveFinger } = await touchController(page);
   const firstPreview = await pixelAt(page, await canvas.screenshot(), 120, 165);
-  await page.touchscreen.tap(445, 49);
+  await pressHeader(page, 'Filters', true);
   await waitForText('Theme');
   await page.touchscreen.tap(413, 135); // Coast
   await moveFinger(311, 247, 311, 90);
@@ -3103,13 +3195,46 @@ scenario('touch can scroll the filter dialog and apply choices on a short screen
   await moveFinger(311, 247, 311, 90);
   await page.touchscreen.tap(385, 247); // Animated, after scrolling the dialog body.
   await page.touchscreen.tap(445, 317);
-  await waitForText('Filters (2)');
+  await waitForFilterCount(page, 2);
   assert.notDeepEqual(await pixelAt(page, await canvas.screenshot(), 120, 165), firstPreview);
   assert.deepEqual(errors, []);
 });
 
+scenario('touch can reach lower Settings and setup options on a short screen', async (t) => {
+  const { page, waitForText, errors } = await openCompactPuzzle(t, {
+    viewport: { width: 640, height: 375 }, hasTouch: true, isMobile: true,
+  });
+  const { moveFinger } = await touchController(page);
+  const revealOption = async (selector, footer) => {
+    let option = await uiControl(page, selector);
+    assert.ok(option.y > option.clip.bottom, 'The lower option should start outside the scrollable body');
+    const action = await uiControl(page, footer);
+    const { x, top, bottom } = option.clip;
+    for (let swipe = 0; swipe < 8 && option.y > option.clip.bottom; swipe += 1) {
+      await moveFinger(x, bottom - 10, x, top + 10);
+      option = await uiControl(page, selector);
+    }
+    assert.ok(option.y >= option.clip.top && option.y <= option.clip.bottom, 'Swiping should bring the option into view');
+    assert.equal((await uiControl(page, footer)).y, action.y, 'The footer should stay in place while the body scrolls');
+    await page.touchscreen.tap(option.x, option.y);
+  };
+
+  await pressHeader(page, 'Settings', true);
+  await revealOption({ sceneKey: 'Settings', text: 'Yes' }, { sceneKey: 'Settings', text: 'Done', action: true });
+  assert.equal((await readSave(page)).settings.allowLoosePiecesOnBoard, true);
+  await pressSetting(page, 'Done', true);
+  await waitForDialogClosed(page, 'Settings');
+
+  await page.touchscreen.tap(320, 180);
+  await revealOption({ name: 'no-guide' }, { text: 'Play', action: true });
+  await pressAction(page, 'Play', true);
+  await waitForText('0 of 8 placed');
+  assert.equal((await readSave(page)).recentOptions.challengeMode, 'no-guide');
+  assert.deepEqual(errors, []);
+});
+
 scenario('touch artist name taps open credits but swipes and cancellation do not', async (t) => {
-  const { page, canvas, waitForText, errors, clickDialog } = await openPuzzle(t, {
+  const { page, canvas, waitForText, errors } = await openPuzzle(t, {
     viewport: { width: 1320, height: 780 }, hasTouch: true, isMobile: true,
   });
   const { dispatch, moveFinger } = await touchController(page);
@@ -3126,7 +3251,8 @@ scenario('touch artist name taps open credits but swipes and cancellation do not
   const paintedCredits = await page.evaluate(() => window.paintedText.join(' '));
   assert.ok(paintedCredits.includes('Place holder art from the prototype. Left it in for fun.'));
   assert.ok(!paintedCredits.includes('https://example.com'));
-  await clickDialog(119, 65); // Done
+  await pressAction(page, 'Close', true);
+  await waitForDialogClosed(page, 'SelectPuzzle');
   await page.evaluate(() => { window.paintedText = []; });
 
   const initial = await canvas.screenshot();
@@ -3173,7 +3299,7 @@ scenario('compact picker ellipsis opens details with the preview and inline cred
   await page.mouse.click(...card.more);
   await waitForText('Artwork credits');
   await waitForText('Me');
-  await waitForText('Done');
+  await waitForText('Close');
   const details = await page.evaluate(() => {
     const scene = window.puzzlePickerScene;
     const dialog = scene.children.list.find(({ type }) => type === 'rexDialog');
@@ -3202,7 +3328,7 @@ scenario('compact picker ellipsis opens details with the preview and inline cred
   assert.equal(details.titleInset, 20);
   assert.match(details.metadata, / · Animated$/);
   assert.deepEqual(details.credits, ['Artwork credits', 'Me', 'Place holder art from the prototype. Left it in for fun.']);
-  assert.deepEqual(details.actions, ['Done']);
+  assert.deepEqual(details.actions, ['Close']);
   const waitForDetails = (open) => page.waitForFunction((open) => {
     const dialog = window.puzzlePickerScene.children.list.find(({ type }) => type === 'rexDialog');
     return open ? Boolean(dialog?.getElement('title')?.texture) : !dialog;
@@ -3212,13 +3338,7 @@ scenario('compact picker ellipsis opens details with the preview and inline cred
 
   await page.touchscreen.tap(...card.more);
   await waitForDetails(true);
-  const done = await page.evaluate(() => {
-    const dialog = window.puzzlePickerScene.children.list.find(({ type }) => type === 'rexDialog');
-    const [button] = dialog.getElement('actions');
-    const { centerX, centerY } = button.getBounds();
-    return [centerX, centerY];
-  });
-  await page.touchscreen.tap(...done);
+  await pressAction(page, 'Close', true);
   await waitForDetails(false);
 
   await page.touchscreen.tap(card.more[0], card.more[1] - 65);
@@ -3236,7 +3356,7 @@ scenario('compact picker ellipsis opens details with the preview and inline cred
   assert.deepEqual(errors, []);
 });
 
-scenario('compact picker details puts saved progress in the Done row', async (t) => {
+scenario('compact picker details puts saved progress in the Close row', async (t) => {
   const { page, errors } = await openPuzzle(t, { viewport: { width: 375, height: 640 }, hasTouch: true },
     currentSizesPuzzlePath, async (page) => {
       await page.addInitScript(({ version, size }) => localStorage.setItem('live-jigsaw.save', JSON.stringify({
@@ -3259,21 +3379,20 @@ scenario('compact picker details puts saved progress in the Done row', async (t)
   const footer = await page.evaluate(() => {
     const dialog = window.puzzlePickerScene.children.list.find(({ type }) => type === 'rexDialog');
     const progress = dialog.getElement('actionsSizer.footerLabel');
-    const [done] = dialog.getElement('actions');
+    const [close] = dialog.getElement('actions');
     const body = dialog.getElement('content');
     return {
       text: progress?.text,
       inBody: body.getElement('panel').getChildren().some(({ text }) => text === '1 of 8 placed'),
       leftAligned: progress?.getBounds().left === body.getBounds().left,
-      rowOffset: progress && progress.getBounds().centerY - done.getBounds().centerY,
-      done: [done.x, done.y],
+      rowOffset: progress && progress.getBounds().centerY - close.getBounds().centerY,
     };
   });
   assert.equal(footer.text, '1 of 8 placed');
   assert.equal(footer.inBody, false);
   assert.equal(footer.leftAligned, true);
-  assert.ok(Math.abs(footer.rowOffset) < 1, `Progress and Done should share a row (offset: ${footer.rowOffset})`);
-  await page.touchscreen.tap(...footer.done);
+  assert.ok(Math.abs(footer.rowOffset) < 1, `Progress and Close should share a row (offset: ${footer.rowOffset})`);
+  await pressAction(page, 'Close', true);
   await page.waitForFunction(() => !window.puzzlePickerScene.children.list.some(({ type }) => type === 'rexDialog'));
   assert.deepEqual(errors, []);
 });
@@ -3281,6 +3400,14 @@ scenario('compact picker details puts saved progress in the Done row', async (t)
 scenario('the picker scrolls past two cards and clips previews', async (t) => {
   await build({
     base: '/picker-fixture/',
+    plugins: [{
+      name: 'expose-picker-fixture-scene',
+      transform(code, id) {
+        if (!id.replaceAll('\\', '/').endsWith('/src/ui/SelectPuzzleScene.ts')) return;
+        return `${code}\nconst createPicker = SelectPuzzleScene.prototype.create;\n`
+          + `SelectPuzzleScene.prototype.create = function () { createPicker.call(this); window.puzzlePickerScene = this; };`;
+      },
+    }],
     build: {
       outDir: 'dist/picker-fixture',
       rollupOptions: { input: 'tests/fixtures/puzzle-picker.html' },
@@ -3304,18 +3431,21 @@ scenario('the picker scrolls past two cards and clips previews', async (t) => {
     assert.deepEqual(errors, []);
   });
   await t.test('mouse wheel scrolls to a selectable third card', async (t) => {
-    const { page, canvas, waitForText, errors, clickSetup, playSelection } = await openPuzzle(t, { viewport: { width: 1320, height: 540 } }, path);
+    const { page, canvas, waitForText, errors, playSelection } = await openPuzzle(t, { viewport: { width: 1320, height: 540 } }, path);
     const initial = await canvas.screenshot();
     assert.deepEqual(await pixelAt(page, initial, 120, 175), [192, 221, 219, 255]);
     assert.notDeepEqual(await pixelAt(page, initial, 800, 175), [38, 58, 54, 255], 'The second card should sit beside the first');
-    await page.mouse.move(1208, 43);
-    const hoveredButton = await pixelAt(page, await canvas.screenshot(), 1208, 43);
+    const settings = await uiControl(page, { name: 'Settings' });
+    assert.equal(settings.width, settings.height, 'The header control should be square');
+    const sampleX = settings.x - settings.width / 3;
+    await page.mouse.move(sampleX, settings.y);
+    const hoveredButton = await pixelAt(page, await canvas.screenshot(), sampleX, settings.y);
     await page.mouse.down();
-    assert.notDeepEqual(await pixelAt(page, await canvas.screenshot(), 1208, 43), hoveredButton, 'A held mouse button should look pressed');
-    await page.mouse.move(1100, 43);
+    assert.notDeepEqual(await pixelAt(page, await canvas.screenshot(), sampleX, settings.y), hoveredButton, 'A held mouse button should look pressed');
+    await page.mouse.move(sampleX, settings.y + settings.height);
     await page.mouse.up();
-    await page.mouse.move(1208, 43);
-    assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 1208, 43), hoveredButton, 'Moving off the button should clear the press');
+    await page.mouse.move(sampleX, settings.y);
+    assert.deepEqual(await pixelAt(page, await canvas.screenshot(), sampleX, settings.y), hoveredButton, 'Moving off the button should clear the press');
     await page.mouse.move(340, 180);
     await page.mouse.down();
     const previewBeforePress = await pixelAt(page, initial, 86, 116);
@@ -3391,46 +3521,50 @@ scenario('the picker scrolls past two cards and clips previews', async (t) => {
     for (const label of ['Square', 'Vertical Long', 'Horizontal Long', 'Vertical Short', 'Horizontal Short']) {
       assert.ok(!paintedText.includes(label), `The ${label} piece shape should not draw a caption`);
     }
-    const setupPixel = (screenshot, x, y) => {
-      const scale = (540 - 24) / 750;
-      return pixelAt(page, screenshot, Math.round(660 + x * scale), Math.round(270 + y * scale));
-    };
+    const classic = await uiControl(page, { name: 'classic' });
+    const rounded = await uiControl(page, { name: 'rounded' });
+    const count = await uiControl(page, { text: '40' });
+    const shape = await uiControl(page, { name: 'vertical-short' });
+    const connectorless = await uiControl(page, { name: 'none', text: '' });
+    const tilePixel = (screenshot, tile, dx = 0, dy = 0) => pixelAt(page, screenshot, tile.x + dx, tile.y + dy);
     const selectedFill = [75, 108, 94, 255];
     const beforeSelection = await canvas.screenshot();
-    assert.deepEqual(await setupPixel(beforeSelection, -182, setupY.connector + 20), selectedFill);
+    assert.deepEqual(await tilePixel(beforeSelection, classic, -26, 20), selectedFill);
     const iconFill = [101, 135, 122, 255];
-    assert.deepEqual(await setupPixel(beforeSelection, -169.6, setupY.size - 12), selectedFill, 'The count tile should have no illustration');
-    assert.deepEqual(await setupPixel(beforeSelection, -169.6, setupY.shape), iconFill, 'The first shape illustration should draw above its tile');
-    assert.deepEqual(await setupPixel(beforeSelection, 156, setupY.connector + 5), iconFill, 'The connector illustration should draw above its tile');
-    await clickSetup(-52, setupY.connector);
+    assert.deepEqual(await tilePixel(beforeSelection, count, 0, -16), selectedFill, 'The count tile should have no illustration');
+    assert.deepEqual(await tilePixel(beforeSelection, shape), iconFill, 'The first shape illustration should draw above its tile');
+    assert.deepEqual(await tilePixel(beforeSelection, connectorless, 0, 5), iconFill, 'The connector illustration should draw above its tile');
+    await clickControl(page, { name: 'rounded' });
     const afterSelection = await canvas.screenshot();
-    assert.notDeepEqual(await setupPixel(afterSelection, -182, setupY.connector + 20), selectedFill);
-    assert.deepEqual(await setupPixel(afterSelection, -78, setupY.connector + 20), selectedFill);
+    assert.notDeepEqual(await tilePixel(afterSelection, classic, -26, 20), selectedFill);
+    assert.deepEqual(await tilePixel(afterSelection, rounded, -26, 20), selectedFill);
     await page.setViewportSize({ width: 375, height: 540 });
     await page.waitForFunction(() => document.querySelector('canvas').width === 375);
-    const [cornerRed] = await pixelAt(page, await canvas.screenshot(), 373, 538);
-    assert.ok(cornerRed < 38, 'The modal backdrop should still reach the corner after resizing');
+    await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    const corner = await pixelAt(page, await canvas.screenshot(), 2, 538);
+    assert.ok(corner[0] < 38, `The modal backdrop should still reach the corner after resizing: ${corner}`);
     await page.setViewportSize({ width: 1320, height: 540 });
     await page.waitForFunction(() => document.querySelector('canvas').width === 1320);
     await page.mouse.move(340, 175);
     await page.mouse.wheel(0, -1000);
-    await clickSetup(58, setupY.action);
+    await pressAction(page, 'Cancel');
+    await waitForDialogClosed(page, 'SelectPuzzle');
     assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 120, 175), previewColor, 'Cancel should preserve the picker scroll position');
     await page.mouse.click(340, 175);
     await playSelection();
     await waitForText('0 of 40 placed');
     await page.waitForFunction(() => window.sourceAnimationSpeed === 'Normal');
     await page.evaluate(() => { window.paintedText = []; });
-    await page.mouse.click(99, 43);
-    await waitForText('Settings');
+    await pressHeader(page, 'All puzzles');
+    await waitForPicker(page);
     assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 120, 175), previewColor, 'Returning from play should restore the picker offset');
     await page.mouse.click(340, 175);
     await playSelection({ animationSpeed: 'Slow' });
     await page.waitForFunction(() => window.sourceAnimationSpeed === 'Slow');
 
     await page.evaluate(() => { window.paintedText = []; });
-    await page.mouse.click(99, 43);
-    await waitForText('Settings');
+    await pressHeader(page, 'All puzzles');
+    await waitForPicker(page);
     await scrollPickerTo(page, 0);
     await page.mouse.click(340, 175);
     await playSelection({ size: 72, connectorStyle: 'None', animationSpeed: 'Fast' });
@@ -3445,8 +3579,8 @@ scenario('the picker scrolls past two cards and clips previews', async (t) => {
     });
 
     await page.evaluate(() => { window.paintedText = []; });
-    await page.mouse.click(99, 43);
-    await waitForText('Settings');
+    await pressHeader(page, 'All puzzles');
+    await waitForPicker(page);
     await page.mouse.move(340, 300);
     await page.mouse.wheel(0, 1000);
     assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 120, 175), previewColor);
@@ -3496,8 +3630,8 @@ scenario('the picker scrolls past two cards and clips previews', async (t) => {
     await waitForText('0 of 40 placed');
     await page.waitForFunction(() => window.sourceAnimationSpeed === 'Fast');
     await page.evaluate(() => { window.paintedText = []; });
-    await page.touchscreen.tap(99, 49);
-    await waitForText('Settings');
+    await pressHeader(page, 'All puzzles', true);
+    await waitForPicker(page);
     assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 140, 410), previewColor,
       'Returning by touch should restore the swiped picker offset');
     assert.deepEqual(errors, []);
@@ -3556,7 +3690,8 @@ scenario('tablet touch scrolls, resizes, zooms, cancels, and places pieces', asy
   const panned = await canvas.screenshot();
   assert.deepEqual(await pixelAt(page, panned, target.x, target.y), panelBackground, 'One finger should pan the zoomed board');
   assert.deepEqual(await pixelAt(page, panned, target.x + 150, target.y), sky, 'Placed pieces should follow the pan');
-  await page.touchscreen.tap(984, 119);
+  const fit = (await playLayout(page)).fitButton;
+  await page.touchscreen.tap(fit.x + fit.width - 4, fit.y + fit.height / 2);
   const fitted = await canvas.screenshot();
   const fittedTarget = cellCenter(wide, 0, 0);
   assert.deepEqual(await pixelAt(page, fitted, fittedTarget.x, fittedTarget.y), sky, 'A tap near the edge of Fit board should recenter the placed piece');
@@ -3565,16 +3700,16 @@ scenario('tablet touch scrolls, resizes, zooms, cancels, and places pieces', asy
   await page.setViewportSize({ width: 768, height: 1024 });
   await page.waitForFunction(() => document.querySelector('canvas').height === 1024);
   await page.evaluate(() => { window.paintedText = []; });
-  await page.touchscreen.tap(99, 43);
-  await waitForText('Windmill');
+  await pressHeader(page, 'All puzzles', true);
+  await waitForPicker(page);
   await page.touchscreen.tap(395, 180);
   await waitForText('Resume');
   await page.evaluate(() => { window.paintedText = []; });
   await clickDialog(100, resumeActionY);
   await waitForText('1 of 8 placed');
   await page.evaluate(() => { window.paintedText = []; });
-  await page.touchscreen.tap(99, 43);
-  await waitForText('Windmill');
+  await pressHeader(page, 'All puzzles', true);
+  await waitForPicker(page);
   await page.touchscreen.tap(395, 180);
   await waitForText('Resume');
   await clickDialog(-6, resumeActionY);
@@ -3597,11 +3732,10 @@ scenario('tray settings move the live tray and rotate touch gestures with it', a
   const boardColor = [32, 46, 42, 255];
   const selectedColor = [75, 108, 94, 255];
   const layout = {
-    Left: { choice: [-102, settingsY.firstTray], scroll: [0, -100], lift: [85, 0] },
-    Right: { choice: [0, settingsY.firstTray], scroll: [0, -100], lift: [-85, 0] },
-    Bottom: { choice: [102, settingsY.firstTray], scroll: [-46, 0], lift: [0, -90] },
-    Top: { choice: [-102, settingsY.secondTray], scroll: [-46, 0], lift: [0, 95] },
-    Auto: { choice: [0, settingsY.secondTray] },
+    Left: { scroll: [0, -100], lift: [85, 0] },
+    Right: { scroll: [0, -100], lift: [-85, 0] },
+    Bottom: { scroll: [-46, 0], lift: [0, -90] },
+    Top: { scroll: [-46, 0], lift: [0, 95] },
   };
   const sample = async (...point) => pixelAt(page, await canvas.screenshot(), ...point);
   const assertSide = async (side) => {
@@ -3619,16 +3753,16 @@ scenario('tray settings move the live tray and rotate touch gestures with it', a
     assert.deepEqual(await pixelAt(page, frame, ...trayPoint), trayColor, `Expected tray on the ${side}`);
     assert.deepEqual(await pixelAt(page, frame, ...boardPoint), boardColor, `Expected board opposite the ${side} tray`);
   };
-  const tapSettings = paceRepeatClicks(() => page.touchscreen.tap(page.viewportSize().width - 74, 43));
+  const tapSettings = paceRepeatClicks(() => pressHeader(page, 'Settings', true));
   const openTraySettings = async () => {
     await page.evaluate(() => { window.paintedText = []; });
     await tapSettings();
     await waitForText('Puzzle tray');
   };
-  const closeSettings = () => clickSetting(101, settingsY.done);
+  const closeSettings = () => clickSetting('Done');
   const selectSide = async (side) => {
     await openTraySettings();
-    await clickSetting(...layout[side].choice);
+    await clickSetting(side);
     assert.equal((await readSave(page)).settings.trayPosition, side);
     await closeSettings();
   };
@@ -3645,7 +3779,11 @@ scenario('tray settings move the live tray and rotate touch gestures with it', a
   await waitForText('0 of 8 placed');
   await assertSide('Bottom');
   await openTraySettings();
-  assert.deepEqual(await sample(portrait.width / 2 + 25, 543), selectedColor, 'Auto should be selected without a saved setting');
+  const settingFill = async (text) => {
+    const { x, y, width, height } = await uiControl(page, { sceneKey: 'Settings', text });
+    return sample(x + width / 4, y + height / 4);
+  };
+  assert.deepEqual(await settingFill('Auto'), selectedColor, 'Auto should be selected without a saved setting');
   await closeSettings();
 
   for (const side of ['Left', 'Right', 'Top', 'Bottom']) {
@@ -3738,7 +3876,7 @@ scenario('tray settings move the live tray and rotate touch gestures with it', a
   await page.reload();
   await waitForText('Windmill');
   await openTraySettings();
-  assert.deepEqual(await sample(537, 441), selectedColor, 'Right should remain selected after reload');
+  assert.deepEqual(await settingFill('Right'), selectedColor, 'Right should remain selected after reload');
   await closeSettings();
   await page.touchscreen.tap(522, 180);
   await waitForText('Resume');

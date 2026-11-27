@@ -7,15 +7,14 @@ import { puzzleSources } from '../puzzles/catalog';
 import type { PuzzleSource } from '../puzzles/PuzzleSource';
 import { makeButton, makeOptionTile, type UIScene } from './button';
 import type { PuzzleSelection } from './PlayPuzzleScene';
-import { artworkCreditLines, showArtworkCredits } from './puzzleCreditsDialog';
-import { showPuzzleDetails } from './puzzleDetailsDialog';
+import { artworkCreditLines, showPuzzleDetails } from './puzzleDetailsDialog';
 import { showPuzzleFilters } from './puzzleFilterDialog';
 import { activeFilterCount, matchesPuzzleFilters, noPuzzleFilters, samePuzzleFilters, type PuzzleFilters } from './puzzleFilters';
-import { headerControlGap, headerInset, makeSettingsButton, puzzleSpacing } from './puzzleHeader';
+import { headerControlGap, headerInset, makeFiltersButton, makeSettingsButton, puzzleSpacing } from './puzzleHeader';
 import { makePreviewCornerCutout, makePuzzlePickerCard, maxPickerCardWidth } from './PuzzlePickerCard';
 import { showPuzzleOptions, showResumePuzzle } from './puzzleOptions';
 import { openSettings } from './SettingsScene';
-import { styleWithTheme } from './theme';
+import { metadataTextStyle, styleWithTheme } from './theme';
 
 const scrollbarWidth = 10;
 const scrollbarGap = 14;
@@ -118,18 +117,12 @@ export class SelectPuzzleScene extends Phaser.Scene {
       const completions = gameSave.completionCount(source.scene.key);
       const progress = resumableProgress(source);
       const status = cardStatus(progress, completions);
-      const credits = artworkCreditLines(source.attribution);
-      const openCredits = credits.length ? () => {
-        if (dialogOpen) return;
-        openDialog();
-        showArtworkCredits(this, credits, closeDialog);
-      } : undefined;
       const card = makePuzzlePickerCard(this, source, status, cutout, listBounds, scrollThreshold,
         () => openCard(source, progress), (copyPreview) => {
           if (dialogOpen) return;
           openDialog();
           showPuzzleDetails(this, source, status, copyPreview(), closeDialog);
-        }, openCredits);
+        }, artworkCreditLines(source.attribution).length > 0);
       return { card, source, completions };
     });
     const grid = this.rexUI.add.gridSizer({
@@ -166,14 +159,21 @@ export class SelectPuzzleScene extends Phaser.Scene {
       openDialog();
       openSettings(this, { onClose: closeDialog });
     });
-    const filtersButton = makeButton(this, 0, 0, 'Filters', (pointer) => {
-      if (dialogOpen || pointer.wasCanceled) return;
+    const filtersButton = makeFiltersButton(this, () => {
+      if (dialogOpen) return;
       openDialog();
       showPuzzleFilters(this, this.filters, (filters) => {
         closeDialog();
         if (filters) applyFilters(filters);
       });
-    }, 130);
+    });
+    const filterBadge = this.add.text(0, 0, '', {
+      ...metadataTextStyle, fontSize: '12px', fontStyle: 'bold', padding: { x: 3, y: 1 },
+    }).setOrigin(1, 0);
+    styleWithTheme(filterBadge, (colors) => {
+      filterBadge.setColor(colors.primaryButtonText)
+        .setBackgroundColor(Phaser.Display.Color.IntegerToColor(colors.primaryButton).rgba);
+    });
     const previewSizeRow = this.rexUI.add.sizer({ space: { item: headerControlGap } }).setOrigin(0);
     const previewSizeTiles = pickerPreviewSizes.map((size) => {
       const tile = makeOptionTile(this, {
@@ -208,7 +208,8 @@ export class SelectPuzzleScene extends Phaser.Scene {
     let cardLayout: { columns: number; width: number; stackStatus: boolean; compact: boolean } | undefined;
     const updateFilterCaption = () => {
       const count = activeFilterCount(this.filters);
-      filtersButton.setText(count ? `Filters (${count})` : 'Filters').layout();
+      filtersButton.setData('filterCount', count);
+      filterBadge.setText(String(count)).setVisible(count > 0);
     };
     const updatePreviewSizeTiles = () => {
       for (const { size, tile } of previewSizeTiles) tile.setSelected(gameSave.settings.pickerPreviewSize === size);
@@ -234,6 +235,7 @@ export class SelectPuzzleScene extends Phaser.Scene {
       const { width, height } = this.scale.gameSize;
       settings.layout(width);
       filtersButton.setPosition(settings.button.x - filtersButton.width - headerControlGap, settings.button.y);
+      filterBadge.setPosition(filtersButton.x + filtersButton.width - 2, filtersButton.y + 2);
       const buttonHeight = Math.max(settings.button.height, filtersButton.height);
       const headerBottom = puzzleSpacing + buttonHeight;
       const sizesFitInline = headerInset + previewSizeRow.width + headerControlGap <= filtersButton.x;

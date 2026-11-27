@@ -8,6 +8,7 @@ import type { PuzzleOptions, PuzzleProgress } from '../persistence/GameSave';
 import { puzzleAnimationSpeeds, type PuzzleSource } from '../puzzles/PuzzleSource';
 import { puzzleSizeChoices } from '../puzzles/puzzleSizeChoices';
 import { makeButtonLabel, makeOptionTile, type UIScene } from './button';
+import { makeScrollableDialogBody } from './scrollableDialogBody';
 import { metadataTextStyle, palette, styleWithTheme } from './theme';
 
 const optionWidth = 96;
@@ -36,27 +37,29 @@ export function showPuzzleOptions(
   const sizeChoices = puzzleSizeChoices(source);
   const initialSize = sizeChoices.find(({ targetCount }) => targetCount === defaults?.pieceCount) ?? sizeChoices[0];
   const sizeTileWidth = sizeChoices.length > 4 ? fiveOptionWidth : optionWidth;
-  const sizeButtons = makeRadioButtons(scene, sizeChoices.map(({ targetCount }) => ({
+  const buttonsFor = (options: readonly Option[], selected: string, width?: number, fontSize?: string) =>
+    makeRadioButtons(scene, options, selected, (pointer) => scroll.containsTap(pointer), width, fontSize);
+  const sizeButtons = buttonsFor(sizeChoices.map(({ targetCount }) => ({
     name: String(targetCount),
     label: String(targetCount),
   })), String(initialSize.targetCount), sizeTileWidth);
-  const shapeButtons = makeRadioButtons(scene, pieceShapeIds.map((shape) => ({
+  const shapeButtons = buttonsFor(pieceShapeIds.map((shape) => ({
     name: shape,
     height: 52,
     drawIcon: () => drawPieceShapeIcon(scene, shape),
   })), defaults?.pieceShape ?? defaultPieceShape, fiveOptionWidth);
-  const styleButtons = makeRadioButtons(scene, styles.map((style) => ({
+  const styleButtons = buttonsFor(styles.map((style) => ({
     name: style,
     drawIcon: () => drawConnectorIcon(scene, style),
   })), defaults?.connectorStyle ?? 'classic');
-  const speedButtons = source.motion === 'Animated' ? makeRadioButtons(scene, puzzleAnimationSpeeds.map((speed) => ({
+  const speedButtons = source.motion === 'Animated' ? buttonsFor(puzzleAnimationSpeeds.map((speed) => ({
     name: speed,
     label: speed,
   })), defaults?.animationSpeed ?? 'Normal') : undefined;
-  const rotationButtons = makeRadioButtons(scene, ['Off', 'On'].map((label) => ({ name: label, label })),
+  const rotationButtons = buttonsFor(['Off', 'On'].map((label) => ({ name: label, label })),
     defaults?.pieceRotation ? 'On' : 'Off');
   const modes = Object.keys(challengeModes) as ChallengeMode[];
-  const modeButtons = makeRadioButtons(scene, modes.map((mode) => ({
+  const modeButtons = buttonsFor(modes.map((mode) => ({
     name: mode,
     label: mode === 'sequential-window' ? challengeModes[mode].label.replace(' ', '\n') : challengeModes[mode].label,
   })), defaults?.challengeMode ?? 'none', fiveOptionWidth, '14px');
@@ -105,7 +108,8 @@ export function showPuzzleOptions(
     makeButtonLabel(scene, 'Cancel', 92, 52),
     makeButtonLabel(scene, 'Play', 92, 52, true),
   ];
-  return showPickerDialog(scene, source.title, content, actions, (action) => {
+  const scroll = makeScrollableDialogBody(scene, content, depth.controls);
+  return showPickerDialog(scene, source.title, scroll.body, actions, (action) => {
     onClose();
     if (action !== 1) return;
 
@@ -121,7 +125,7 @@ export function showPuzzleOptions(
         connectorStyle: style, animationSpeed: speed, challengeMode, pieceRotation,
       });
     }
-  });
+  }, { fitContent: scroll.fitContent });
 }
 
 export function showResumePuzzle(
@@ -177,12 +181,13 @@ export function showPickerDialog(
   const radius = artworkHeader ? { tl: title.cornerRadius, tr: title.cornerRadius, bl: 16, br: 16 } : 16;
   const inset = artworkHeader ? 0 : pickerDialogInset;
   const bodyInset = artworkHeader ? pickerDialogInset : 0;
+  const background = scene.rexUI.add.roundRectangle(0, 0, 1, 1, radius).setDepth(depth.panel);
+  const titleLabel = artworkHeader ? undefined : scene.add.text(0, 0, title, {
+    fontFamily: 'system-ui', fontSize: '25px', fontStyle: 'bold',
+  }).setFixedSize(0, 34).setDepth(depth.controls);
   const dialog = scene.rexUI.add.dialog({
-    background: scene.rexUI.add.roundRectangle(0, 0, 1, 1, radius, palette.surface)
-      .setStrokeStyle(1, palette.border).setDepth(depth.panel),
-    title: artworkHeader ? title.artwork.setDepth(depth.controls) : scene.add.text(0, 0, title, {
-      fontFamily: 'system-ui', fontSize: '25px', fontStyle: 'bold', color: palette.text,
-    }).setFixedSize(0, 34).setDepth(depth.controls),
+    background,
+    title: artworkHeader ? title.artwork.setDepth(depth.controls) : titleLabel,
     content,
     actions: actions.map((button) => button.setDepth(depth.controls)),
     align: { title: 'left', actions: 'right' },
@@ -191,6 +196,11 @@ export function showPickerDialog(
       contentLeft: bodyInset, contentRight: bodyInset, actionsLeft: bodyInset, actionsRight: bodyInset,
     },
     click: { mode: 'release', clickInterval: 0 },
+  });
+  styleWithTheme(dialog, (colors) => {
+    cover.setFillStyle(colors.modalBackdrop, 0.72);
+    background.setFillStyle(colors.surface).setStrokeStyle(1, colors.border);
+    titleLabel?.setColor(colors.text);
   });
   if (options?.footerLabel) {
     const actionsRow = dialog.getElement('actionsSizer') as ReturnType<UIScene['rexUI']['add']['sizer']>;
@@ -203,6 +213,7 @@ export function showPickerDialog(
   const fit = () => {
     const { width, height } = scene.scale.gameSize;
     const { zoom } = scene.cameras.main;
+    dialog.setScale(1);
     if (options?.fitContent) {
       const widthScale = Math.min(1, Math.max(1, width - 24) / dialog.width);
       const chromeHeight = dialog.height - content.height;
@@ -242,24 +253,23 @@ export function showPickerDialog(
 }
 
 function makeRadioButtons(
-  scene: UIScene, options: readonly Option[], selectedName: string, width = optionWidth, fontSize = '15px',
+  scene: UIScene, options: readonly Option[], selectedName: string, canSelect: (pointer: Phaser.Input.Pointer) => boolean,
+  width = optionWidth, fontSize = '15px',
 ) {
-  const dragThreshold = 12;
+  const buttons = scene.rexUI.add.sizer({ orientation: 'x', space: { item: optionGap } });
   const tiles = options.map((option) => makeOptionTile(scene, {
-    ...option, width, fontSize, depth: depth.controls, contentDepth: depth.tileContents, dragThreshold,
-  }));
-
-  const buttons = scene.rexUI.add.buttons({
-    orientation: 'x', type: 'radio', buttons: tiles.map(({ button }) => button),
-    click: { threshold: dragThreshold, clickInterval: 0 },
-    space: { item: optionGap },
-    setValueCallback: (button, selected) => {
-      const tile = tiles.find((entry) => entry.button === button)!;
-      tile.setSelected(selected);
+    ...option, width, fontSize, depth: depth.controls, contentDepth: depth.tileContents, dragThreshold: 10,
+    onClick: (pointer) => {
+      if (!canSelect(pointer)) return;
+      selectedName = option.name;
+      updateSelection();
+      buttons.emit('button.click');
     },
-  });
-  for (const { button } of tiles) button.input!.cursor = 'pointer';
-  return buttons.setSelectedButtonName(selectedName);
+  }));
+  const updateSelection = () => tiles.forEach((tile) => tile.setSelected(tile.button.name === selectedName));
+  tiles.forEach(({ button }) => buttons.add(button));
+  updateSelection();
+  return Object.assign(buttons, { getSelectedButtonName: () => selectedName });
 }
 
 function drawPieceShapeIcon(scene: UIScene, shape: PieceShape) {

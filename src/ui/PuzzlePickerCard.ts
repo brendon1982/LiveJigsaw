@@ -46,8 +46,8 @@ export function makePuzzlePickerCard(
   listBounds: Phaser.Geom.Rectangle,
   scrollThreshold: number,
   openOptions: () => void,
-  openMore: (copyPreview: () => Phaser.GameObjects.Image) => void,
-  openCredits?: () => void,
+  openDetails: (copyPreview: () => Phaser.GameObjects.Image) => void,
+  hasCredits: boolean,
 ) {
   const background = scene.rexUI.add.roundRectangle(0, 0, 1, 1, pickerCardCornerRadius).setOrigin(0);
   let preview: Phaser.GameObjects.RenderTexture | undefined;
@@ -123,10 +123,10 @@ export function makePuzzlePickerCard(
     return artwork;
   }
   const { button: more } = makeFooterAction('more', '...', moreWidth, () => {
-    if (compact) openMore(copyPreview);
+    if (compact) openDetails(copyPreview);
   });
   const artistName = source.attribution?.name?.trim() || 'Credits';
-  const credits = openCredits && makeFooterAction('credits', artistName, footerActionHeight, openCredits);
+  const credits = hasCredits && makeFooterAction('credits', artistName, footerActionHeight, () => openDetails(copyPreview));
   return {
     container,
     preparePreview() {
@@ -197,7 +197,7 @@ export function makePuzzlePickerCard(
   };
 }
 
-function fitLabel(label: Phaser.GameObjects.Text, value: string, width: number) {
+export function fitLabel(label: Phaser.GameObjects.Text, value: string, width: number) {
   const { canvas, context } = label;
   label.style.syncFont(canvas, context);
   if (context.measureText(value).width <= width) {
@@ -209,7 +209,7 @@ function fitLabel(label: Phaser.GameObjects.Text, value: string, width: number) 
   label.setText(text ? `${text}…` : '');
 }
 
-function makePreview(scene: UIScene, source: PuzzleSource, cutout: Phaser.Textures.CanvasTexture) {
+export function makePreview(scene: UIScene, source: PuzzleSource, cutout: Phaser.Textures.CanvasTexture) {
   const { width, height } = previewSize;
   const sourceScale = Math.min(1, source.maxViewport.width / width, source.maxViewport.height / height);
   const objects = source.drawPreview(scene, { width: width * sourceScale, height: height * sourceScale });

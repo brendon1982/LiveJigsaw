@@ -7,13 +7,16 @@ import { gameSave } from '../persistence';
 import type { PuzzleSetup } from '../persistence/GameSave';
 import { LivePuzzleCapture } from '../rendering/LivePuzzleCapture';
 import type { PuzzleSource } from '../puzzles/PuzzleSource';
-import { makeButton } from './button';
+import { addPressFeedback } from './button';
+import { openPlayInfo, showChallengeRules } from './PlayInfoScene';
 import { playWorkspace } from './playLayout';
-import { headerControlGap, headerInset, makeSettingsButton, puzzleSpacing } from './puzzleHeader';
+import { makeDetailsArtwork, showPuzzleDetails } from './puzzleDetailsDialog';
+import { headerControlGap, headerInset, makeBackButton, makeSettingsButton, puzzleSpacing } from './puzzleHeader';
 import { PuzzleBoardView } from './PuzzleBoardView';
+import { fitLabel } from './PuzzlePickerCard';
 import { SelectPuzzleScene } from './SelectPuzzleScene';
 import { openSettings } from './SettingsScene';
-import { styleWithTheme } from './theme';
+import { metadataTextStyle, palette, styleWithTheme } from './theme';
 
 export type PuzzleSelection = {
   source: PuzzleSource;
@@ -42,9 +45,7 @@ export class PlayPuzzleScene extends Phaser.Scene {
       ...puzzle.board.size, seed: puzzle.seed, animationSpeed,
     });
 
-    const backButton = makeButton(this, headerInset, puzzleSpacing, 'All puzzles', (pointer) => {
-      if (!pointer.wasCanceled) this.scene.start(SelectPuzzleScene.key);
-    }, 150);
+    const backButton = makeBackButton(this, () => this.scene.start(SelectPuzzleScene.key));
     const settings = makeSettingsButton(this, () => {
       board.cancelInteraction();
       openSettings(this, {
@@ -53,18 +54,35 @@ export class PlayPuzzleScene extends Phaser.Scene {
       });
     });
     const title = this.add.text(0, 0, source.title, {
-      fontFamily: 'system-ui', fontSize: '34px', fontStyle: 'bold',
+      fontFamily: 'system-ui', fontSize: '20px', fontStyle: 'bold',
     }).setOrigin(0, 0.5);
-    const progress = this.add.text(0, 0, '', {
-      fontFamily: 'system-ui', fontSize: '17px',
-    }).setOrigin(0, 0.5);
-    const challenge = challengeMode === 'none' ? undefined : this.add.text(0, 0, `· ${challengeModes[challengeMode].label}`, {
-      fontFamily: 'system-ui', fontSize: '17px',
-    }).setOrigin(0, 0.5);
+    const progress = this.add.text(0, 0, '', metadataTextStyle).setOrigin(0, 0.5);
+    const makeHeaderLink = (name: string, text: string, open: () => void) => {
+      const link = this.add.text(0, 0, text, metadataTextStyle).setName(name).setOrigin(0, 0.5);
+      this.rexUI.add.click(link, { threshold: 10, clickInterval: 0 })
+        .on('click', (_button: unknown, _object: unknown, pointer: Phaser.Input.Pointer) => {
+          if (pointer.wasCanceled) return;
+          board.cancelInteraction();
+          open();
+        });
+      link.input!.cursor = 'pointer';
+      let pressed = false;
+      const restyle = (colors: typeof palette) => link.setColor(pressed ? colors.text : colors.mutedText);
+      styleWithTheme(link, restyle);
+      addPressFeedback(link, (value) => { pressed = value; restyle(palette); }, 10);
+      return link;
+    };
+    const challengeLabel = challengeMode === 'none' ? '' : `· ${challengeModes[challengeMode].label}`;
+    const challenge = challengeMode === 'none' ? undefined : makeHeaderLink('Challenge rules', challengeLabel, () => {
+      openPlayInfo(this, (scene, close) => showChallengeRules(scene, challengeMode, close));
+    });
+    const artistName = source.attribution?.name?.trim();
+    const artist = artistName ? makeHeaderLink('Artwork details', `· ${artistName}`, () => {
+      openPlayInfo(this, (scene, close) => showPuzzleDetails(scene, source, progress.text, makeDetailsArtwork(scene, source), close));
+    }) : undefined;
     styleWithTheme(title, (colors) => {
       title.setColor(colors.text);
       progress.setColor(colors.mutedText);
-      challenge?.setColor(colors.mutedText);
     });
     const pieceCount = puzzle.pieces.length;
     let headerBottom = 0;
@@ -74,30 +92,28 @@ export class PlayPuzzleScene extends Phaser.Scene {
       settings.layout(width);
 
       const titleX = narrow ? headerInset : backButton.x + backButton.width + puzzleSpacing;
-      title.setFontSize(narrow ? 20 : 34);
-      progress.setFontSize(narrow ? 14 : 17);
-      challenge?.setFontSize(narrow ? 14 : 17);
-      const progressWidth = Math.ceil(progress.context.measureText(`${pieceCount} of ${pieceCount} placed`).width);
-      const challengeWidth = challenge ? headerControlGap + challenge.width : 0;
-      const inlineRight = titleX + title.width + headerControlGap + progressWidth + challengeWidth;
-      const stacked = narrow || width < 700 || inlineRight + puzzleSpacing > settings.button.x;
-      if (stacked && !narrow) {
-        title.setFontSize(20);
-        progress.setFontSize(15);
-        challenge?.setFontSize(15);
-      }
-
-      const progressHeight = Math.max(progress.height, challenge?.height ?? 0);
-      const textHeight = stacked ? title.height + progressHeight : Math.max(title.height, progressHeight);
+      const textRight = narrow ? width - headerInset : settings.button.x - puzzleSpacing;
+      fitLabel(title, source.title, textRight - titleX);
+      for (const label of [progress, challenge, artist]) label?.setFontSize(narrow ? 14 : 15);
+      const textHeight = title.height + progress.height;
       const buttonHeight = Math.max(backButton.height, settings.button.height);
       const rowHeight = Math.max(buttonHeight, textHeight);
       const textTop = narrow ? puzzleSpacing + buttonHeight + headerControlGap
         : puzzleSpacing + (rowHeight - textHeight) / 2;
-      const titleY = textTop + (stacked ? title.height : textHeight) / 2;
-      const progressY = stacked ? textTop + title.height + progressHeight / 2 : titleY;
-      title.setPosition(titleX, titleY);
-      progress.setPosition(stacked ? titleX : titleX + title.width + headerControlGap, progressY);
-      challenge?.setPosition(progress.x + progress.width + headerControlGap, progressY);
+      const progressY = textTop + title.height + progress.height / 2;
+      title.setPosition(titleX, textTop + title.height / 2);
+      progress.setPosition(titleX, progressY);
+      let linkX = progress.x + progress.width + headerControlGap;
+      if (challenge) {
+        const artistSpace = artist ? 48 : 0;
+        fitLabel(challenge, challengeLabel, textRight - linkX - artistSpace);
+        challenge.setPosition(linkX, progressY);
+        linkX += challenge.width + headerControlGap;
+      }
+      if (artist) {
+        fitLabel(artist, `· ${artistName}`, textRight - linkX);
+        artist.setPosition(linkX, progressY);
+      }
       headerBottom = narrow ? textTop + textHeight : puzzleSpacing + rowHeight;
     };
     this.scale.on(Phaser.Scale.Events.RESIZE, layoutHeader);
@@ -113,7 +129,7 @@ export class PlayPuzzleScene extends Phaser.Scene {
         gameSave.completeAttempt(source.scene.key, { setup, completedAt: new Date().toISOString() });
         board.showCompletion();
         completionAction = this.time.delayedCall(completionPreviewDuration, () => {
-          backButton.setText('Choose puzzle').setData('primary', true).layout();
+          backButton.setData('primary', true);
         });
       } else {
         saveProgress();

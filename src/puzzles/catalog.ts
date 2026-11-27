@@ -92,6 +92,7 @@ import { shadowbeltSource } from './shadowbelt/shadowbeltSource';
 import { driftingOrbitsSource } from './driftingOrbits/driftingOrbitsSource';
 import { neonCircuitSource } from './neonCircuit/neonCircuitSource';
 import { pastriesAndCoffeeSource } from './pastriesAndCoffee/pastriesAndCoffeeSource';
+import { pumpkinSpiceLatteSource } from './pumpkinSpiceLatte/pumpkinSpiceLatteSource';
 
 export const puzzleSources: readonly PuzzleSource[] = [
   windmillSource,
@@ -187,4 +188,5 @@ export const puzzleSources: readonly PuzzleSource[] = [
   driftingOrbitsSource,
   neonCircuitSource,
   pastriesAndCoffeeSource,
+  pumpkinSpiceLatteSource,
 ];

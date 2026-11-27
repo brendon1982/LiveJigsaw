@@ -850,6 +850,9 @@ scenario('the Flowers and Static filters open Cherry Blossoms with an adaptive c
   await page.touchscreen.tap(900, 430);
   await waitForText('Artwork credits');
   await waitForText('Umme Hani Ali');
+  const paintedCredits = await page.evaluate(() => window.paintedText.join(''));
+  assert.ok(paintedCredits.includes('https://unsplash.com/illustrations/pink-cherry-blossoms-on-branch--a5OyxkF24g'));
+  assert.ok(paintedCredits.includes('https://unsplash.com/@ummehaniali_22/illustrations'));
   await page.keyboard.press('Escape');
 
   await page.touchscreen.tap(660, 220);

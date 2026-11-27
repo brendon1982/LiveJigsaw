@@ -28,7 +28,8 @@ export const cherryBlossomsSource: PuzzleSource = {
   motion: 'Static',
   attribution: {
     name: 'Umme Hani Ali',
-    url: 'https://unsplash.com/illustrations/pink-cherry-blossoms-on-branch--a5OyxkF24g',
+    sourceUrl: 'https://unsplash.com/illustrations/pink-cherry-blossoms-on-branch--a5OyxkF24g',
+    artistUrl: 'https://unsplash.com/@ummehaniali_22/illustrations',
   },
   maxViewport: artworkSize,
   scene: CherryBlossomsScene,

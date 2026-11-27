@@ -6,8 +6,9 @@ import { palette } from './theme';
 const contentWidth = 326;
 
 export function artworkCreditLines(attribution?: PuzzleAttribution) {
-  return [attribution?.name, attribution?.description, attribution?.url]
-    .map((value) => value?.trim() ?? '').filter(Boolean);
+  if (!attribution) return [];
+  const { name, description, sourceUrl, artistUrl } = attribution;
+  return [name, description, sourceUrl, artistUrl].map((value) => value?.trim() ?? '').filter(Boolean);
 }
 
 export function showArtworkCredits(scene: UIScene, credits: readonly string[], onClose: () => void) {

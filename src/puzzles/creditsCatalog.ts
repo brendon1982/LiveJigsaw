@@ -7,10 +7,10 @@ export const puzzleCredits = {
   },
   kenney: {
     name: 'Kenny',
-    url: 'https://kenney.nl/',
+    sourceUrl: 'https://kenney.nl/',
   },
   craftpix: {
     name: 'Craftpix',
-    url: 'https://craftpix.net/',
+    sourceUrl: 'https://craftpix.net/',
   },
 } as const satisfies Record<string, PuzzleAttribution>;

@@ -16,7 +16,8 @@ export type PuzzleSourceSceneData = Size & Readonly<{ seed: number; animationSpe
 export type PuzzleAttribution = Readonly<{
   name?: string;
   description?: string;
-  url?: string;
+  sourceUrl?: string;
+  artistUrl?: string;
 }>;
 
 /**

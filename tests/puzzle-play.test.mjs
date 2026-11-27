@@ -1617,6 +1617,11 @@ scenario('live pieces scroll, reflow, and snap to the pannable board', async (t)
   await waitForText('1 of 8 placed');
   const placed = await canvas.screenshot();
   assert.deepEqual(await pixelAt(page, placed, dropX, dropY), sky, 'Zooming at the drop target should keep it under the pointer');
+  const guidePixel = (screenshot) => pixelAt(page, screenshot, dropX + 255, dropY);
+  const assertGuideColor = (actual, expected, message) => {
+    assert.ok(actual.every((channel, i) => Math.abs(channel - expected[i]) <= 1),
+      `${message}. Expected ${expected}, got ${actual}`);
+  };
   await clickSettings();
   await waitForText('Color theme');
   await pressSetting(page, 'Slate');
@@ -1629,7 +1634,9 @@ scenario('live pieces scroll, reflow, and snap to the pannable board', async (t)
   await waitForText('Color theme');
   await pressSetting(page, 'Dark');
   await pressSetting(page, 'Done');
-  assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 1317, 100), [27, 28, 30, 255], 'Dark should use its own board colour');
+  const dark = await canvas.screenshot();
+  assert.deepEqual(await pixelAt(page, dark, 1317, 100), [27, 28, 30, 255], 'Dark should use its own board colour');
+  assertGuideColor(await guidePixel(dark), [67, 74, 74, 255], 'The guide backing should darken when switching themes');
   await page.evaluate(() => { window.paintedText = []; });
   await clickSettings();
   await waitForText('Color theme');
@@ -1641,13 +1648,8 @@ scenario('live pieces scroll, reflow, and snap to the pannable board', async (t)
   assert.deepEqual(await pixelAt(page, unfiltered, 1317, 100), panelBackground);
   const trayPieceColor = await pixelAt(page, unfiltered, 85, 140);
   assert.notDeepEqual(trayPieceColor, [52, 66, 62, 255], 'The sample should be on a tray piece');
-  const guidePixel = (screenshot) => pixelAt(page, screenshot, dropX + 255, dropY);
   const originalGuide = await guidePixel(unfiltered);
-  const assertGuideColor = (actual, expected, message) => {
-    assert.ok(actual.every((channel, i) => Math.abs(channel - expected[i]) <= 1),
-      `${message}. Expected ${expected}, got ${actual}`);
-  };
-  assertGuideColor(originalGuide, [67, 85, 81, 255], 'The original guide should blend with the board at 22% opacity');
+  assertGuideColor(originalGuide, [76, 83, 82, 255], 'The original guide should blend with neutral gray at 22% opacity');
 
   const selectFilter = async (label, name) => {
     await page.evaluate(() => { window.paintedText = []; });
@@ -1666,9 +1668,20 @@ scenario('live pieces scroll, reflow, and snap to the pannable board', async (t)
     assert.deepEqual(await pixelAt(page, screenshot, 85, 140), trayPieceColor, 'The tray piece should keep its original color');
     return guidePixel(screenshot);
   };
-  assertGuideColor(await selectFilter('Black and White', 'grayscale'), [107, 116, 113, 255], 'Black and White should blend with the board at 42% opacity');
-  assertGuideColor(await selectFilter('Sepia', 'sepia'), [88, 92, 76, 255], 'Sepia should blend with the board at 22% opacity');
-  assertGuideColor(await selectFilter('Faded', 'faded'), [94, 108, 105, 255], 'Faded should blend with the board at 42% opacity');
+  assertGuideColor(await selectFilter('Black and White', 'grayscale'), [114, 114, 114, 255], 'Black and White should stay neutral at 42% opacity');
+  assertGuideColor(await selectFilter('Sepia', 'sepia'), [97, 90, 77, 255], 'Sepia should blend with neutral gray at 22% opacity');
+
+  await clickSettings();
+  await pressSetting(page, 'Rose');
+  await pressSetting(page, 'Done');
+  const [sepiaRed, , sepiaBlue] = await guidePixel(await canvas.screenshot());
+  assert.ok(sepiaRed - sepiaBlue >= 30, 'Sepia should retain its warm tones against the light backing');
+  await clickSettings();
+  await pressSetting(page, 'Forest');
+  await pressSetting(page, 'Done');
+  assertGuideColor(await guidePixel(await canvas.screenshot()), [97, 90, 77, 255], 'Switching back should restore Forest’s Sepia strength');
+
+  assertGuideColor(await selectFilter('Faded', 'faded'), [100, 106, 106, 255], 'Faded should blend with neutral gray at 42% opacity');
 
   await move(dropX, dropY);
   await page.mouse.wheel(0, 200);
@@ -2096,7 +2109,8 @@ scenario('Hex Coast captures continuous roads and animated water', async (t) => 
     for (let x = 0; x < width; x += 1) {
       const pixel = (y * width + x) * 4;
       const red = data[pixel], green = data[pixel + 1], blue = data[pixel + 2];
-      const road = Math.abs(red - 74) <= 2 && Math.abs(green - 77) <= 2 && Math.abs(blue - 59) <= 2;
+      // Sample the road color as displayed at 22% opacity over Forest's neutral backing.
+      const road = Math.abs(red - 83) <= 2 && Math.abs(green - 75) <= 2 && Math.abs(blue - 60) <= 2;
       run = road ? run + 1 : 0;
       longestRoad = Math.max(longestRoad, run);
     }

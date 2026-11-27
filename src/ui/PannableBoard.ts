@@ -5,10 +5,17 @@ import type { LivePuzzleCapture } from '../rendering/LivePuzzleCapture';
 import { activePuzzleFilter, onPuzzleFilterChange, type PuzzleArtworkFilter } from './puzzleFilter';
 import { palette, styleWithTheme } from './theme';
 
+function neutralBoardColor(color: number): number {
+  const { red, green, blue } = Phaser.Display.Color.IntegerToColor(color);
+  const gray = Math.round(0.2126 * red + 0.7152 * green + 0.0722 * blue);
+  return Phaser.Display.Color.GetColor(gray, gray, gray);
+}
+
 export class PannableBoard {
   readonly layer: Phaser.GameObjects.Layer;
   readonly camera: Phaser.Cameras.Scene2D.Camera;
   private readonly guide: Phaser.GameObjects.Image;
+  private readonly guideBacking?: Phaser.GameObjects.Rectangle;
   private readonly border?: Phaser.GameObjects.Rectangle;
   private readonly placedMask: Phaser.Textures.CanvasTexture;
   private readonly placedImage: Phaser.GameObjects.Image;
@@ -30,8 +37,17 @@ export class PannableBoard {
     this.guide = guide;
     const setGuideOpacity = (colors: typeof palette) => {
       if (this.showingFinishedArtwork) return;
-      const filtered = activePuzzleFilter === 'grayscale' || activePuzzleFilter === 'faded';
-      guide.setAlpha(filtered ? colors.filteredGuideOpacity : colors.guideOpacity);
+      switch (activePuzzleFilter) {
+        case 'sepia':
+          guide.setAlpha(colors.sepiaGuideOpacity);
+          break;
+        case 'grayscale':
+        case 'faded':
+          guide.setAlpha(colors.filteredGuideOpacity);
+          break;
+        default:
+          guide.setAlpha(colors.guideOpacity);
+      }
     };
     let guideFilter: Phaser.Filters.ColorMatrix | undefined;
     const updateGuideFilter = (filter: PuzzleArtworkFilter | undefined) => {
@@ -68,6 +84,10 @@ export class PannableBoard {
       this.border = border;
       this.layer.add(border);
     } else {
+      const backing = scene.add.rectangle(0, 0, size.width, size.height).setOrigin(0);
+      styleWithTheme(backing, (colors) => backing.setFillStyle(neutralBoardColor(colors.board)));
+      this.guideBacking = backing;
+      this.layer.add(backing);
       styleWithTheme(guide, setGuideOpacity);
       updateGuideFilter(activePuzzleFilter);
       guide.once(Phaser.GameObjects.Events.DESTROY, onPuzzleFilterChange(updateGuideFilter));
@@ -109,7 +129,10 @@ export class PannableBoard {
     this.scene.tweens.add({ ...fade, targets: this.guide, alpha: 0 });
     this.scene.tweens.add({
       ...fade, targets: artwork, alpha: 1,
-      onComplete: () => this.placedImage.setVisible(false),
+      onComplete: () => {
+        this.placedImage.setVisible(false);
+        this.guideBacking?.setVisible(false);
+      },
     });
   }
 

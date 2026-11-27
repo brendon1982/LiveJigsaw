@@ -9,7 +9,7 @@ import { createPuzzle, puzzleSizePresets } from '../src/domain/puzzleSizes.ts';
 import { saveVersion } from '../src/persistence/saveMigrations.ts';
 
 const scenarios = [];
-const scenario = (name, run) => scenarios.push({ name, run });
+const scenario = (name, run, minimumTimeout = 0) => scenarios.push({ name, run, minimumTimeout });
 
 const filterY = { firstTheme: -256, secondTheme: -194, type: 83, completion: 174, motion: 262, action: 333 };
 const resumeActionY = 114;
@@ -88,7 +88,7 @@ async function touchController(page) {
 
 async function scrollPickerTo(page, wheelDelta) {
   await page.mouse.move(340, 300);
-  await page.mouse.wheel(0, -30000);
+  await page.mouse.wheel(0, -100_000);
   await page.mouse.wheel(0, wheelDelta);
 }
 
@@ -991,14 +991,14 @@ scenario('the picker shows newest puzzles first and only loads nearby previews',
     reducedMotion: 'reduce',
   });
   const gameScript = /\/assets\/index-[\w-]+\.js$/;
-  const staticArtwork = /\/assets\/(?:cherry-blossoms-on-branch|gray-panther|jungle-rhinos)-[\w-]+\.png$/;
-  const previewAsset = /\/assets\/(?:preview-[\w-]+\.png|(?:cherry-blossoms|gray-panther|jungle-rhinos)-preview-[\w-]+\.jpg)$/;
+  const rasterAsset = /\/assets\/[^/]+-[\w-]+\.(?:png|jpe?g|webp)$/;
+  const previewAsset = /\/assets\/(?:[^/]+-)?preview-[\w-]+\.(?:png|jpe?g|webp)$/;
   const requestedArtwork = [];
   const requestedPreviews = [];
   const scriptGate = Promise.withResolvers();
   const previewGate = Promise.withResolvers();
   page.on('request', (request) => {
-    if (staticArtwork.test(request.url())) requestedArtwork.push(request.url());
+    if (rasterAsset.test(request.url()) && !previewAsset.test(request.url())) requestedArtwork.push(request.url());
   });
   await page.route(gameScript, async (route) => {
     await scriptGate.promise;
@@ -1023,11 +1023,10 @@ scenario('the picker shows newest puzzles first and only loads nearby previews',
     await page.emulateMedia({ reducedMotion: 'no-preference' });
     assert.equal(await spinner.evaluate((element) => getComputedStyle(element).animationName), 'startup-spin');
 
-    const firstCardRequested = page.waitForRequest(/\/assets\/jungle-rhinos(?:-preview)?-[\w-]+\.(?:png|jpg)$/, { timeout: 4000 });
+    const firstCardRequested = page.waitForRequest(previewAsset, { timeout: 4000 });
     scriptGate.resolve();
-    await status.waitFor({ state: 'detached', timeout: 4000 });
-    await firstCardRequested;
-    assert.deepEqual(requestedArtwork, [], 'The picker must not request full-size static artwork');
+    await Promise.all([status.waitFor({ state: 'detached', timeout: 4000 }), firstCardRequested]);
+    assert.deepEqual(requestedArtwork, [], 'The picker must not request gameplay artwork');
     const placeholder = [48, 69, 63, 255];
     const topPreview = async () => pixelAt(page, await canvas.screenshot(), 380, 220);
     assert.deepEqual(await topPreview(), placeholder, 'A pending preview should leave the card in place');
@@ -1039,29 +1038,80 @@ scenario('the picker shows newest puzzles first and only loads nearby previews',
       artwork = await topPreview();
     }
     assert.notDeepEqual(artwork, placeholder, 'The preview should appear in the same card when it loads');
-    const expectPuzzleAt = async (y, title, countHeading = 'Piece count') => {
+    const expectPuzzleAt = async (y, title) => {
       await page.evaluate(() => { window.paintedText = []; });
       await page.mouse.click(380, y);
-      await waitForText(countHeading);
+      await waitForText('Piece count');
       await waitForText(title);
       await page.keyboard.press('Escape');
     };
-    await expectPuzzleAt(220, 'Jungle Rhinos', 'Target piece count');
-    await expectPuzzleAt(610, 'Gray Panther', 'Target piece count');
+    await expectPuzzleAt(220, 'Neon Circuit');
     await page.mouse.move(380, 400);
-    await page.mouse.wheel(0, 30000);
+    await page.mouse.wheel(0, 100_000);
     await canvas.screenshot();
     await expectPuzzleAt(780, 'Windmill');
-    await page.mouse.wheel(0, -30000);
+    await page.mouse.wheel(0, -100_000);
     assert.deepEqual(await topPreview(), artwork);
     assert.equal(new Set(requestedPreviews).size, requestedPreviews.length, 'Revisited cards should reuse their preview');
-    assert.deepEqual(requestedArtwork, [], 'Opening options and scrolling must not load full-size static artwork');
+    assert.deepEqual(requestedArtwork, [], 'Opening options and scrolling must not load gameplay artwork');
     assert.deepEqual(errors, []);
   } finally {
     scriptGate.resolve();
     previewGate.resolve();
   }
 });
+
+scenario('all 40 new Parallax puzzles capture a first frame and representative artwork moves', async (t) => {
+  await build({
+    base: '/parallax-fixture/',
+    logLevel: 'warn',
+    build: {
+      outDir: 'dist/parallax-fixture',
+      rollupOptions: { input: 'tests/fixtures/parallax-catalog.html' },
+    },
+  });
+  const { page, errors, origin } = await openGamePage(t, { viewport: { width: 320, height: 240 } });
+  await page.goto(`${origin}/parallax-fixture/tests/fixtures/parallax-catalog.html`);
+  await page.waitForFunction(() => window.parallaxSmoke, undefined, { timeout: 8000 });
+  const catalogue = await page.evaluate(() => window.parallaxSmoke.catalogue);
+  const first = catalogue.findIndex(({ key }) => key === 'Palmshore');
+  const last = catalogue.findIndex(({ key }) => key === 'NeonCircuit');
+  assert.ok(first >= 0 && last >= first, 'The catalogue should include the Palmshore–Neon Circuit batch');
+  const batch = catalogue.slice(first, last + 1);
+  assert.equal(batch.length, 40);
+  assert.equal(new Set(batch.map(({ key }) => key)).size, batch.length, 'The batch should have unique scene keys');
+  const motionSamples = new Set([0, Math.floor(batch.length / 2), batch.length - 1]);
+
+  for (const [index, { key, title, type, motion }] of batch.entries()) {
+    assert.equal(type, 'Parallax', title);
+    assert.equal(motion, 'Animated', title);
+    const checkMotion = motionSamples.has(index);
+    const { firstFrame, laterFrame, stopped, released } = await page.evaluate(async ({ key, title, checkMotion }) => {
+      try {
+        return await window.parallaxSmoke.capture(key, checkMotion);
+      } catch (error) {
+        throw new Error(`${title} (${key}): ${error.message}`);
+      }
+    }, { key, title, checkMotion });
+
+    const colors = new Set();
+    let opaquePixels = 0;
+    for (let pixel = 0; pixel < firstFrame.length; pixel += 4) {
+      const [red, green, blue, alpha] = firstFrame.slice(pixel, pixel + 4);
+      if (alpha < 250) continue;
+      opaquePixels++;
+      colors.add((red << 16) | (green << 8) | blue);
+    }
+    assert.ok(opaquePixels >= 0.95 * firstFrame.length / 4 && colors.size >= 8,
+      `${title} should fill the first capture with artwork (got ${opaquePixels} opaque pixels and ${colors.size} colors)`);
+    if (checkMotion) {
+      assert.ok(laterFrame.some((channel, i) => i % 4 !== 3 && Math.abs(channel - firstFrame[i]) > 4),
+        `${title} artwork should move between captures`);
+    }
+    assert.ok(stopped && released, `${title} should stop and release the capture before the next source loads`);
+  }
+  assert.deepEqual(errors, []);
+}, 90_000);
 
 scenario('the Flowers and Static filters open Cherry Blossoms with an adaptive cut that survives reload', async (t) => {
   const { page, waitForText, errors, clickDialog } = await openPuzzle(t, {
@@ -3150,6 +3200,7 @@ scenario('picker tag and completion filters combine and refresh after play', asy
   await clickDialog(-61, filterY.action);
   await clickDialog(93, filterY.firstTheme); // Coast
   await clickDialog(2, filterY.type); // Parallax
+  await clickDialog(-66, filterY.completion); // Only Lighthouse has been completed, and it isn't Parallax.
   await clickDialog(125, filterY.action);
   await waitForText('No puzzles match your filters');
   const emptyImage = PNG.sync.read(await canvas.screenshot());
@@ -3181,9 +3232,11 @@ scenario('picker tag and completion filters combine and refresh after play', asy
   await openFilters();
   await clickDialog(93, filterY.firstTheme); // Coast
   await clickDialog(-119, filterY.secondTheme); // Countryside
+  await clickControl(page, { text: 'Flat Illustration' });
+  await clickControl(page, { text: 'Procedural' });
   await clickDialog(65, filterY.completion); // Never completed
   await clickDialog(125, filterY.action);
-  await waitForFilterCount(page, 3);
+  await waitForFilterCount(page, 5);
   const topOfResults = await canvas.screenshot();
   await scrollPickerTo(page, 200);
   assert.ok(!topOfResults.equals(await canvas.screenshot()), 'Three results should scroll across two rows');
@@ -3201,7 +3254,7 @@ scenario('picker tag and completion filters combine and refresh after play', asy
   await uiControl(page, { name: 'All puzzles', primary: true });
   await page.evaluate(() => { window.paintedText = []; });
   await pressHeader(page, 'All puzzles');
-  await waitForFilterCount(page, 3);
+  await waitForFilterCount(page, 5);
   const shortenedResults = await canvas.screenshot();
   assert.notDeepEqual(await pixelAt(page, shortenedResults, 120, 405),
     await pixelAt(page, shortenedResults, 20, 405), 'The shorter result list should clamp back to the top');
@@ -3956,5 +4009,5 @@ scenario('tray settings move the live tray and rotate touch gestures with it', a
 const concurrency = Number(process.env.LIVE_JIGSAW_BROWSER_CONCURRENCY ?? 4);
 const timeout = Number(process.env.LIVE_JIGSAW_BROWSER_TIMEOUT ?? 20_000);
 describe('puzzle play', { concurrency }, () => {
-  for (const { name, run } of scenarios) test(name, { timeout }, run);
+  for (const { name, run, minimumTimeout } of scenarios) test(name, { timeout: Math.max(timeout, minimumTimeout) }, run);
 });

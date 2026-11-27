@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <title>Live Jigsaw parallax catalogue fixture</title>
+  </head>
+  <body>
+    <main id="game"></main>
+    <script type="module">
+      import Phaser from 'phaser';
+      import { defaultPieceShape } from '../../src/domain/puzzleSizes';
+      import { puzzleSources } from '../../src/puzzles/catalog';
+      import { puzzleSizeChoices } from '../../src/puzzles/puzzleSizeChoices';
+      import { LivePuzzleCapture } from '../../src/rendering/LivePuzzleCapture';
+
+      const frameSample = document.createElement('canvas');
+      frameSample.width = 64;
+      frameSample.height = 36;
+      const sampleContext = frameSample.getContext('2d', { willReadFrequently: true });
+
+      function sampleFrame(texture) {
+        return new Promise((resolve) => texture.snapshot((image) => {
+          const { width, height } = frameSample;
+          sampleContext.clearRect(0, 0, width, height);
+          sampleContext.drawImage(image, 0, 0, width, height);
+          resolve(Array.from(sampleContext.getImageData(0, 0, width, height).data));
+        }));
+      }
+
+      class CaptureHost extends Phaser.Scene {
+        constructor() {
+          super('CaptureHost');
+        }
+
+        create() {
+          window.parallaxSmoke = {
+            catalogue: puzzleSources.map(({ scene, title, tags, motion }) => ({ key: scene.key, title, type: tags.type, motion })),
+            capture: (key, checkMotion) => this.captureSource(key, checkMotion),
+          };
+        }
+
+        async captureSource(key, checkMotion) {
+          const source = puzzleSources.find(({ scene }) => scene.key === key);
+          const { width, height } = puzzleSizeChoices(source)[0].preset[defaultPieceShape];
+          const capture = new LivePuzzleCapture(this, source, { width, height, seed: 233, animationSpeed: 'Fast' });
+          let timeout;
+          let firstFrame;
+          let laterFrame;
+          try {
+            firstFrame = await Promise.race([
+              new Promise((resolve, reject) => capture.start(
+                () => resolve(sampleFrame(capture.texture)),
+                () => reject(new Error('The artwork failed to load')),
+              )),
+              new Promise((_, reject) => {
+                timeout = setTimeout(() => reject(new Error('The first capture did not arrive')), 8000);
+              }),
+            ]);
+            if (checkMotion) {
+              await new Promise((resolve) => setTimeout(resolve, 500));
+              laterFrame = await sampleFrame(capture.texture);
+            }
+          } finally {
+            clearTimeout(timeout);
+            capture.destroy();
+          }
+          await new Promise((resolve) => this.game.events.once(Phaser.Core.Events.POST_STEP, resolve));
+          return {
+            firstFrame, laterFrame,
+            stopped: !this.scene.isActive(key),
+            released: !this.textures.exists('live-puzzle-output'),
+          };
+        }
+      }
+
+      new Phaser.Game({
+        type: Phaser.WEBGL,
+        parent: 'game',
+        width: 64,
+        height: 36,
+        roundPixels: true,
+        scene: [CaptureHost, ...puzzleSources.map(({ scene }) => scene)],
+      });
+    </script>
+  </body>
+</html>

@@ -90,6 +90,7 @@ import { violetSnowfallSource } from './violetSnowfall/violetSnowfallSource';
 import { frostwaterValleySource } from './frostwaterValley/frostwaterValleySource';
 import { shadowbeltSource } from './shadowbelt/shadowbeltSource';
 import { driftingOrbitsSource } from './driftingOrbits/driftingOrbitsSource';
+import { neonCircuitSource } from './neonCircuit/neonCircuitSource';
 
 export const puzzleSources: readonly PuzzleSource[] = [
   windmillSource,
@@ -183,4 +184,5 @@ export const puzzleSources: readonly PuzzleSource[] = [
   frostwaterValleySource,
   shadowbeltSource,
   driftingOrbitsSource,
+  neonCircuitSource,
 ];

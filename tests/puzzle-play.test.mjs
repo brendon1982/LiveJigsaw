@@ -865,6 +865,8 @@ scenario('landing filter categories scroll, open Settings and filter the picker 
   const categorySettings = await uiControl(page, landingControl('Settings'));
   assert.equal(categoryBack.y, categorySettings.y);
   assert.ok(categoryBack.x < 375 / 2 && categorySettings.x > 375 / 2);
+  const christmas = await uiControl(page, landingControl('value-Christmas'));
+  await moveFinger(christmas.x, christmas.y, christmas.x, christmas.y - 380, 'touchEnd', 120);
   await clickControl(page, landingControl('value-Coast'), true);
   await waitForPicker(page);
   await waitForFilterCount(page, 1);
@@ -895,6 +897,11 @@ scenario('landing offers specific filter values for Type, Completion and Artwork
   const { page, errors, origin } = await openGamePage(t, { viewport: { width: 1320, height: 900 } });
   await page.goto(`${origin}${compactPuzzlePath}?landing`);
   const landingControl = (name) => ({ sceneKey: 'Landing', name });
+  await uiControl(page, landingControl('browse-All'));
+  const categories = await page.evaluate(() => window.puzzleLandingScene.children.list
+    .find(({ type }) => type === 'rexScrollablePanel').getAllChildren()
+    .filter(({ name }) => name.startsWith('browse-')).map(({ name }) => name.slice(7)));
+  assert.deepEqual(categories, ['All', 'Theme', 'Artist', 'Type', 'Completion', 'Artwork motion']);
   const cases = [
     ['Type', ['Flat Illustration', 'Parallax', 'Procedural'], 'Parallax', { types: ['Parallax'] }],
     ['Completion', ['Completed', 'Never completed'], 'Never completed', { completion: 'Never completed' }],

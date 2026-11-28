@@ -29,9 +29,10 @@ export function makePuzzleFilterGroups(sources: readonly Pick<PuzzleSource, 'att
     const artist = creditedArtistName(attribution);
     if (artist) artistNames.add(artist);
   }
+  const themes = [...puzzleThemes].sort((first, second) => first.localeCompare(second));
   const artists = [...artistNames].sort((first, second) => first.localeCompare(second));
   return {
-    theme: filterGroup('Theme', puzzleThemes, (theme) => ({ themes: [theme] })),
+    theme: filterGroup('Theme', themes, (theme) => ({ themes: [theme] })),
     artist: filterGroup('Artist', artists, (artist) => ({ artists: [artist] })),
     type: filterGroup('Type', puzzleTypes, (type) => ({ types: [type] })),
     completion: filterGroup('Completion', completionFilters, (completion) => ({ completion })),

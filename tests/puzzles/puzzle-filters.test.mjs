@@ -39,6 +39,13 @@ test('artwork motion is independent of illustration style and combines with the 
   assert.ok(!matchesPuzzleFilters(source('Ocean', 'Parallax', 'Static'), 1, filters));
 });
 
+test('theme choices and landing options share alphabetical order', () => {
+  const { theme } = makePuzzleFilterGroups([]);
+  const alphabetical = [...theme.choices].sort((first, second) => first.localeCompare(second));
+  assert.deepEqual(theme.choices, alphabetical);
+  assert.deepEqual(theme.options.map(({ label }) => label), alphabetical);
+});
+
 test('artist choices are the unique credited names in alphabetical order', () => {
   const { artist } = makePuzzleFilterGroups([
     { attribution: { name: 'Rosa' } }, {}, { attribution: { description: 'No name' } },

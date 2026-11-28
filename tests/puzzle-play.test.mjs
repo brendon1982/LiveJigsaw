@@ -1001,6 +1001,40 @@ scenario('Artist cards fill with previews from their own puzzles, without loadin
   assert.deepEqual(errors, []);
 });
 
+scenario('Theme cards fill with puzzle previews from their own themes', async (t) => {
+  await buildCompactFixture();
+  const { page, errors, origin } = await openGamePage(t, { viewport: { width: 1320, height: 900 } });
+  await page.goto(`${origin}${compactPuzzlePath}?landing`);
+  await clickControl(page, { sceneKey: 'Landing', name: 'browse-Theme' });
+  await uiControl(page, { sceneKey: 'Landing', name: 'value-Christmas' });
+
+  const christmasArtwork = /^(among-the-evergreens|cats-at-christmas|choosing-the-tree|christmas-stickers|christmas-tree-farm|dala-horse-christmas|festive-favorites|folk-art-christmas-tree|holly-bells|pine-and-baubles|snowman-and-baubles|starburst-santa)(-preview)?$/;
+  const result = await page.evaluate(({ source }) => {
+    const scene = window.puzzleLandingScene;
+    const panel = scene.children.list.find(({ type }) => type === 'rexScrollablePanel');
+    const cards = panel.getAllChildren().filter(({ name }) => name.startsWith('value-'));
+    const christmas = cards.find(({ name }) => name === 'value-Christmas');
+    const caption = christmas.getElement('text');
+    return {
+      cardsWithoutArtwork: cards.filter((card) => !card.getElement('artwork')).map(({ name }) => name),
+      allArtworkFillsCards: cards.every((card) => {
+        const artwork = card.getElement('artwork');
+        return artwork && Math.abs(artwork.displayWidth - card.width) < 1
+          && Math.abs(artwork.displayHeight - card.height) < 1;
+      }),
+      roundedCaption: caption.getElement?.('background')?.radius > 0,
+      christmasTextures: scene.textures.getTextureKeys().filter((key) => new RegExp(source).test(key)),
+      sourceStarted: Boolean(window.puzzleArtworkScene),
+    };
+  }, { source: christmasArtwork.source });
+  assert.deepEqual(result.cardsWithoutArtwork, []);
+  assert.ok(result.allArtworkFillsCards && result.roundedCaption);
+  assert.equal(result.christmasTextures.length, 1);
+  assert.match(result.christmasTextures[0], /-preview$/);
+  assert.equal(result.sourceStarted, false);
+  assert.deepEqual(errors, []);
+});
+
 scenario('Artist opens a filtered picker and the Filters dialog can add another artist', async (t) => {
   await buildCompactFixture();
   const { page, waitForText, errors, origin } = await openGamePage(t, { viewport: { width: 1320, height: 900 }, hasTouch: true });

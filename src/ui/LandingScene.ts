@@ -1,10 +1,10 @@
 import Phaser from 'phaser';
 import { puzzleSources } from '../puzzles/catalog';
-import { creditedArtistName, type PuzzleSource } from '../puzzles/PuzzleSource';
+import type { PuzzleSource } from '../puzzles/PuzzleSource';
 import { makeOptionTile, type UIScene } from './button';
 import { cardScrollbarSpace, cardScrollThreshold, makePuzzleCardPanel } from './puzzleCardPanel';
 import { puzzleFilterGroups } from './puzzleFilterGroups';
-import { activeFilterCount, noPuzzleFilters, type PuzzleFilterCategory, type PuzzleFilters } from './puzzleFilters';
+import { activeFilterCount, matchesPuzzleFilters, noPuzzleFilters, type PuzzleFilterCategory, type PuzzleFilters } from './puzzleFilters';
 import { headerInset, makeBackButton, makeSettingsButton, puzzleSpacing } from './puzzleHeader';
 import { makePreview, makePreviewCornerCutout, maxPickerCardWidth, pickerCardCornerRadius } from './PuzzlePickerCard';
 import { SelectPuzzleScene } from './SelectPuzzleScene';
@@ -15,12 +15,14 @@ const maxBrowseCardWidth = 320;
 const browseCardHeight = 160;
 const filterCategories = Object.keys(puzzleFilterGroups) as PuzzleFilterCategory[];
 
-function chooseArtistPreviews() {
+function chooseBrowsePreviews(category?: PuzzleFilterCategory) {
   const previews = new Map<string, PuzzleSource>();
-  for (const artist of puzzleFilterGroups.artist.choices) {
-    const works = puzzleSources.filter(({ attribution }) => creditedArtistName(attribution) === artist);
-    const source = works[Math.floor(Math.random() * works.length)];
-    if (source) previews.set(artist, source);
+  if (category !== 'theme' && category !== 'artist') return previews;
+
+  for (const { label, filters } of puzzleFilterGroups[category].options) {
+    const matchingPuzzles = puzzleSources.filter((source) => matchesPuzzleFilters(source, 0, filters));
+    const source = matchingPuzzles[Math.floor(Math.random() * matchingPuzzles.length)];
+    if (source) previews.set(label, source);
   }
   return previews;
 }
@@ -28,18 +30,18 @@ function chooseArtistPreviews() {
 export class LandingScene extends Phaser.Scene {
   static readonly key = 'Landing';
   declare rexUI: UIScene['rexUI'];
-  private artistPreviews = new Map<string, PuzzleSource>();
+  private browsePreviews = new Map<string, PuzzleSource>();
 
   constructor() {
     super(LandingScene.key);
   }
 
   init({ category }: { category?: PuzzleFilterCategory } = {}) {
-    this.artistPreviews = category === 'artist' ? chooseArtistPreviews() : new Map();
+    this.browsePreviews = chooseBrowsePreviews(category);
   }
 
   preload() {
-    for (const { previewImage } of this.artistPreviews.values()) {
+    for (const { previewImage } of this.browsePreviews.values()) {
       if (previewImage && !this.textures.exists(previewImage.key)) {
         this.load.image(previewImage.key, previewImage.url);
       }
@@ -49,8 +51,8 @@ export class LandingScene extends Phaser.Scene {
   create({ category }: { category?: PuzzleFilterCategory } = {}) {
     const group = category && puzzleFilterGroups[category];
     const entries = this.browseEntries(category);
-    const artistCutout = category === 'artist' ? makePreviewCornerCutout(this, 'all') : undefined;
-    if (artistCutout) this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.textures.remove(artistCutout));
+    const artworkCutout = this.browsePreviews.size ? makePreviewCornerCutout(this, 'all') : undefined;
+    if (artworkCutout) this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.textures.remove(artworkCutout));
     const camera = this.cameras.main;
     const listBounds = new Phaser.Geom.Rectangle();
     const isInsideList = (x: number, y: number) => {
@@ -59,7 +61,7 @@ export class LandingScene extends Phaser.Scene {
     };
     const cards = entries.map(({ label, open }) => makeOptionTile(this, {
       name: `${group ? 'value' : 'browse'}-${label}`, label, width: 1, height: browseCardHeight, fontSize: '24px',
-      createArtwork: artistCutout && (() => this.makeArtistPreview(label, artistCutout)),
+      createArtwork: artworkCutout && (() => this.makeBrowsePreview(label, artworkCutout)),
       dragThreshold: cardScrollThreshold,
       onClick: (pointer) => {
         if (pointer.getDistance() >= cardScrollThreshold
@@ -87,12 +89,12 @@ export class LandingScene extends Phaser.Scene {
       const fittingColumns = Math.floor((availableWidth + puzzleSpacing) / (cardWidth + puzzleSpacing));
       const columns = Math.min(cards.length, Math.max(1, fittingColumns));
       const rows = Math.ceil(cards.length / columns);
-      const cardHeight = category === 'artist' ? cardWidth * 9 / 16 : browseCardHeight;
+      const cardHeight = artworkCutout ? cardWidth * 9 / 16 : browseCardHeight;
       const artworkCornerRadius = pickerCardCornerRadius * cardWidth / maxPickerCardWidth;
       grid.resetGrid(columns, rows, 0, 0, { column: puzzleSpacing, row: puzzleSpacing });
       cards.forEach(({ button, setCornerRadius }, index) => {
         button.setMinSize(cardWidth, cardHeight);
-        if (artistCutout) setCornerRadius(artworkCornerRadius);
+        if (artworkCutout) setCornerRadius(artworkCornerRadius);
         grid.add(button, { column: index % columns, row: Math.floor(index / columns) });
       });
     };
@@ -116,8 +118,8 @@ export class LandingScene extends Phaser.Scene {
     layout();
   }
 
-  private makeArtistPreview(artist: string, cutout: Phaser.Textures.CanvasTexture) {
-    const source = this.artistPreviews.get(artist);
+  private makeBrowsePreview(label: string, cutout: Phaser.Textures.CanvasTexture) {
+    const source = this.browsePreviews.get(label);
     if (!source) return;
     const image = source.previewImage;
     if (image && !this.textures.exists(image.key)) return;

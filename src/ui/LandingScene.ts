@@ -11,6 +11,12 @@ import { SelectPuzzleScene } from './SelectPuzzleScene';
 import { openSettings } from './SettingsScene';
 import { styleWithTheme } from './theme';
 
+export type LandingPage = {
+  category?: PuzzleFilterCategory;
+  scrollOffset?: number;
+  categoriesScrollOffset?: number;
+};
+
 const maxBrowseCardWidth = 320;
 const browseCardHeight = 160;
 const filterCategories = Object.keys(puzzleFilterGroups) as PuzzleFilterCategory[];
@@ -36,7 +42,7 @@ export class LandingScene extends Phaser.Scene {
     super(LandingScene.key);
   }
 
-  init({ category }: { category?: PuzzleFilterCategory } = {}) {
+  init({ category }: LandingPage = {}) {
     this.browsePreviews = chooseBrowsePreviews(category);
   }
 
@@ -48,9 +54,10 @@ export class LandingScene extends Phaser.Scene {
     }
   }
 
-  create({ category }: { category?: PuzzleFilterCategory } = {}) {
+  create(page: LandingPage = {}) {
+    const { category, scrollOffset = 0, categoriesScrollOffset } = page;
     const group = category && puzzleFilterGroups[category];
-    const entries = this.browseEntries(category);
+    const entries = this.browseEntries(page);
     const artworkCutout = this.browsePreviews.size ? makePreviewCornerCutout(this, 'all') : undefined;
     if (artworkCutout) this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.textures.remove(artworkCutout));
     const camera = this.cameras.main;
@@ -66,14 +73,16 @@ export class LandingScene extends Phaser.Scene {
       onClick: (pointer) => {
         if (pointer.getDistance() >= cardScrollThreshold
           || !isInsideList(pointer.downX, pointer.downY) || !isInsideList(pointer.x, pointer.y)) return;
-        open();
+        open(panel.childOY);
       },
     }));
     const grid = this.rexUI.add.gridSizer({ column: 1, row: 1 });
     const list = this.rexUI.add.sizer({ orientation: 'y', space: { top: puzzleSpacing, bottom: puzzleSpacing } })
       .add(grid, { align: 'center' });
     const panel = makePuzzleCardPanel(this, list);
-    if (group) makeBackButton(this, () => this.scene.restart({}), 'Back to filter categories');
+    if (group) {
+      makeBackButton(this, () => this.scene.restart({ scrollOffset: categoriesScrollOffset }), 'Back to filter categories');
+    }
     const settings = makeSettingsButton(this, () => {
       panel.setScrollerEnable(false).setMouseWheelScrollerEnable(false);
       openSettings(this, { onClose: () => panel.setScrollerEnable(true).setMouseWheelScrollerEnable(true) });
@@ -116,6 +125,7 @@ export class LandingScene extends Phaser.Scene {
     this.scale.on(Phaser.Scale.Events.RESIZE, layout);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.scale.off(Phaser.Scale.Events.RESIZE, layout));
     layout();
+    panel.setChildOY(scrollOffset, true);
   }
 
   private makeBrowsePreview(label: string, cutout: Phaser.Textures.CanvasTexture) {
@@ -131,17 +141,21 @@ export class LandingScene extends Phaser.Scene {
     return artwork;
   }
 
-  private browseEntries(category?: PuzzleFilterCategory) {
-    const openPicker = (filters: PuzzleFilters) => this.scene.start(SelectPuzzleScene.key, { filters, category });
+  private browseEntries(page: LandingPage) {
+    const { category } = page;
+    const openPicker = (filters: PuzzleFilters, scrollOffset: number) => {
+      const returnToBrowse: LandingPage = { ...page, scrollOffset };
+      this.scene.start(SelectPuzzleScene.key, { filters, returnToBrowse });
+    };
     if (category) {
       return puzzleFilterGroups[category].options.filter(({ filters }) => activeFilterCount(filters) > 0)
-        .map(({ label, filters }) => ({ label, open: () => openPicker(filters) }));
+        .map(({ label, filters }) => ({ label, open: (scrollOffset: number) => openPicker(filters, scrollOffset) }));
     }
 
     const categories = filterCategories.map((category) => ({
       label: puzzleFilterGroups[category].title,
-      open: () => this.scene.restart({ category }),
+      open: (scrollOffset: number) => this.scene.restart({ category, categoriesScrollOffset: scrollOffset }),
     }));
-    return [{ label: 'All', open: () => openPicker(noPuzzleFilters) }, ...categories];
+    return [{ label: 'All', open: (scrollOffset: number) => openPicker(noPuzzleFilters, scrollOffset) }, ...categories];
   }
 }

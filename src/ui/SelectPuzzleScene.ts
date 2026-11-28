@@ -6,11 +6,12 @@ import { pickerPreviewSizes, type PickerPreviewSize, type PuzzleProgress } from 
 import { puzzleSources } from '../puzzles/catalog';
 import type { PuzzleSource } from '../puzzles/PuzzleSource';
 import { makeButton, makeOptionTile, type UIScene } from './button';
+import type { LandingPage } from './LandingScene';
 import type { PuzzleSelection } from './PlayPuzzleScene';
 import { cardScrollbarSpace, cardScrollThreshold, makePuzzleCardPanel } from './puzzleCardPanel';
 import { artworkCreditLines, showPuzzleDetails } from './puzzleDetailsDialog';
 import { showPuzzleFilters } from './puzzleFilterDialog';
-import { activeFilterCount, matchesPuzzleFilters, noPuzzleFilters, samePuzzleFilters, type PuzzleFilterCategory, type PuzzleFilters } from './puzzleFilters';
+import { activeFilterCount, matchesPuzzleFilters, noPuzzleFilters, samePuzzleFilters, type PuzzleFilters } from './puzzleFilters';
 import { headerControlGap, headerInset, makeBackButton, makeFiltersButton, makeSettingsButton, puzzleSpacing } from './puzzleHeader';
 import { makePreviewCornerCutout, makePuzzlePickerCard, maxPickerCardWidth } from './PuzzlePickerCard';
 import { showPuzzleOptions, showResumePuzzle } from './puzzleOptions';
@@ -58,17 +59,17 @@ export class SelectPuzzleScene extends Phaser.Scene {
   static readonly key = 'SelectPuzzle';
   declare rexUI: RexUIPlugin;
   private filters = noPuzzleFilters;
-  private browseCategory?: PuzzleFilterCategory;
+  private returnToBrowse?: LandingPage;
   private scrollOffset = 0;
 
   constructor() {
     super(SelectPuzzleScene.key);
   }
 
-  init({ filters, category }: { filters?: PuzzleFilters; category?: PuzzleFilterCategory } = {}) {
+  init({ filters, returnToBrowse }: { filters?: PuzzleFilters; returnToBrowse?: LandingPage } = {}) {
     if (!filters) return;
     this.filters = filters;
-    this.browseCategory = category;
+    this.returnToBrowse = returnToBrowse;
     this.scrollOffset = 0;
   }
 
@@ -141,7 +142,7 @@ export class SelectPuzzleScene extends Phaser.Scene {
       headerBackground.setFillStyle(colors.background);
     });
     const back = makeBackButton(this, () => {
-      if (!dialogOpen) this.scene.start('Landing', { category: this.browseCategory });
+      if (!dialogOpen) this.scene.start('Landing', this.returnToBrowse ?? {});
     }, 'Back to browse');
     const settings = makeSettingsButton(this, () => {
       if (dialogOpen) return;

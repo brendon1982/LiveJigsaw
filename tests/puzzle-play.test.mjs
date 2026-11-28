@@ -892,6 +892,39 @@ scenario('landing filter categories scroll, open Settings and filter the picker 
   assert.deepEqual(errors, []);
 });
 
+scenario('landing restores the scroll position when going back a level', async (t) => {
+  await buildCompactFixture();
+  const { page, errors, origin } = await openGamePage(t, { viewport: { width: 375, height: 900 } });
+  await page.goto(`${origin}${compactPuzzlePath}?landing`);
+  const landingControl = (name) => ({ sceneKey: 'Landing', name });
+  const scrollOffset = () => page.evaluate(() => window.puzzleLandingScene.children.list
+    .find(({ type }) => type === 'rexScrollablePanel').childOY);
+  const scrollDown = async (delta) => {
+    await page.mouse.move(180, 350);
+    await page.mouse.wheel(0, delta);
+    await page.waitForFunction(() => window.puzzleLandingScene.children.list
+      .find(({ type }) => type === 'rexScrollablePanel')?.childOY < 0, undefined, { timeout: 4000 });
+    return scrollOffset();
+  };
+
+  await uiControl(page, landingControl('browse-Theme'));
+  const categoriesOffset = await scrollDown(100);
+  await clickControl(page, landingControl('browse-Theme'));
+  await uiControl(page, landingControl('value-Christmas'));
+  assert.equal(await scrollOffset(), 0, 'A new level starts at the top');
+  const themeOffset = await scrollDown(500);
+  await clickControl(page, landingControl('value-Coast'));
+  await waitForPicker(page);
+
+  await pressHeader(page, 'Back to browse');
+  await uiControl(page, landingControl('value-Coast'));
+  assert.equal(await scrollOffset(), themeOffset, 'Returning from the picker restores the Theme list');
+  await clickControl(page, landingControl('Back to filter categories'));
+  await uiControl(page, landingControl('browse-Theme'));
+  assert.equal(await scrollOffset(), categoriesOffset, 'Returning from Theme restores the main list');
+  assert.deepEqual(errors, []);
+});
+
 scenario('landing offers specific filter values for Type, Completion and Artwork motion', async (t) => {
   await buildCompactFixture();
   const { page, errors, origin } = await openGamePage(t, { viewport: { width: 1320, height: 900 } });

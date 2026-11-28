@@ -68,13 +68,10 @@ export function makePuzzlePickerCard(
   const background = scene.rexUI.add.roundRectangle(0, 0, 1, 1, pickerCardCornerRadius).setOrigin(0);
   let preview: Phaser.GameObjects.RenderTexture | undefined;
   let previewRequested = false;
-  let compact = false;
   const metadata = puzzleCardTags(source);
-  const title = scene.add.text(0, 0, source.title, {
-    fontFamily: 'system-ui', fontSize: '22px', fontStyle: 'bold',
+  const title = scene.add.text(0, 0, '', {
+    fontFamily: 'system-ui', fontSize: '22px', fontStyle: 'bold', color: palette.text,
   }).setOrigin(0, 0.5);
-  const tags = scene.add.text(0, 0, metadata, metadataTextStyle).setOrigin(0, 0.5);
-  const statusLabel = scene.add.text(0, 0, status, metadataTextStyle).setOrigin(1, 0.5);
 
   const isInsideList = (x: number, y: number) => {
     const point = scene.cameras.main.getWorldPoint(x, y);
@@ -91,11 +88,12 @@ export function makePuzzlePickerCard(
   };
 
   let pressed = false;
+  let fullFooter: ReturnType<typeof makeFullFooter> | undefined;
   styleWithTheme(background, (colors) => {
     background.setFillStyle(pressed ? colors.surfacePressed : colors.surface);
-    title.setColor(colors.text);
-    tags.setColor(colors.mutedText);
-    statusLabel.setColor(colors.text);
+    if (title.style.color !== colors.text) title.setColor(colors.text);
+    fullFooter?.tags.setColor(colors.mutedText);
+    fullFooter?.statusLabel?.setColor(colors.text);
   });
   if (hasPuzzleSizeChoice(source)) {
     addPressFeedback(background, (value) => {
@@ -107,13 +105,16 @@ export function makePuzzlePickerCard(
   }
 
   const container = scene.rexUI.add.container(0, 0, 0, 0).setOrigin(0)
-    .addLocal([background, title, tags, statusLabel]);
+    .addLocal([background, title]);
   const makeFooterAction = (name: string, text: string, width: number, action: () => void) => {
-    const caption = scene.add.text(0, 0, text, metadataTextStyle);
+    const caption = scene.add.text(0, 0, text, { ...metadataTextStyle, color: palette.mutedText });
     const button = scene.rexUI.add.label({ width, height: footerActionHeight, align: 'right', text: caption })
       .setName(`picker-${name}`).setOrigin(1, 0.5).layout();
     let actionPressed = false;
-    const restyle = (colors: typeof palette) => caption.setColor(actionPressed ? colors.text : colors.mutedText);
+    const restyle = (colors: typeof palette) => {
+      const color = actionPressed ? colors.text : colors.mutedText;
+      if (caption.style.color !== color) caption.setColor(color);
+    };
     styleWithTheme(button, restyle);
     addPressFeedback(button, (value) => { actionPressed = value; restyle(palette); }, scrollThreshold,
       (pointer) => isInsideList(pointer.x, pointer.y));
@@ -140,11 +141,23 @@ export function makePuzzlePickerCard(
     }
     return artwork;
   }
-  const { button: more } = makeFooterAction('more', '...', moreWidth, () => {
-    if (compact) openDetails(copyPreview);
-  });
-  const artistName = creditedArtistName(source.attribution) ?? 'Credits';
-  const credits = hasCredits && makeFooterAction('credits', artistName, footerActionHeight, () => openDetails(copyPreview));
+  let more: ReturnType<typeof makeFooterAction>['button'] | undefined;
+  function makeFullFooter() {
+    const tags = scene.add.text(0, 0, '', { ...metadataTextStyle, color: palette.mutedText }).setOrigin(0, 0.5);
+    container.addLocal(tags);
+    const statusLabel = status ? scene.add.text(0, 0, '', { ...metadataTextStyle, color: palette.text }).setOrigin(1, 0.5) : undefined;
+    if (statusLabel) container.addLocal(statusLabel);
+    const artistName = hasCredits ? creditedArtistName(source.attribution) ?? 'Credits' : undefined;
+    const credits = artistName && makeFooterAction('credits', '', footerActionHeight, () => openDetails(copyPreview));
+    return { tags, statusLabel, artistName, credits };
+  }
+  const setFullFooterVisible = (visible: boolean) => {
+    if (!fullFooter) return;
+    const { tags, statusLabel, credits } = fullFooter;
+    container.setChildVisible(tags, visible);
+    if (statusLabel) container.setChildVisible(statusLabel, visible);
+    if (credits) container.setChildVisible(credits.button, visible);
+  };
   return {
     container,
     get previewInUse() { return openPreviewCopies > 0; },
@@ -163,12 +176,10 @@ export function makePuzzlePickerCard(
       container.addLocal(preview).setChildLocalScale(preview, scale, scale);
       return false;
     },
-    layout(width: number, stackStatus: boolean, compactLayout: boolean) {
-      compact = compactLayout;
+    layout(width: number, stackStatus: boolean, compact: boolean) {
       const scale = width / maxPickerCardWidth;
       const artworkBottom = previewHeight * scale;
       const compactFooter = width < compactFooterWidth;
-      const stackCredits = credits && compactFooter;
       const height = pickerCardHeight(width, stackStatus, compact, hasCredits);
       const inset = compact ? compactFooterInset : footerInset;
       const right = width - inset;
@@ -177,12 +188,12 @@ export function makePuzzlePickerCard(
       background.setRadius(pickerCardCornerRadius * scale).resize(width, height);
       if (background.input) background.input.hitArea.setSize(width, height);
       if (preview) container.setChildLocalScale(preview, scale, scale);
-      title.setFontSize(compact || compactFooter ? 16 : 22);
-      container.setChildVisible(more, compact);
-      container.setChildVisible(tags, !compact);
-      container.setChildVisible(statusLabel, !compact);
-      if (credits) container.setChildVisible(credits.button, !compact);
+      const titleSize = compact || compactFooter ? '16px' : '22px';
+      if (title.style.fontSize !== titleSize) title.setFontSize(titleSize);
       if (compact) {
+        more ??= makeFooterAction('more', '...', moreWidth, () => openDetails(copyPreview)).button;
+        container.setChildVisible(more, true);
+        setFullFooterVisible(false);
         const titleY = artworkBottom + footerActionHeight / 2;
         fitLabel(title, source.title, Math.max(0, textWidth - moreWidth - headerControlGap));
         container.setChildLocalPosition(title, inset, titleY);
@@ -190,9 +201,14 @@ export function makePuzzlePickerCard(
         return;
       }
 
+      fullFooter ??= makeFullFooter();
+      setFullFooterVisible(true);
+      if (more) container.setChildVisible(more, false);
+      const { tags, statusLabel, artistName, credits } = fullFooter;
       const metadataY = artworkBottom + 50;
+      const stackCredits = hasCredits && compactFooter;
       let titleWidth = textWidth;
-      if (credits) {
+      if (credits && artistName) {
         const { button, caption } = credits;
         fitLabel(caption, artistName, stackCredits ? textWidth : Math.floor(textWidth / 2));
         const buttonWidth = Math.max(footerActionHeight, caption.width);
@@ -204,12 +220,14 @@ export function makePuzzlePickerCard(
       }
       fitLabel(title, source.title, titleWidth);
       fitLabel(tags, metadata, textWidth);
-      fitLabel(statusLabel, status, textWidth);
       container.setChildLocalPosition(title, footerInset, artworkBottom + 23);
       container.setChildLocalPosition(tags, footerInset, metadataY);
-      statusLabel.setOrigin(stackStatus ? 0 : 1, 0.5);
-      container.setChildLocalPosition(statusLabel, stackStatus ? footerInset : right,
-        metadataY + (stackStatus ? statusRowHeight : 0));
+      if (statusLabel) {
+        fitLabel(statusLabel, status, textWidth);
+        statusLabel.setOrigin(stackStatus ? 0 : 1, 0.5);
+        container.setChildLocalPosition(statusLabel, stackStatus ? footerInset : right,
+          metadataY + (stackStatus ? statusRowHeight : 0));
+      }
     },
   };
 }
@@ -221,9 +239,16 @@ export function fitLabel(label: Phaser.GameObjects.Text, value: string, width: n
     label.setText(value);
     return;
   }
-  let text = value;
-  while (text && context.measureText(`${text}…`).width > width) text = text.slice(0, -1);
-  label.setText(text ? `${text}…` : '');
+  const characters = Array.from(value);
+  let fitting = 0;
+  let tooLong = characters.length + 1;
+  while (fitting + 1 < tooLong) {
+    const length = Math.floor((fitting + tooLong) / 2);
+    const candidate = `${characters.slice(0, length).join('')}…`;
+    if (context.measureText(candidate).width <= width) fitting = length;
+    else tooLong = length;
+  }
+  label.setText(fitting ? `${characters.slice(0, fitting).join('')}…` : '');
 }
 
 export function makePreview(scene: UIScene, source: PuzzleSource, cutout: Phaser.Textures.CanvasTexture) {

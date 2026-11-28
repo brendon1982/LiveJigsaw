@@ -77,7 +77,7 @@ export class SelectPuzzleScene extends Phaser.Scene {
     const listBounds = new Phaser.Geom.Rectangle();
     let dialogOpen = false;
     const setPickerScrolling = (enabled: boolean) => {
-      panel.setScrollerEnable(enabled).setMouseWheelScrollerEnable(enabled);
+      panel?.setScrollerEnable(enabled).setMouseWheelScrollerEnable(enabled);
     };
     const closeDialog = () => {
       dialogOpen = false;
@@ -88,7 +88,7 @@ export class SelectPuzzleScene extends Phaser.Scene {
       setPickerScrolling(false);
     };
     const play = (selection: PuzzleSelection) => {
-      this.scrollOffset = panel.childOY;
+      this.scrollOffset = panel?.childOY ?? 0;
       this.scene.start('PlayPuzzle', selection);
     };
     const openSetup = (source: PuzzleSource) => {
@@ -143,7 +143,7 @@ export class SelectPuzzleScene extends Phaser.Scene {
     });
     const list = this.rexUI.add.sizer({ orientation: 'y', space: { bottom: puzzleSpacing } })
       .add(grid, { align: 'center', key: 'cards' });
-    const panel = makePuzzleCardPanel(this, list);
+    let panel: ReturnType<typeof makePuzzleCardPanel> | undefined;
     const headerBackground = this.add.rectangle(0, 0, 1, 1).setOrigin(0);
     styleWithTheme(headerBackground, (colors) => {
       headerBackground.setFillStyle(colors.background);
@@ -190,19 +190,21 @@ export class SelectPuzzleScene extends Phaser.Scene {
       return { size, tile };
     });
     previewSizeRow.layout();
-    const clearFilters = makeButton(this, 0, 0, 'Clear filters', (pointer) => {
-      if (!dialogOpen && !pointer.wasCanceled) applyFilters(noPuzzleFilters);
-    }, 140);
-    const emptyMessage = this.add.text(0, 0, 'No puzzles match your filters', {
-      fontFamily: 'system-ui', fontSize: '18px', align: 'center',
-    });
-    const emptyState = this.rexUI.add.sizer({ orientation: 'y', space: { item: 14 } })
-      .setOrigin(0.5, 0)
-      .add(emptyMessage, { align: 'center' })
-      .add(clearFilters, { align: 'center' });
-    styleWithTheme(emptyMessage, (colors) => {
-      emptyMessage.setColor(colors.mutedText);
-    });
+    const makeEmptyState = () => {
+      const clearFilters = makeButton(this, 0, 0, 'Clear filters', (pointer) => {
+        if (!dialogOpen && !pointer.wasCanceled) applyFilters(noPuzzleFilters);
+      }, 140);
+      const message = this.add.text(0, 0, 'No puzzles match your filters', {
+        fontFamily: 'system-ui', fontSize: '18px', align: 'center',
+      });
+      const content = this.rexUI.add.sizer({ orientation: 'y', space: { item: 14 } })
+        .setOrigin(0.5, 0)
+        .add(message, { align: 'center' })
+        .add(clearFilters, { align: 'center' });
+      styleWithTheme(message, (colors) => message.setColor(colors.mutedText));
+      return { content, message };
+    };
+    let emptyState: ReturnType<typeof makeEmptyState> | undefined;
 
     const matchingCards = (filters: PuzzleFilters) =>
       records.filter(({ source, completionState }) => matchesPuzzleFilters(source, completionState, filters)).map(cardFor);
@@ -218,12 +220,12 @@ export class SelectPuzzleScene extends Phaser.Scene {
     };
     const changePreviewSize = (size: PickerPreviewSize) => {
       if (gameSave.settings.pickerPreviewSize === size) return;
-      const firstInView = panel.childOY < 0 && visibleCards.find(({ container }) =>
+      const firstInView = panel && panel.childOY < 0 && visibleCards.find(({ container }) =>
         container.y + container.height > listBounds.top);
       gameSave.updateSettings({ pickerPreviewSize: size });
       updatePreviewSizeTiles();
       layoutPicker(0);
-      if (firstInView) panel.setChildOY(listBounds.top - firstInView.container.y, true);
+      if (firstInView) panel?.setChildOY(listBounds.top - firstInView.container.y, true);
     };
     const applyFilters = (filters: PuzzleFilters) => {
       if (samePuzzleFilters(this.filters, filters)) return;
@@ -285,15 +287,17 @@ export class SelectPuzzleScene extends Phaser.Scene {
       this.cameras.main.setViewport(0, 0, width, height).setOrigin(0);
       headerBackground.setDisplaySize(width, panelTop);
       listBounds.setTo(0, panelTop, listWidth, panelHeight);
-      panel.setPosition(0, panelTop).setMinSize(width, panelHeight).layout();
-      panel.setChildOY(offset, true);
-      const empty = visibleCards.length === 0;
-      panel.setVisible(!empty);
-      emptyState.setVisible(empty);
-      if (empty) {
+      if (visibleCards.length === 0) {
+        panel?.setVisible(false);
+        emptyState ??= makeEmptyState();
         const messageWidth = width - 2 * headerInset;
-        emptyMessage.setWordWrapWidth(Math.max(1, messageWidth), true);
-        emptyState.layout().setPosition(width / 2, panelTop + 36);
+        emptyState.message.setWordWrapWidth(Math.max(1, messageWidth), true);
+        emptyState.content.setVisible(true).layout().setPosition(width / 2, panelTop + 36);
+      } else {
+        emptyState?.content.setVisible(false);
+        panel ??= makePuzzleCardPanel(this, list);
+        panel.setVisible(true).setPosition(0, panelTop).setMinSize(width, panelHeight).layout();
+        panel.setChildOY(offset, true);
       }
     };
 
@@ -313,7 +317,7 @@ export class SelectPuzzleScene extends Phaser.Scene {
       }
       if (queuedImages) this.load.start();
     };
-    const fitPicker = () => layoutPicker(panel.childOY);
+    const fitPicker = () => layoutPicker(panel?.childOY ?? 0);
     this.scale.on(Phaser.Scale.Events.RESIZE, fitPicker);
     this.events.on(Phaser.Scenes.Events.UPDATE, loadNearbyPreviews);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {

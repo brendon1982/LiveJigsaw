@@ -99,14 +99,16 @@ function waitForPicker(page) {
 
 function uiControl(page, { sceneKey, name, text, action, filterCount, primary }) {
   return page.waitForFunction(({ sceneKey, name, text, action, filterCount, primary }) => {
-    const game = window.puzzlePickerScene?.sys.game;
+    const game = (window.puzzlePickerScene ?? window.puzzleLandingScene)?.sys.game;
     if (!game) return;
     const play = game.scene.getScene('PlayPuzzle');
     const scene = sceneKey ? game.scene.getScene(sceneKey) : play.sys.isActive() ? play : window.puzzlePickerScene;
     if (!scene?.sys.isActive()) return;
     const dialog = scene.children.list.find(({ type }) => type === 'rexDialog');
     const body = dialog?.getElement('content');
-    const candidates = action ? dialog?.getElement('actions') : dialog?.getAllChildren() ?? scene.children.list;
+    const panel = sceneKey === 'Landing' && scene.children.list.find(({ type }) => type === 'rexScrollablePanel');
+    const sceneControls = panel ? [...scene.children.list, ...panel.getAllChildren()] : scene.children.list;
+    const candidates = action ? dialog?.getElement('actions') : dialog?.getAllChildren() ?? sceneControls;
     const clip = !action && body?.type === 'rexScrollablePanel' ? body.getBounds() : undefined;
     const control = candidates?.find((object) => (object.visible || clip) && object.input?.enabled
       && (name === undefined || object.name === name)
@@ -157,7 +159,7 @@ const pressAction = (page, text, touch = false) => clickControl(page, { text, ac
 
 function waitForDialogClosed(page, sceneKey) {
   return page.waitForFunction((key) => {
-    const scene = window.puzzlePickerScene.sys.game.scene.getScene(key);
+    const scene = (window.puzzlePickerScene ?? window.puzzleLandingScene).sys.game.scene.getScene(key);
     return !scene.sys.isActive() || !scene.children.list.some(({ type }) => type === 'rexDialog');
   }, sceneKey, { timeout: 4000 });
 }
@@ -214,18 +216,19 @@ async function openGamePage(t, options) {
   return { page, canvas, waitForText, errors, origin: `http://127.0.0.1:${port}` };
 }
 
+function buildCompactFixture() {
+  return compactPuzzleBuild ??= build({
+    base: '/compact-fixture/',
+    logLevel: 'warn',
+    build: {
+      outDir: 'dist/compact-fixture',
+      rollupOptions: { input: 'tests/fixtures/compact-puzzle.html' },
+    },
+  });
+}
+
 async function openPuzzle(t, options, path = currentSizesPuzzlePath, initPage) {
-  if (path.startsWith(compactPuzzlePath)) {
-    compactPuzzleBuild ??= build({
-      base: '/compact-fixture/',
-      logLevel: 'warn',
-      build: {
-        outDir: 'dist/compact-fixture',
-        rollupOptions: { input: 'tests/fixtures/compact-puzzle.html' },
-      },
-    });
-    await compactPuzzleBuild;
-  }
+  if (path.startsWith(compactPuzzlePath)) await buildCompactFixture();
   const { page, canvas, waitForText, errors, origin } = await openGamePage(t, options);
   await initPage?.(page);
   await page.goto(`${origin}${path}`);
@@ -828,7 +831,55 @@ scenario('the board keeps fixed pan bounds through zoom with a parked piece', as
   assert.deepEqual(errors, []);
 });
 
-scenario('picker preview sizes reflow the cards, persist and stay left aligned on touch screens', async (t) => {
+scenario('landing theme cards scroll, open Settings and filter the picker with touch', async (t) => {
+  await buildCompactFixture();
+  const { page, waitForText, errors, origin } = await openGamePage(t, {
+    viewport: { width: 375, height: 900 }, hasTouch: true, isMobile: true,
+  });
+  await page.goto(`${origin}${compactPuzzlePath}?landing`);
+  await waitForText('Live Jigsaw');
+  const landingControl = (name) => ({ sceneKey: 'Landing', name });
+  await clickControl(page, landingControl('Settings'), true);
+  await waitForText('Color theme');
+  await pressSetting(page, 'Done', true);
+  await waitForDialogClosed(page, 'Settings');
+
+  const { x, y } = await uiControl(page, landingControl('theme-All'));
+  const { moveFinger } = await touchController(page);
+  await moveFinger(x, y, x, y - 92);
+  await page.waitForFunction(() => window.puzzleLandingScene.children.list
+    .find(({ type }) => type === 'rexScrollablePanel')?.childOY < 0, undefined, { timeout: 4000 });
+  assert.ok(await page.evaluate(() => window.puzzleLandingScene.sys.isActive()), 'A swipe starting on All must not open the picker');
+
+  await page.reload();
+  await clickControl(page, landingControl('theme-Coast'), true);
+  await waitForPicker(page);
+  await waitForFilterCount(page, 1);
+  const visiblePuzzles = () => page.evaluate(() => window.puzzlePickerScene.children.list
+    .find(({ type }) => type === 'rexScrollablePanel').getElement('panel.cards').getElement('items')
+    .filter(Boolean).map((card) => card.getChildren().find(({ type }) => type === 'Text').text));
+  assert.ok((await visiblePuzzles()).includes('Lighthouse'));
+  assert.ok(!(await visiblePuzzles()).includes('Windmill'));
+
+  const back = await uiControl(page, { name: 'Back to themes' });
+  const compact = await uiControl(page, { name: 'preview-size-Compact' });
+  const full = await uiControl(page, { name: 'preview-size-Full' });
+  const filters = await uiControl(page, { name: 'Filters' });
+  const settings = await uiControl(page, { name: 'Settings' });
+  assert.equal(back.y, compact.y);
+  assert.equal(compact.y, full.y);
+  assert.ok(Math.abs((compact.x + full.x) / 2 - 375 / 2) <= 1);
+  assert.equal(filters.y, settings.y);
+  assert.ok(filters.y > back.y);
+
+  await pressHeader(page, 'Back to themes', true);
+  await clickControl(page, landingControl('theme-All'), true);
+  await uiControl(page, { sceneKey: 'SelectPuzzle', name: 'Filters', filterCount: 0 });
+  assert.ok((await visiblePuzzles()).includes('Windmill'));
+  assert.deepEqual(errors, []);
+});
+
+scenario('picker preview sizes reflow the cards, persist and stay centered on touch screens', async (t) => {
   const { page, waitForText, errors } = await openPuzzle(t, {
     viewport: { width: 1320, height: 780 }, hasTouch: true,
   });
@@ -841,7 +892,7 @@ scenario('picker preview sizes reflow the cards, persist and stay left aligned o
     const [card] = grid.getElement('items');
     const options = children.list.filter(({ name }) => name.startsWith('preview-size-')).map((tile) => {
       return {
-        size: tile.name.slice('preview-size-'.length), x: tile.x, y: tile.y, left: tile.getBounds().left,
+        size: tile.name.slice('preview-size-'.length), x: tile.x, y: tile.y,
         selected: tile.getElement('background').lineWidth === 2,
         icon: Boolean(tile.getElement('icon')), text: Boolean(tile.getElement('text')),
       };
@@ -859,7 +910,7 @@ scenario('picker preview sizes reflow the cards, persist and stay left aligned o
   assert.deepEqual(full.options.map(({ size }) => size), ['Compact', 'Full']);
   assertSelection(full, 'Full');
   assert.ok(full.options.every(({ icon, text }) => icon && !text));
-  assert.equal(full.options[0].left, 24);
+  assert.ok(Math.abs((full.options[0].x + full.options[1].x) / 2 - 660) <= 1);
   assert.equal(full.columns, 2);
   assert.equal(full.width, 560);
   assert.equal(full.titleStyle, 'bold');
@@ -890,7 +941,7 @@ scenario('picker preview sizes reflow the cards, persist and stay left aligned o
   assertSelection(portrait, 'Compact');
   assert.equal(portrait.width, 148);
   assert.equal(portrait.columns, 2);
-  assert.equal(portrait.options[0].left, 24);
+  assert.ok(Math.abs((portrait.options[0].x + portrait.options[1].x) / 2 - 375 / 2) <= 1);
   assert.ok(portrait.options.every(({ x, y }) => x > 0 && x < 375 && y < portrait.panelTop));
   await page.touchscreen.tap(portrait.options[1].x, portrait.options[1].y);
   const portraitFull = await pickerLayout();
@@ -1025,7 +1076,11 @@ scenario('the picker shows newest puzzles first and only loads nearby previews',
 
     const firstCardRequested = page.waitForRequest(previewAsset, { timeout: 4000 });
     scriptGate.resolve();
-    await Promise.all([status.waitFor({ state: 'detached', timeout: 4000 }), firstCardRequested]);
+    await status.waitFor({ state: 'detached', timeout: 4000 });
+    await waitForText('Live Jigsaw');
+    assert.deepEqual(requestedPreviews, [], 'The landing page should not load picker previews');
+    await page.mouse.click(210, 220); // All themes
+    await firstCardRequested;
     assert.deepEqual(requestedArtwork, [], 'The picker must not request gameplay artwork');
     const placeholder = [48, 69, 63, 255];
     const topPreview = async () => pixelAt(page, await canvas.screenshot(), 380, 220);

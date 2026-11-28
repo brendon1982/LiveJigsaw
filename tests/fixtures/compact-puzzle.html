@@ -10,6 +10,7 @@
     <script type="module">
       import { pieceShapeIds, puzzleSizePresets } from '../../src/domain/puzzleSizes';
       import { puzzleSources } from '../../src/puzzles/catalog';
+      import { LandingScene } from '../../src/ui/LandingScene';
       import { SelectPuzzleScene } from '../../src/ui/SelectPuzzleScene';
 
       // Keep Windmill first on screen for the fixed-coordinate gameplay scenarios.
@@ -18,6 +19,12 @@
       SelectPuzzleScene.prototype.create = function () {
         createPicker.call(this);
         window.puzzlePickerScene = this;
+      };
+      const createLanding = LandingScene.prototype.create;
+      LandingScene.prototype.create = function () {
+        createLanding.call(this);
+        window.puzzleLandingScene = this;
+        if (!new URLSearchParams(location.search).has('landing')) this.scene.start(SelectPuzzleScene.key);
       };
 
       // Keep the compact board for fixed-coordinate interaction scenarios only.

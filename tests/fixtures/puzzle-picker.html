@@ -10,6 +10,8 @@
     <script type="module">
       import Phaser from 'phaser';
       import { puzzleSources } from '../../src/puzzles/catalog';
+      import { LandingScene } from '../../src/ui/LandingScene';
+      import { SelectPuzzleScene } from '../../src/ui/SelectPuzzleScene';
 
       const previewColor = 0xff00ff;
       class OversizedPreviewScene extends Phaser.Scene {
@@ -43,6 +45,12 @@
       });
       // Display Windmill, Lighthouse, and Oversized preview in that order for the layout checks.
       puzzleSources.reverse();
+
+      const createLanding = LandingScene.prototype.create;
+      LandingScene.prototype.create = function () {
+        createLanding.call(this);
+        this.scene.start(SelectPuzzleScene.key);
+      };
 
       await import('../../src/main');
     </script>

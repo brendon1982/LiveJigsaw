@@ -27,8 +27,8 @@ export function makeSettingsButton(scene: UIScene, open: () => void) {
   };
 }
 
-export function makeBackButton(scene: UIScene, open: () => void) {
-  return makeIconButton(scene, 'All puzzles', (art, color) => {
+export function makeBackButton(scene: UIScene, open: () => void, name = 'All puzzles') {
+  return makeIconButton(scene, name, (art, color) => {
     art.clear().lineStyle(2, color).beginPath()
       .moveTo(-2, -7).lineTo(-9, 0).lineTo(-2, 7).moveTo(-9, 0).lineTo(10, 0).strokePath();
   }, (pointer) => {

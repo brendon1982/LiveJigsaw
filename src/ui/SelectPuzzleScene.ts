@@ -7,19 +7,16 @@ import { puzzleSources } from '../puzzles/catalog';
 import type { PuzzleSource } from '../puzzles/PuzzleSource';
 import { makeButton, makeOptionTile, type UIScene } from './button';
 import type { PuzzleSelection } from './PlayPuzzleScene';
+import { cardScrollbarSpace, cardScrollThreshold, makePuzzleCardPanel } from './puzzleCardPanel';
 import { artworkCreditLines, showPuzzleDetails } from './puzzleDetailsDialog';
 import { showPuzzleFilters } from './puzzleFilterDialog';
 import { activeFilterCount, matchesPuzzleFilters, noPuzzleFilters, samePuzzleFilters, type PuzzleFilters } from './puzzleFilters';
-import { headerControlGap, headerInset, makeFiltersButton, makeSettingsButton, puzzleSpacing } from './puzzleHeader';
+import { headerControlGap, headerInset, makeBackButton, makeFiltersButton, makeSettingsButton, puzzleSpacing } from './puzzleHeader';
 import { makePreviewCornerCutout, makePuzzlePickerCard, maxPickerCardWidth } from './PuzzlePickerCard';
 import { showPuzzleOptions, showResumePuzzle } from './puzzleOptions';
 import { openSettings } from './SettingsScene';
 import { metadataTextStyle, styleWithTheme } from './theme';
 
-const scrollbarWidth = 10;
-const scrollbarGap = 14;
-const scrollbarSpace = scrollbarWidth + scrollbarGap;
-const scrollThreshold = 10;
 const previewSizes = {
   Compact: { maxWidth: 200, widthFraction: 0.465, iconGridSize: 2 },
   Full: { maxWidth: maxPickerCardWidth, widthFraction: 1, iconGridSize: 1 },
@@ -65,6 +62,12 @@ export class SelectPuzzleScene extends Phaser.Scene {
 
   constructor() {
     super(SelectPuzzleScene.key);
+  }
+
+  init({ filters }: { filters?: PuzzleFilters } = {}) {
+    if (!filters) return;
+    this.filters = filters;
+    this.scrollOffset = 0;
   }
 
   create() {
@@ -117,7 +120,7 @@ export class SelectPuzzleScene extends Phaser.Scene {
       const completions = gameSave.completionCount(source.scene.key);
       const progress = resumableProgress(source);
       const status = cardStatus(progress, completions);
-      const card = makePuzzlePickerCard(this, source, status, cutout, listBounds, scrollThreshold,
+      const card = makePuzzlePickerCard(this, source, status, cutout, listBounds, cardScrollThreshold,
         () => openCard(source, progress), (copyPreview) => {
           if (dialogOpen) return;
           openDialog();
@@ -130,30 +133,14 @@ export class SelectPuzzleScene extends Phaser.Scene {
     });
     const list = this.rexUI.add.sizer({ orientation: 'y', space: { bottom: puzzleSpacing } })
       .add(grid, { align: 'center', key: 'cards' });
-    const track = this.rexUI.add.roundRectangle(0, 0, 8, 10, 4);
-    const thumb = this.rexUI.add.roundRectangle(0, 0, scrollbarWidth, 36, 5);
-    const panel = this.rexUI.add.scrollablePanel({
-      panel: { child: list, mask: { maskType: 'stencil' } },
-      clampChildOY: true,
-      scrollDetectionMode: 'rectBounds',
-      scroller: { threshold: scrollThreshold },
-      mouseWheelScroller: { focus: 2, speed: 0.75 },
-      slider: {
-        track, thumb,
-        adaptThumbSize: true,
-        minThumbSize: 36,
-        hideUnscrollableSlider: true,
-      },
-      space: { sliderY: scrollbarGap },
-    }).setOrigin(0);
-    styleWithTheme(panel, (colors) => {
-      track.setFillStyle(colors.scrollbarTrack);
-      thumb.setFillStyle(colors.scrollbarThumb);
-    });
+    const panel = makePuzzleCardPanel(this, list);
     const headerBackground = this.add.rectangle(0, 0, 1, 1).setOrigin(0);
     styleWithTheme(headerBackground, (colors) => {
       headerBackground.setFillStyle(colors.background);
     });
+    const back = makeBackButton(this, () => {
+      if (!dialogOpen) this.scene.start('Landing');
+    }, 'Back to themes');
     const settings = makeSettingsButton(this, () => {
       if (dialogOpen) return;
       openDialog();
@@ -179,7 +166,7 @@ export class SelectPuzzleScene extends Phaser.Scene {
       const tile = makeOptionTile(this, {
         name: `preview-size-${size}`, width: 70, height: filtersButton.height,
         drawIcon: () => drawPreviewSizeIcon(this, size),
-        dragThreshold: scrollThreshold,
+        dragThreshold: cardScrollThreshold,
         onClick: () => {
           if (!dialogOpen) changePreviewSize(size);
         },
@@ -234,16 +221,18 @@ export class SelectPuzzleScene extends Phaser.Scene {
     const layoutPicker = (offset: number) => {
       const { width, height } = this.scale.gameSize;
       settings.layout(width);
-      filtersButton.setPosition(settings.button.x - filtersButton.width - headerControlGap, settings.button.y);
+      const filtersLeft = settings.button.x - filtersButton.width - headerControlGap;
+      const sizesLeft = Math.max((width - previewSizeRow.width) / 2, back.x + back.width + headerControlGap);
+      const stack = sizesLeft + previewSizeRow.width + headerControlGap > filtersLeft;
+      const firstRowHeight = Math.max(back.height, previewSizeRow.height);
+      const settingsTop = stack ? puzzleSpacing + firstRowHeight + headerControlGap : puzzleSpacing;
+      previewSizeRow.setPosition(sizesLeft, puzzleSpacing);
+      settings.button.setY(settingsTop);
+      filtersButton.setPosition(filtersLeft, settingsTop);
       filterBadge.setPosition(filtersButton.x + filtersButton.width - 2, filtersButton.y + 2);
-      const buttonHeight = Math.max(settings.button.height, filtersButton.height);
-      const headerBottom = puzzleSpacing + buttonHeight;
-      const sizesFitInline = headerInset + previewSizeRow.width + headerControlGap <= filtersButton.x;
-      const sizeRowTop = sizesFitInline ? puzzleSpacing : headerBottom + headerControlGap;
-      previewSizeRow.setPosition(headerInset, sizeRowTop);
-      const panelTop = Math.max(headerBottom, sizeRowTop + previewSizeRow.height) + puzzleSpacing;
+      const panelTop = settingsTop + Math.max(firstRowHeight, settings.button.height, filtersButton.height) + puzzleSpacing;
       const panelHeight = Math.max(1, height - panelTop);
-      const listWidth = width - scrollbarSpace;
+      const listWidth = width - cardScrollbarSpace;
       const availableWidth = listWidth - 2 * puzzleSpacing;
       const size = gameSave.settings.pickerPreviewSize;
       const compact = size === 'Compact';

@@ -138,21 +138,23 @@ export function makeOptionTile(scene: UIScene, {
   if (artwork) button.addBackground(artwork, 0, 'artwork');
   let selected = false;
   let pressed = false;
-  const restyle = (colors: typeof palette) => {
+  const styleBackground = (colors: typeof palette) => {
     background.setFillStyle(pressed ? colors.buttonPressed : selected ? colors.selectedOption : colors.background)
       .setStrokeStyle(selected ? 2 : 1, selected ? colors.primaryButton : colors.optionBorder);
     artwork?.setTint(pressed ? 0xd8d8d8 : 0xffffff);
-    text?.setColor(hasArtworkCaption ? '#fff' : colors.text);
   };
-  styleWithTheme(button, restyle);
-  addPressFeedback(button, (value) => { pressed = value; restyle(palette); }, dragThreshold);
+  styleWithTheme(button, (colors) => {
+    styleBackground(colors);
+    text?.setColor(hasArtworkCaption ? '#fff' : colors.text);
+  });
+  addPressFeedback(button, (value) => { pressed = value; styleBackground(palette); }, dragThreshold);
   if (onClick) {
     bindClick(scene, button, (pointer) => { if (!pointer.wasCanceled) onClick(pointer); }, dragThreshold);
   }
   return {
     button, artwork,
     setCornerRadius(radius: number) { background.setRadius(radius); },
-    setSelected(value: boolean) { selected = value; restyle(palette); },
+    setSelected(value: boolean) { selected = value; styleBackground(palette); },
   };
 }
 

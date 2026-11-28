@@ -119,9 +119,15 @@ export class SelectPuzzleScene extends Phaser.Scene {
     };
     const cutout = makePreviewCornerCutout(this);
     const newestFirst = [...puzzleSources].reverse();
-    const cards = newestFirst.map((source) => {
+    const records = newestFirst.map((source) => {
       const completions = gameSave.completionCount(source.scene.key);
       const progress = resumableProgress(source);
+      return { source, progress, completionState: { completions, hasResumableProgress: Boolean(progress) } };
+    });
+    const cards = new Map<PuzzleSource, ReturnType<typeof makePuzzlePickerCard>>();
+    const cardFor = ({ source, progress, completionState: { completions } }: typeof records[number]) => {
+      const existing = cards.get(source);
+      if (existing) return existing;
       const status = cardStatus(progress, completions);
       const card = makePuzzlePickerCard(this, source, status, cutout, listBounds, cardScrollThreshold,
         () => openCard(source, progress), (copyPreview) => {
@@ -129,8 +135,9 @@ export class SelectPuzzleScene extends Phaser.Scene {
           openDialog();
           showPuzzleDetails(this, source, status, copyPreview(), closeDialog);
         }, artworkCreditLines(source.attribution).length > 0);
-      return { card, source, completionState: { completions, hasResumableProgress: Boolean(progress) } };
-    });
+      cards.set(source, card);
+      return card;
+    };
     const grid = this.rexUI.add.gridSizer({
       column: 1, row: 1,
     });
@@ -198,7 +205,7 @@ export class SelectPuzzleScene extends Phaser.Scene {
     });
 
     const matchingCards = (filters: PuzzleFilters) =>
-      cards.filter(({ source, completionState }) => matchesPuzzleFilters(source, completionState, filters));
+      records.filter(({ source, completionState }) => matchesPuzzleFilters(source, completionState, filters)).map(cardFor);
     let visibleCards = matchingCards(this.filters);
     let cardLayout: { columns: number; width: number; stackStatus: boolean; compact: boolean } | undefined;
     const updateFilterCaption = () => {
@@ -211,12 +218,12 @@ export class SelectPuzzleScene extends Phaser.Scene {
     };
     const changePreviewSize = (size: PickerPreviewSize) => {
       if (gameSave.settings.pickerPreviewSize === size) return;
-      const firstInView = panel.childOY < 0 && visibleCards.find(({ card: { container } }) =>
+      const firstInView = panel.childOY < 0 && visibleCards.find(({ container }) =>
         container.y + container.height > listBounds.top);
       gameSave.updateSettings({ pickerPreviewSize: size });
       updatePreviewSizeTiles();
       layoutPicker(0);
-      if (firstInView) panel.setChildOY(listBounds.top - firstInView.card.container.y, true);
+      if (firstInView) panel.setChildOY(listBounds.top - firstInView.container.y, true);
     };
     const applyFilters = (filters: PuzzleFilters) => {
       if (samePuzzleFilters(this.filters, filters)) return;
@@ -256,13 +263,13 @@ export class SelectPuzzleScene extends Phaser.Scene {
       const cardWidth = Phaser.Math.Clamp(Math.floor(availableWidth * widthFraction), 1, maxWidth);
       const fittingColumns = Math.floor((availableWidth + puzzleSpacing) / (cardWidth + puzzleSpacing));
       const columns = Math.min(Math.max(1, fittingColumns), Math.max(1, visibleCards.length));
-      const stackStatus = !compact && visibleCards.some(({ card }) => card.needsStatusRow(cardWidth));
+      const stackStatus = !compact && visibleCards.some((card) => card.needsStatusRow(cardWidth));
       if (cardLayout?.columns !== columns || cardLayout.width !== cardWidth
         || cardLayout.stackStatus !== stackStatus || cardLayout.compact !== compact) {
         const rows = Math.max(1, Math.ceil(visibleCards.length / columns));
         grid.resetGrid(columns, rows, 0, 0, { column: puzzleSpacing, row: puzzleSpacing });
-        for (const { card } of cards) card.container.setVisible(false);
-        visibleCards.forEach(({ card }, index) => {
+        for (const card of cards.values()) card.container.setVisible(false);
+        visibleCards.forEach((card, index) => {
           card.layout(cardWidth, stackStatus, compact);
           card.container.setVisible(true);
           grid.add(card.container, { column: index % columns, row: Math.floor(index / columns) });
@@ -300,7 +307,7 @@ export class SelectPuzzleScene extends Phaser.Scene {
     };
     const loadNearbyPreviews = () => {
       let queuedImages = false;
-      for (const { card } of visibleCards) {
+      for (const card of visibleCards) {
         if (!isNearCardViewport(card.container, listBounds, puzzleSpacing)) continue;
         if (card.preparePreview()) queuedImages = true;
       }

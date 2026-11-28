@@ -8,6 +8,7 @@ import { metadataTextStyle, palette, styleWithTheme } from './theme';
 export const maxPickerCardWidth = 560;
 const previewSize = { width: 1024, height: 576 };
 const previewHeight = maxPickerCardWidth * previewSize.height / previewSize.width;
+const landingArtworkBackground = 0xf8f6f0;
 export const pickerCardCornerRadius = 16;
 const footerHeight = 72;
 const statusRowHeight = 22;
@@ -216,9 +217,38 @@ export function makePreview(scene: UIScene, source: PuzzleSource, cutout: Phaser
   const sourceScale = Math.min(1, source.maxViewport.width / width, source.maxViewport.height / height);
   const objects = source.drawPreview(scene, { width: width * sourceScale, height: height * sourceScale });
   const artwork = scene.add.container(0, 0, objects).setScale(maxPickerCardWidth / (width * sourceScale));
+  return captureCardArtwork(scene, artwork, cutout);
+}
+
+export function captureImageArtwork(
+  scene: UIScene, key: string, cutout: Phaser.Textures.CanvasTexture,
+  focus = { x: 0.5, y: 0.5 },
+) {
+  const image = scene.add.image(0, 0, key).setOrigin(0);
+  image.setScale(Math.max(maxPickerCardWidth / image.width, previewHeight / image.height));
+  const cropOrigin = (frameSize: number, imageSize: number, subject: number) =>
+    Phaser.Math.Clamp(frameSize / 2 - imageSize * subject, Math.min(0, frameSize - imageSize), 0);
+  const left = cropOrigin(maxPickerCardWidth, image.displayWidth, focus.x);
+  const top = cropOrigin(previewHeight, image.displayHeight, focus.y);
+  image.setPosition(left, top);
+  return captureCardArtwork(scene, image, cutout, landingArtworkBackground);
+}
+
+export function makeScalableArtwork(scene: UIScene, preview: Phaser.GameObjects.RenderTexture) {
+  // RexUI resizes backgrounds during layout, which would clear a RenderTexture.
+  const image = scene.add.image(0, 0, preview.removeFromDisplayList().texture);
+  image.once(Phaser.GameObjects.Events.DESTROY, () => preview.destroy());
+  return image;
+}
+
+function captureCardArtwork(
+  scene: UIScene, artwork: Phaser.GameObjects.GameObject, cutout: Phaser.Textures.CanvasTexture,
+  background?: number,
+) {
   const preview = scene.add.renderTexture(0, 0, maxPickerCardWidth, previewHeight).setOrigin(0);
   preview.texture.setFilter(Phaser.Textures.FilterMode.LINEAR);
   // Capture and round the artwork once so cards can scale it as a single image.
+  if (background !== undefined) preview.fill(background);
   preview.draw(artwork).erase(cutout.get(), cutout.width / 2, cutout.height / 2).render();
   artwork.destroy();
   return preview;

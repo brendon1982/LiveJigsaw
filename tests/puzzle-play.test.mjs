@@ -988,8 +988,16 @@ scenario('landing offers specific filter values for Type, Completion and Artwork
   await uiControl(page, landingControl('browse-All'));
   const categories = await page.evaluate(() => window.puzzleLandingScene.children.list
     .find(({ type }) => type === 'rexScrollablePanel').getAllChildren()
-    .filter(({ name }) => name.startsWith('browse-')).map(({ name }) => name.slice(7)));
-  assert.deepEqual(categories, ['All', 'Theme', 'Artist', 'Type', 'Completion', 'Artwork motion']);
+    .filter(({ name }) => name.startsWith('browse-'))
+    .map((card) => ({ label: card.name.slice(7), artwork: Boolean(card.getElement('artwork')) })));
+  assert.deepEqual(categories.map(({ label }) => label), ['All', 'Theme', 'Artist', 'Type', 'Completion', 'Artwork motion']);
+  assert.deepEqual(categories.filter(({ artwork }) => !artwork).map(({ label }) => label), ['All']);
+  const typeCard = await uiControl(page, landingControl('browse-Type'));
+  const screenshot = PNG.sync.read(await page.screenshot({ clip: {
+    x: Math.ceil(typeCard.x - typeCard.width / 2), y: Math.ceil(typeCard.y - typeCard.height / 2),
+    width: Math.floor(typeCard.width), height: Math.floor(typeCard.height),
+  } }));
+  assert.ok(screenshot.data.includes(Buffer.from([248, 246, 240, 255])), 'Transparent art should have an off-white backing');
   const cases = [
     ['Type', ['Flat Illustration', 'Parallax', 'Procedural'], 'Parallax', { types: ['Parallax'] }],
     ['Completion', ['Completed', 'In progress', 'Never completed'], 'In progress', { completion: 'In progress' }],
@@ -1003,11 +1011,13 @@ scenario('landing offers specific filter values for Type, Completion and Artwork
       const panel = scene.children.list.find(({ type }) => type === 'rexScrollablePanel');
       return {
         heading: scene.children.getByName('browse-heading').text,
-        values: panel.getAllChildren().filter(({ name }) => name.startsWith('value-')).map(({ name }) => name.slice(6)),
+        values: panel.getAllChildren().filter(({ name }) => name.startsWith('value-'))
+          .map((card) => ({ label: card.name.slice(6), artwork: Boolean(card.getElement('artwork')) })),
       };
     });
     assert.equal(available.heading, category);
-    assert.deepEqual(available.values, values);
+    assert.deepEqual(available.values.map(({ label }) => label), values);
+    assert.deepEqual(available.values.filter(({ artwork }) => !artwork), [], `All ${category} values should have artwork`);
     await clickControl(page, landingControl(`value-${choice}`));
     await waitForPicker(page);
     assert.deepEqual(await page.evaluate(() => window.puzzlePickerScene.filters), {
@@ -1016,6 +1026,96 @@ scenario('landing offers specific filter values for Type, Completion and Artwork
     await pressHeader(page, 'Back to browse');
     await clickControl(page, landingControl('Back to filter categories'));
   }
+  assert.deepEqual(errors, []);
+});
+
+scenario('landing card artwork credits open separately from touch navigation', async (t) => {
+  await buildCompactFixture();
+  const { page, errors, origin } = await openGamePage(t, {
+    viewport: { width: 640, height: 600 }, hasTouch: true, isMobile: true,
+  });
+  const artworkRequests = [];
+  page.on('request', (request) => {
+    const path = new URL(request.url()).pathname;
+    if (path.endsWith('.webp')) artworkRequests.push(path);
+  });
+  await page.goto(`${origin}${compactPuzzlePath}?landing`);
+  const landingControl = (name) => ({ sceneKey: 'Landing', name });
+  const credits = landingControl('Artwork credits for Theme');
+  const { x, y } = await uiControl(page, credits);
+  const card = await uiControl(page, landingControl('browse-Theme'));
+  assert.ok(x > card.x && y > card.y, 'Credits should be in the lower right');
+  const labels = await page.evaluate(() => {
+    const { children } = window.puzzleLandingScene;
+    const controls = children.list.find(({ type }) => type === 'rexScrollablePanel').getAllChildren();
+    const caption = (name) => controls.find((control) => control.name === name).getElement('text');
+    const theme = caption('browse-Theme');
+    const all = caption('browse-All');
+    const dots = controls.find(({ name }) => name === 'Artwork credits for Theme');
+    return {
+      colors: [theme, all, dots].map((label) => label.getElement('text').style.color),
+      sameHeight: theme.height === dots.height,
+    };
+  });
+  assert.deepEqual(labels.colors, ['#fff', '#fff', '#fff']);
+  assert.equal(labels.sameHeight, true);
+  const image = await page.screenshot();
+  const left = Math.ceil(card.x - card.width / 2);
+  const top = Math.ceil(card.y - card.height / 2);
+  assert.deepEqual(await pixelAt(page, image, left, top), await pixelAt(page, image, left - 3, top),
+    'Artwork should not show outside the rounded corner');
+  const interior = await Promise.all([0.15, 0.35, 0.65].map((fraction) =>
+    pixelAt(page, image, Math.floor(left + card.width * fraction), top + 20)));
+  assert.ok(new Set(interior.map(String)).size > 1, 'The artwork should be visible across the card');
+
+  const { moveFinger } = await touchController(page);
+  await moveFinger(x, y, x, y - 50, 'touchEnd', 120);
+  const state = await page.evaluate(() => {
+    const { list } = window.puzzleLandingScene.children;
+    return {
+      offset: list.find(({ type }) => type === 'rexScrollablePanel').childOY,
+      hasDialog: list.some(({ type }) => type === 'rexDialog'),
+    };
+  });
+  assert.ok(state.offset < 0, 'Swiping from the credits button should scroll the cards');
+  assert.equal(state.hasDialog, false);
+
+  assert.ok(!artworkRequests.some((path) => path.includes('theme-banner')), 'The larger file should not load with the card');
+  const [bannerResponse] = await Promise.all([
+    page.waitForResponse((response) => response.url().includes('theme-banner') && response.ok(), { timeout: 4000 }),
+    clickControl(page, credits, true),
+  ]);
+  await uiControl(page, { sceneKey: 'Landing', text: 'Close', action: true });
+  const banner = await page.evaluate(async (url) => {
+    const image = new Image();
+    image.src = url;
+    await image.decode();
+    return { width: image.naturalWidth, height: image.naturalHeight };
+  }, bannerResponse.url());
+  assert.ok(Math.min(banner.width, banner.height) > 396 && Math.min(banner.width, banner.height) <= 2000);
+  const details = await page.evaluate(() => {
+    const scene = window.puzzleLandingScene;
+    const dialog = scene.children.list.find(({ type }) => type === 'rexDialog');
+    return {
+      heading: scene.children.getByName('browse-heading').text,
+      bannerType: dialog.getElement('title').type,
+      texts: dialog.getAllChildren().filter(({ type }) => type === 'Text').map(({ text }) => text),
+      hasAllCredits: Boolean(scene.children.getByName('Artwork credits for All')),
+    };
+  });
+  assert.equal(details.heading, 'Live Jigsaw', 'The ellipsis must not open the filter category');
+  assert.equal(details.bannerType, 'Image');
+  assert.ok(details.texts.includes('Artwork credits'));
+  assert.ok(details.texts.includes('Wildan Kurniawan'));
+  const links = details.texts.filter((line) => line.startsWith('https://unsplash.com/'));
+  assert.equal(links.length, 2);
+  assert.ok(links.every((link) => !new URL(link).search));
+  assert.equal(details.hasAllCredits, false);
+
+  await clickControl(page, { sceneKey: 'Landing', text: 'Close', action: true }, true);
+  await waitForDialogClosed(page, 'Landing');
+  await clickControl(page, landingControl('browse-Theme'), true);
+  await page.waitForFunction(() => window.puzzleLandingScene.children.getByName('browse-heading')?.text === 'Theme');
   assert.deepEqual(errors, []);
 });
 
@@ -1317,12 +1417,15 @@ scenario('the picker shows newest puzzles first and only loads nearby previews',
   const gameScript = /\/assets\/index-[\w-]+\.js$/;
   const rasterAsset = /\/assets\/[^/]+-[\w-]+\.(?:png|jpe?g|webp)$/;
   const previewAsset = /\/assets\/(?:[^/]+-)?preview-[\w-]+\.(?:png|jpe?g|webp)$/;
+  const landingAsset = /\/assets\/(?:theme|artist|type|completion|motion)-card-[\w-]+\.webp$/;
   const requestedArtwork = [];
   const requestedPreviews = [];
   const scriptGate = Promise.withResolvers();
   const previewGate = Promise.withResolvers();
   page.on('request', (request) => {
-    if (rasterAsset.test(request.url()) && !previewAsset.test(request.url())) requestedArtwork.push(request.url());
+    if (rasterAsset.test(request.url()) && !previewAsset.test(request.url()) && !landingAsset.test(request.url())) {
+      requestedArtwork.push(request.url());
+    }
   });
   await page.route(gameScript, async (route) => {
     await scriptGate.promise;
@@ -4027,7 +4130,7 @@ scenario('compact picker ellipsis opens details with the preview and inline cred
     const preview = card.getChildren().find(({ type }) => type === 'RenderTexture');
     const body = dialog.getElement('content.panel');
     const image = dialog.getElement('title');
-    const [title, metadata, ...credits] = body.getChildren();
+    const [title, metadata, ...credits] = body.getAllChildren().filter(({ type }) => type === 'Text');
     const artworkBounds = image.getBounds();
     const borderBounds = dialog.getElement('background').getBounds();
     return {
@@ -4044,7 +4147,7 @@ scenario('compact picker ellipsis opens details with the preview and inline cred
   assert.equal(details.sameArtwork, true);
   assert.equal(details.artworkAboveTitle, true);
   assert.ok(details.artworkInsets.every((inset) => Math.abs(inset) < 1), `Artwork insets: ${details.artworkInsets}`);
-  assert.equal(details.titleInset, 20);
+  assert.equal(details.titleInset, 22);
   assert.match(details.metadata, / · Animated$/);
   assert.deepEqual(details.credits, ['Artwork credits', 'Me', 'Place holder art from the prototype. Left it in for fun.']);
   assert.deepEqual(details.actions, ['Close']);

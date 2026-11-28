@@ -92,27 +92,44 @@ type OptionTile = {
   fontSize?: string;
   drawIcon?: () => Phaser.GameObjects.Container;
   createArtwork?: () => Phaser.GameObjects.Image | undefined;
+  useArtworkCaption?: boolean;
   depth?: number;
   contentDepth?: number;
   dragThreshold?: number;
   onClick?: (pointer: Phaser.Input.Pointer) => void;
 };
 
+function makeArtworkCaption(scene: UIScene, text: Phaser.GameObjects.Text, depth: number) {
+  const background = scene.rexUI.add.roundRectangle(0, 0, 1, 1, 9, 0x000000, 0.73).setDepth(depth);
+  text.setColor('#fff').setDepth(depth);
+  return scene.rexUI.add.label({
+    background, text, align: 'center', space: { left: 8, right: 8, top: 4, bottom: 4 },
+  }).setDepth(depth);
+}
+
+export function addArtworkCreditsButton(
+  scene: UIScene, card: ButtonLabel, name: string, fontSize: string, dragThreshold: number,
+  onClick: (pointer: Phaser.Input.Pointer) => void,
+) {
+  const caption = scene.add.text(0, 0, '...', { fontFamily: 'system-ui', fontSize });
+  const credits = makeArtworkCaption(scene, caption, card.depth + 0.5)
+    .setName(name).setOrigin(1, 1).layout();
+  card.pin(credits).setSizerEventsEnable();
+  card.on('postlayout', () => card.setChildPosition(credits, card.right - 8, card.bottom - 8));
+  bindClick(scene, credits, onClick, dragThreshold);
+}
+
 export function makeOptionTile(scene: UIScene, {
   name, label, width, drawIcon, height = drawIcon ? 82 : 52, fontSize = '15px',
-  createArtwork, depth = 0, contentDepth = depth, dragThreshold, onClick,
+  createArtwork, useArtworkCaption, depth = 0, contentDepth = depth, dragThreshold, onClick,
 }: OptionTile) {
   const background = scene.rexUI.add.roundRectangle(0, 0, 1, 1, 9).setDepth(depth);
   const artwork = createArtwork?.()?.setDepth(depth);
-  const captionBackground = artwork && label !== undefined
-    ? scene.rexUI.add.roundRectangle(0, 0, 1, 1, 9, 0x000000, 0.73).setDepth(contentDepth)
-    : undefined;
   const text = label === undefined ? undefined : scene.add.text(0, 0, label, {
     fontFamily: 'system-ui', fontSize, align: 'center',
   }).setDepth(contentDepth);
-  const caption = captionBackground ? scene.rexUI.add.label({
-    background: captionBackground, text, space: { left: 8, right: 8, top: 4, bottom: 4 },
-  }) : text;
+  const hasArtworkCaption = Boolean(artwork || useArtworkCaption);
+  const caption = hasArtworkCaption && text ? makeArtworkCaption(scene, text, contentDepth) : text;
   const button = scene.rexUI.add.label({
     name, width, height, orientation: 'y', align: 'center', background, text: caption,
     icon: drawIcon?.().setDepth(contentDepth),
@@ -125,7 +142,7 @@ export function makeOptionTile(scene: UIScene, {
     background.setFillStyle(pressed ? colors.buttonPressed : selected ? colors.selectedOption : colors.background)
       .setStrokeStyle(selected ? 2 : 1, selected ? colors.primaryButton : colors.optionBorder);
     artwork?.setTint(pressed ? 0xd8d8d8 : 0xffffff);
-    text?.setColor(artwork ? '#fff' : colors.text);
+    text?.setColor(hasArtworkCaption ? '#fff' : colors.text);
   };
   styleWithTheme(button, restyle);
   addPressFeedback(button, (value) => { pressed = value; restyle(palette); }, dragThreshold);

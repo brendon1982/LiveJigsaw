@@ -44,6 +44,18 @@ export function makeDetailsArtwork(scene: UIScene, source: PuzzleSource) {
 export function showPuzzleDetails(
   scene: UIScene, source: PuzzleSource, status: string, artwork: Phaser.GameObjects.Image, onClose: () => void,
 ) {
+  return showArtworkDetails(scene, artwork, onClose, {
+    title: source.title,
+    subtitle: `${puzzleCardTags(source)} · ${source.motion}`,
+    credits: artworkCreditLines(source.attribution),
+    status,
+  });
+}
+
+export function showArtworkDetails(
+  scene: UIScene, artwork: Phaser.GameObjects.Image, onClose: () => void,
+  { title, subtitle, credits, status }: { title: string; subtitle?: string; credits: readonly string[]; status?: string },
+) {
   const content = scene.rexUI.add.sizer({ orientation: 'y', width: contentWidth, space: { item: 8 } });
 
   const addLine = (text: string, style: Phaser.Types.GameObjects.Text.TextStyle, top = 0) => {
@@ -52,10 +64,9 @@ export function showPuzzleDetails(
     }).setDepth(pickerControlDepth);
     content.add(label, { align: 'left', padding: { top } });
   };
-  addLine(source.title, { fontFamily: 'system-ui', fontSize: '22px', fontStyle: 'bold', color: palette.text });
-  addLine(`${puzzleCardTags(source)} · ${source.motion}`, { ...metadataTextStyle, color: palette.mutedText });
+  addLine(title, { fontFamily: 'system-ui', fontSize: '22px', fontStyle: 'bold', color: palette.text });
+  if (subtitle) addLine(subtitle, { ...metadataTextStyle, color: palette.mutedText });
 
-  const credits = artworkCreditLines(source.attribution);
   if (credits.length) {
     addLine('Artwork credits', { ...metadataTextStyle, color: palette.mutedText }, 4);
     for (const credit of credits) addLine(credit, { ...metadataTextStyle, fontSize: '17px', color: palette.text });

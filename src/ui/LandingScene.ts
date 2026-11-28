@@ -1,12 +1,16 @@
 import Phaser from 'phaser';
+import { landingArtworkFor, type LandingArtwork } from '../landingArtwork/catalog';
 import { puzzleSources } from '../puzzles/catalog';
 import type { PuzzleSource } from '../puzzles/PuzzleSource';
-import { makeOptionTile, type UIScene } from './button';
+import { addArtworkCreditsButton, makeOptionTile, type UIScene } from './button';
+import { showLandingArtworkDetails } from './landingArtworkDialog';
 import { cardScrollbarSpace, cardScrollThreshold, makePuzzleCardPanel } from './puzzleCardPanel';
 import { puzzleFilterGroups } from './puzzleFilterGroups';
 import { activeFilterCount, matchesPuzzleFilters, noPuzzleFilters, type PuzzleFilterCategory, type PuzzleFilters } from './puzzleFilters';
 import { headerControlGap, headerInset, makeBackButton, makeHomeButton, makeSettingsButton, puzzleSpacing } from './puzzleHeader';
-import { makePreview, makePreviewCornerCutout, maxPickerCardWidth, pickerCardCornerRadius } from './PuzzlePickerCard';
+import {
+  captureImageArtwork, makePreview, makePreviewCornerCutout, makeScalableArtwork, maxPickerCardWidth, pickerCardCornerRadius,
+} from './PuzzlePickerCard';
 import { SelectPuzzleScene } from './SelectPuzzleScene';
 import { openSettings } from './SettingsScene';
 import { styleWithTheme } from './theme';
@@ -17,8 +21,11 @@ export type LandingPage = {
   categoriesScrollOffset?: number;
 };
 
+type BrowseEntry = { label: string; open: (scrollOffset: number) => void; artwork?: LandingArtwork };
+
 const maxBrowseCardWidth = 320;
 const browseCardHeight = 160;
+const browseCardFontSize = '24px';
 const filterCategories = Object.keys(puzzleFilterGroups) as PuzzleFilterCategory[];
 
 function chooseBrowsePreviews(category?: PuzzleFilterCategory) {
@@ -38,19 +45,27 @@ export class LandingScene extends Phaser.Scene {
   static readonly key = 'Landing';
   declare rexUI: UIScene['rexUI'];
   private browsePreviews = new Map<string, PuzzleSource>();
+  private entries: BrowseEntry[] = [];
 
   constructor() {
     super(LandingScene.key);
   }
 
-  init({ category }: LandingPage = {}) {
-    this.browsePreviews = chooseBrowsePreviews(category);
+  init(page: LandingPage = {}) {
+    this.browsePreviews = chooseBrowsePreviews(page.category);
+    this.entries = this.browseEntries(page).map((entry) => ({
+      ...entry, artwork: landingArtworkFor(entry.label, page.category),
+    }));
   }
 
   preload() {
-    for (const { previewImage } of this.browsePreviews.values()) {
-      if (previewImage && !this.textures.exists(previewImage.key)) {
-        this.load.image(previewImage.key, previewImage.url);
+    const images = [
+      ...Array.from(this.browsePreviews.values(), ({ previewImage }) => previewImage),
+      ...this.entries.map(({ artwork }) => artwork?.image),
+    ];
+    for (const image of images) {
+      if (image && !this.textures.exists(image.key)) {
+        this.load.image(image.key, image.url);
       }
     }
   }
@@ -58,8 +73,8 @@ export class LandingScene extends Phaser.Scene {
   create(page: LandingPage = {}) {
     const { category, scrollOffset = 0, categoriesScrollOffset } = page;
     const group = category && puzzleFilterGroups[category];
-    const entries = this.browseEntries(page);
-    const artworkCutout = this.browsePreviews.size ? makePreviewCornerCutout(this, 'all') : undefined;
+    const hasArtwork = this.browsePreviews.size > 0 || this.entries.some(({ artwork }) => artwork);
+    const artworkCutout = hasArtwork ? makePreviewCornerCutout(this, 'all') : undefined;
     if (artworkCutout) this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.textures.remove(artworkCutout));
     const camera = this.cameras.main;
     const listBounds = new Phaser.Geom.Rectangle();
@@ -67,28 +82,46 @@ export class LandingScene extends Phaser.Scene {
       const point = camera.getWorldPoint(x, y);
       return listBounds.contains(point.x, point.y);
     };
-    const cards = entries.map(({ label, open }) => makeOptionTile(this, {
-      name: `${group ? 'value' : 'browse'}-${label}`, label, width: 1, height: browseCardHeight, fontSize: '24px',
-      createArtwork: artworkCutout && (() => this.makeBrowsePreview(label, artworkCutout)),
-      dragThreshold: cardScrollThreshold,
-      onClick: (pointer) => {
-        if (pointer.getDistance() >= cardScrollThreshold
-          || !isInsideList(pointer.downX, pointer.downY) || !isInsideList(pointer.x, pointer.y)) return;
-        open(panel.childOY);
-      },
-    }));
+    let dialogOpen = false;
+    const setDialogOpen = (open: boolean) => {
+      dialogOpen = open;
+      panel.setScrollerEnable(!open).setMouseWheelScrollerEnable(!open);
+    };
+    const canTapCard = (pointer: Phaser.Input.Pointer) => !dialogOpen && !pointer.wasCanceled
+      && pointer.getDistance() < cardScrollThreshold
+      && isInsideList(pointer.downX, pointer.downY) && isInsideList(pointer.x, pointer.y);
+    const cards = this.entries.map(({ label, open, artwork }) => {
+      const tile = makeOptionTile(this, {
+        name: `${group ? 'value' : 'browse'}-${label}`, label, width: 1, height: browseCardHeight, fontSize: browseCardFontSize,
+        useArtworkCaption: true,
+        createArtwork: artworkCutout && (() => this.makeBrowseArtwork(label, artworkCutout, artwork)),
+        dragThreshold: cardScrollThreshold,
+        onClick: (pointer) => { if (canTapCard(pointer)) open(panel.childOY); },
+      });
+      if (artwork && this.textures.exists(artwork.image.key)) {
+        addArtworkCreditsButton(this, tile.button, `Artwork credits for ${label}`, browseCardFontSize, cardScrollThreshold, (pointer) => {
+          if (!canTapCard(pointer)) return;
+          setDialogOpen(true);
+          showLandingArtworkDetails(this, label, artwork, () => setDialogOpen(false));
+        });
+      }
+      return tile;
+    });
     const grid = this.rexUI.add.gridSizer({ column: 1, row: 1 });
     const list = this.rexUI.add.sizer({ orientation: 'y', space: { top: puzzleSpacing, bottom: puzzleSpacing } })
       .add(grid, { align: 'center' });
     const panel = makePuzzleCardPanel(this, list);
     if (group) {
-      const back = makeBackButton(this, () => this.scene.restart({ scrollOffset: categoriesScrollOffset }), 'Back to filter categories');
-      makeHomeButton(this, () => this.scene.restart({}))
+      const back = makeBackButton(this, () => {
+        if (!dialogOpen) this.scene.restart({ scrollOffset: categoriesScrollOffset });
+      }, 'Back to filter categories');
+      makeHomeButton(this, () => { if (!dialogOpen) this.scene.restart({}); })
         .setPosition(back.x + back.width + headerControlGap, back.y);
     }
     const settings = makeSettingsButton(this, () => {
-      panel.setScrollerEnable(false).setMouseWheelScrollerEnable(false);
-      openSettings(this, { onClose: () => panel.setScrollerEnable(true).setMouseWheelScrollerEnable(true) });
+      if (dialogOpen) return;
+      setDialogOpen(true);
+      openSettings(this, { onClose: () => setDialogOpen(false) });
     });
     const title = this.add.text(0, 0, group?.title ?? 'Live Jigsaw', {
       fontFamily: 'system-ui', fontStyle: 'bold',
@@ -131,17 +164,17 @@ export class LandingScene extends Phaser.Scene {
     panel.setChildOY(scrollOffset, true);
   }
 
-  private makeBrowsePreview(label: string, cutout: Phaser.Textures.CanvasTexture) {
+  private makeBrowseArtwork(label: string, cutout: Phaser.Textures.CanvasTexture, artwork?: LandingArtwork) {
+    if (artwork) {
+      if (!this.textures.exists(artwork.image.key)) return;
+      return makeScalableArtwork(this, captureImageArtwork(this, artwork.image.key, cutout));
+    }
     const source = this.browsePreviews.get(label);
     if (!source) return;
     const image = source.previewImage;
     if (image && !this.textures.exists(image.key)) return;
 
-    // RexUI resizes backgrounds during layout, which would clear a RenderTexture.
-    const preview = makePreview(this, source, cutout).removeFromDisplayList();
-    const artwork = this.add.image(0, 0, preview.texture);
-    artwork.once(Phaser.GameObjects.Events.DESTROY, () => preview.destroy());
-    return artwork;
+    return makeScalableArtwork(this, makePreview(this, source, cutout));
   }
 
   private browseEntries(page: LandingPage) {

@@ -4,7 +4,7 @@ import { trayPositions, type TrayPosition } from '../persistence/GameSave';
 import { makeButtonLabel, makeOptionTile, type UIScene } from './button';
 import { activePuzzleFilter, puzzleFilters, selectPuzzleFilter } from './puzzleFilter';
 import { pickerControlDepth, showPickerDialog } from './puzzleOptions';
-import { makeScrollableDialogBody } from './scrollableDialogBody';
+import { makeScrollableDialogBody, wrapDialogText } from './scrollableDialogBody';
 import { activeTheme, selectTheme, styleWithTheme, themes } from './theme';
 
 type SettingsCallbacks = {
@@ -50,16 +50,11 @@ export class SettingsScene extends Phaser.Scene {
       update();
       return tile.button;
     };
-    const row = () => this.rexUI.add.sizer({ orientation: 'x', space: { item: 8 } });
-    const themeChoices = this.rexUI.add.sizer({ orientation: 'y', space: { item: 8 } });
+    const wrappingChoices = () => this.rexUI.add.fixWidthSizer({ space: { item: 8, line: 8 } });
+    const themeChoices = wrappingChoices();
     const themeNames = Object.keys(themes) as (keyof typeof themes)[];
-    const themesPerRow = 3;
-    for (let start = 0; start < themeNames.length; start += themesPerRow) {
-      const choices = row();
-      for (const theme of themeNames.slice(start, start + themesPerRow)) {
-        choices.add(choice(theme, 70, () => selectTheme(theme), () => activeTheme === theme));
-      }
-      themeChoices.add(choices, { align: 'left' });
+    for (const theme of themeNames) {
+      themeChoices.add(choice(theme, 70, () => selectTheme(theme), () => activeTheme === theme));
     }
     const filterChoice = (filter: keyof typeof puzzleFilters, width: number) =>
       choice(puzzleFilters[filter], width, () => selectPuzzleFilter(filter), () => activePuzzleFilter === filter);
@@ -70,21 +65,16 @@ export class SettingsScene extends Phaser.Scene {
       refreshSelections();
     });
     clearFilter.input!.cursor = 'pointer';
-    const filterChoices = this.rexUI.add.sizer({ orientation: 'y', space: { item: 8 } });
-    filterChoices.add(row().add(filterChoice('grayscale', 168)).add(filterChoice('sepia', 122)))
-      .add(row().add(filterChoice('faded', 168)).add(clearFilter));
-    const trayChoices = this.rexUI.add.sizer({ orientation: 'y', space: { item: 8 } });
-    for (const positions of [trayPositions.slice(0, 3), trayPositions.slice(3)]) {
-      const choices = row();
-      for (const position of positions) {
-        choices.add(choice(position, 94, () => {
-          gameSave.updateSettings({ trayPosition: position });
-          onTrayPositionChange?.(position);
-        }, () => (gameSave.settings.trayPosition ?? 'Auto') === position));
-      }
-      trayChoices.add(choices, { align: 'left' });
+    const filterChoices = wrappingChoices().add(filterChoice('grayscale', 168)).add(filterChoice('sepia', 122))
+      .add(filterChoice('faded', 168)).add(clearFilter);
+    const trayChoices = wrappingChoices();
+    for (const position of trayPositions) {
+      trayChoices.add(choice(position, 94, () => {
+        gameSave.updateSettings({ trayPosition: position });
+        onTrayPositionChange?.(position);
+      }, () => (gameSave.settings.trayPosition ?? 'Auto') === position));
     }
-    const loosePiecesChoices = row();
+    const loosePiecesChoices = wrappingChoices();
     for (const allow of [true, false]) {
       loosePiecesChoices.add(choice(allow ? 'Yes' : 'No', 145, () => {
         gameSave.updateSettings({ allowLoosePiecesOnBoard: allow });
@@ -92,21 +82,24 @@ export class SettingsScene extends Phaser.Scene {
       }, () => gameSave.settings.allowLoosePiecesOnBoard === allow));
     }
     const content = this.rexUI.add.sizer({ orientation: 'y', space: { item: 8 } });
-    content.add(themeHeading, { align: 'left' })
-      .add(themeChoices, { align: 'left', padding: { bottom: 6 } })
-      .add(filterHeading, { align: 'left' })
-      .add(filterChoices, { align: 'left', padding: { bottom: 6 } })
-      .add(trayHeading, { align: 'left' })
-      .add(trayChoices, { align: 'left', padding: { bottom: 6 } })
-      .add(loosePiecesHeading, { align: 'left' })
-      .add(loosePiecesChoices, { align: 'left' });
-    for (const heading of [themeHeading, filterHeading, trayHeading, loosePiecesHeading]) {
+    const sections = [
+      [themeHeading, themeChoices], [filterHeading, filterChoices],
+      [trayHeading, trayChoices], [loosePiecesHeading, loosePiecesChoices],
+    ] as const;
+    for (const [heading, choices] of sections) {
       heading.setDepth(pickerControlDepth);
       styleWithTheme(heading, (colors) => heading.setColor(colors.mutedText));
+      content.add(heading, { align: 'left' })
+        .add(choices, { align: 'left', padding: { bottom: heading === loosePiecesHeading ? 0 : 6 } });
     }
     const scroll = makeScrollableDialogBody(this, content, pickerControlDepth);
     showPickerDialog(this, 'Settings', scroll.body, [makeButtonLabel(this, 'Done', 96, 54, true)], close, {
-      fitContent: scroll.fitContent,
+      responsive: scroll.responsiveLayout(314, (width) => {
+        for (const [heading, choices] of sections) {
+          wrapDialogText(heading, width);
+          choices.setMinWidth(width);
+        }
+      }),
     });
     owner.events.once(Phaser.Scenes.Events.SHUTDOWN, close);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {

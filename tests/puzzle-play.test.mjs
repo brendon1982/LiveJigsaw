@@ -4270,11 +4270,18 @@ scenario('touch can reach lower Settings and setup options on a short screen', a
   const { moveFinger } = await touchController(page);
 
   await pressHeader(page, 'Settings', true);
+  await page.setViewportSize({ width: 320, height: 375 });
+  await page.waitForFunction(() => document.querySelector('canvas').width === 320);
+  const [yes, no] = await Promise.all(['Yes', 'No'].map((text) => uiControl(page, { sceneKey: 'Settings', text })));
+  assert.ok(no.y > yes.y, 'Loose-piece choices should wrap on a narrow screen');
+  assert.equal((await uiControl(page, { sceneKey: 'Settings', text: 'Done', action: true })).height, 54);
   await swipeToOption(page, moveFinger, { sceneKey: 'Settings', text: 'Yes' }, { sceneKey: 'Settings', text: 'Done', action: true });
   assert.equal((await readSave(page)).settings.allowLoosePiecesOnBoard, true);
   await pressSetting(page, 'Done', true);
   await waitForDialogClosed(page, 'Settings');
 
+  await page.setViewportSize({ width: 640, height: 375 });
+  await page.waitForFunction(() => document.querySelector('canvas').width === 640);
   await page.touchscreen.tap(320, 180);
   await swipeToOption(page, moveFinger, { name: 'no-guide' }, { text: 'Play', action: true });
   await pressAction(page, 'Play', true);

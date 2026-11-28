@@ -3,6 +3,7 @@ import { challengeModes, type ChallengeMode } from '../domain/challengeModes';
 import { makeButtonLabel, type UIScene } from './button';
 import { challengeDescriptions } from './challengeDescriptions';
 import { pickerControlDepth, showPickerDialog } from './puzzleOptions';
+import { makeScrollableDialogBody, wrapDialogText } from './scrollableDialogBody';
 import { palette } from './theme';
 
 type ShowInfo = (scene: UIScene, close: () => void) => void;
@@ -34,9 +35,13 @@ export class PlayInfoScene extends Phaser.Scene {
 }
 
 export function showChallengeRules(scene: UIScene, mode: Exclude<ChallengeMode, 'none'>, close: () => void) {
-  const content = scene.add.text(0, 0, challengeDescriptions[mode], {
-    fontFamily: 'system-ui', fontSize: '17px', color: palette.text, wordWrap: { width: 304, useAdvancedWrap: true },
-  }).setFixedSize(304, 0).setDepth(pickerControlDepth);
-  showPickerDialog(scene, `${challengeModes[mode].label} challenge`, content,
-    [makeButtonLabel(scene, 'Close', 88, 52, true)], close);
+  const description = scene.add.text(0, 0, challengeDescriptions[mode], {
+    fontFamily: 'system-ui', fontSize: '17px', color: palette.text,
+  }).setDepth(pickerControlDepth);
+  const content = scene.rexUI.add.sizer({ orientation: 'y' }).add(description);
+  const scroll = makeScrollableDialogBody(scene, content, pickerControlDepth);
+  showPickerDialog(scene, `${challengeModes[mode].label} challenge`, scroll.body,
+    [makeButtonLabel(scene, 'Close', 88, 52, true)], close, {
+      responsive: scroll.responsiveLayout(320, (width) => wrapDialogText(description, width)),
+    });
 }

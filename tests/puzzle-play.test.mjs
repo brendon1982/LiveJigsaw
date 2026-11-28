@@ -816,10 +816,15 @@ scenario('play opens artwork details and the active challenge rules without chan
     const play = scene.getScene('PlayPuzzle');
     const info = scene.getScene('PlayInfo');
     const dialog = info.children.list.find(({ type }) => type === 'rexDialog');
+    const body = dialog.getElement('content');
     return {
       boardInputEnabled: play.input.enabled,
       artwork: dialog.getElement('title').type === 'Image',
-      description: dialog.getElement('content').text,
+      description: body.getAllChildren().find(({ type }) => type === 'Text')?.text,
+      bodyWidth: body.width,
+      scrollRange: body.topChildOY - body.bottomChildOY,
+      scale: dialog.scaleX,
+      actionHeight: dialog.getElement('actions')[0].displayHeight,
       progress: dialog.getElement('actionsSizer.footerLabel')?.text,
     };
   });
@@ -843,6 +848,17 @@ scenario('play opens artwork details and the active challenge rules without chan
   const rules = await playInfo();
   assert.equal(rules.boardInputEnabled, false);
   assert.match(rules.description, /only one piece is unlocked at a time/i);
+  await page.setViewportSize({ width: 320, height: 210 });
+  await page.waitForFunction(() => document.querySelector('canvas').width === 320);
+  const compactRules = await playInfo();
+  assert.ok(compactRules.bodyWidth < rules.bodyWidth);
+  assert.ok(compactRules.scrollRange > 0);
+  assert.equal(compactRules.scale, 1);
+  assert.equal(compactRules.actionHeight, 52);
+  await page.mouse.move(160, 100);
+  await page.mouse.wheel(0, 200);
+  await page.waitForFunction(() => window.puzzlePickerScene.sys.game.scene.getScene('PlayInfo').children.list
+    .find(({ type }) => type === 'rexDialog').getElement('content').childOY < 0);
   await dismiss();
   assert.deepEqual(await readSave(page), originalSave);
   assert.deepEqual(errors, []);

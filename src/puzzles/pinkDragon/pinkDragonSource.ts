@@ -5,7 +5,7 @@ import previewUrl from './preview.jpg';
 export const pinkDragonSource = staticImageSource({
   sceneKey: 'PinkDragon',
   title: 'Pink Dragon',
-  tags: { theme: 'Medieval', type: 'Flat Illustration' },
+  tags: { theme: 'Dragons', type: 'Flat Illustration' },
   attribution: {
     name: 'Sara Oliveira',
     sourceUrl: 'https://unsplash.com/illustrations/child-sitting-on-pink-dragon-8Ay79_RI4Qo',

@@ -21,13 +21,7 @@ export class LandingScene extends Phaser.Scene {
 
   create({ category }: { category?: PuzzleFilterCategory } = {}) {
     const group = category && puzzleFilterGroups[category];
-    const openPicker = (filters: PuzzleFilters) => this.scene.start(SelectPuzzleScene.key, { filters, category });
-    const entries = group
-      ? group.options.filter(({ label }) => label !== 'All')
-        .map(({ label, filters }) => ({ label, open: () => openPicker(filters) }))
-      : [{ label: 'All', open: () => openPicker(noPuzzleFilters) }, ...filterCategories.map((category) => ({
-        label: puzzleFilterGroups[category].title, open: () => this.scene.restart({ category }),
-      }))];
+    const entries = this.browseEntries(category);
     const listBounds = new Phaser.Geom.Rectangle();
     const cards = entries.map(({ label, open }) => makeOptionTile(this, {
       name: `${group ? 'value' : 'browse'}-${label}`, label, width: 1, height: browseCardHeight, fontSize: '24px',
@@ -78,5 +72,19 @@ export class LandingScene extends Phaser.Scene {
     this.scale.on(Phaser.Scale.Events.RESIZE, layout);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.scale.off(Phaser.Scale.Events.RESIZE, layout));
     layout();
+  }
+
+  private browseEntries(category?: PuzzleFilterCategory) {
+    const openPicker = (filters: PuzzleFilters) => this.scene.start(SelectPuzzleScene.key, { filters, category });
+    if (category) {
+      return puzzleFilterGroups[category].options.filter(({ label }) => label !== 'All')
+        .map(({ label, filters }) => ({ label, open: () => openPicker(filters) }));
+    }
+
+    const categories = filterCategories.map((category) => ({
+      label: puzzleFilterGroups[category].title,
+      open: () => this.scene.restart({ category }),
+    }));
+    return [{ label: 'All', open: () => openPicker(noPuzzleFilters) }, ...categories];
   }
 }

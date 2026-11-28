@@ -5,7 +5,7 @@ import previewUrl from './preview.jpg';
 export const thanksgivingLeavesSource = staticImageSource({
   sceneKey: 'ThanksgivingLeaves',
   title: 'Thanksgiving Leaves',
-  tags: { theme: 'Woodland', type: 'Flat Illustration' },
+  tags: { theme: 'Thanksgiving', type: 'Flat Illustration' },
   attribution: {
     name: 'Md Ekram',
     sourceUrl: 'https://unsplash.com/illustrations/happy-thanksgiving-autumn-leaves-illustration-Ifsvk6h-WKM',

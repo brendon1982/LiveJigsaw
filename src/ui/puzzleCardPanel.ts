@@ -1,3 +1,4 @@
+import type Phaser from 'phaser';
 import type { UIScene } from './button';
 import { styleWithTheme } from './theme';
 
@@ -5,6 +6,19 @@ const scrollbarWidth = 10;
 const scrollbarGap = 14;
 export const cardScrollbarSpace = scrollbarWidth + scrollbarGap;
 export const cardScrollThreshold = 10;
+
+export function clipCardInput(
+  target: Phaser.GameObjects.GameObject & Phaser.GameObjects.Components.Transform & Phaser.GameObjects.Components.Origin,
+  viewport: Phaser.Geom.Rectangle,
+) {
+  const input = target.input!;
+  const hitTest = input.hitAreaCallback;
+  input.hitAreaCallback = (area, x, y, object) => {
+    if (!hitTest(area, x, y, object)) return false;
+    const point = target.getWorldTransformMatrix().transformPoint(x - target.displayOriginX, y - target.displayOriginY);
+    return viewport.contains(point.x, point.y);
+  };
+}
 
 export function isNearCardViewport(
   { y, height, originY }: { y: number; height: number; originY: number },

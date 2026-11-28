@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { creditedArtistName, type PuzzleSource } from '../puzzles/PuzzleSource';
 import { hasPuzzleSizeChoice } from '../puzzles/puzzleSizeChoices';
 import { addPressFeedback, type UIScene } from './button';
+import { clipCardInput } from './puzzleCardPanel';
 import { headerControlGap, puzzleSpacing } from './puzzleHeader';
 import { metadataTextStyle, palette, styleWithTheme } from './theme';
 
@@ -76,13 +77,14 @@ export function makePuzzlePickerCard(
     const point = scene.cameras.main.getWorldPoint(x, y);
     return listBounds.contains(point.x, point.y);
   };
-  const bindTap = (target: Phaser.GameObjects.GameObject, action: () => void) => {
+  const bindTap = (target: Parameters<typeof clipCardInput>[0], action: () => void) => {
     scene.rexUI.add.click(target, { threshold: scrollThreshold, clickInterval: 0 })
       .on('click', (_button: unknown, _object: unknown, pointer: Phaser.Input.Pointer) => {
         if (pointer.wasCanceled || pointer.getDistance() >= scrollThreshold
           || !isInsideList(pointer.downX, pointer.downY) || !isInsideList(pointer.x, pointer.y)) return;
         action();
       });
+    clipCardInput(target, listBounds);
     target.input!.cursor = 'pointer';
   };
 

@@ -4,7 +4,7 @@ import { puzzleSources } from '../puzzles/catalog';
 import type { PuzzleSource } from '../puzzles/PuzzleSource';
 import { addArtworkCreditsButton, makeOptionTile, type UIScene } from './button';
 import { showLandingArtworkDetails } from './landingArtworkDialog';
-import { cardScrollbarSpace, cardScrollThreshold, isNearCardViewport, makePuzzleCardPanel } from './puzzleCardPanel';
+import { cardScrollbarSpace, cardScrollThreshold, clipCardInput, isNearCardViewport, makePuzzleCardPanel } from './puzzleCardPanel';
 import { puzzleFilterGroups } from './puzzleFilterGroups';
 import { activeFilterCount, matchesPuzzleFilters, noPuzzleFilters, type PuzzleFilterCategory, type PuzzleFilters } from './puzzleFilters';
 import { headerControlGap, headerInset, makeBackButton, makeHomeButton, makeSettingsButton, puzzleSpacing } from './puzzleHeader';
@@ -79,6 +79,7 @@ export class LandingScene extends Phaser.Scene {
         dragThreshold: cardScrollThreshold,
         onClick: (pointer) => { if (canTapCard(pointer)) open(panel.childOY); },
       });
+      clipCardInput(button, listBounds);
       if (artworkSlot) button.setChildVisible(artworkSlot, false);
       const credits = artwork && addArtworkCreditsButton(
         this, button, `Artwork credits for ${label}`, browseCardFontSize, cardScrollThreshold, (pointer) => {
@@ -86,7 +87,10 @@ export class LandingScene extends Phaser.Scene {
           setDialogOpen(true);
           showLandingArtworkDetails(this, label, artwork, () => setDialogOpen(false));
         });
-      if (credits) button.setChildVisible(credits, false);
+      if (credits) {
+        clipCardInput(credits, listBounds);
+        button.setChildVisible(credits, false);
+      }
       const drawArtwork = artworkSlot && artworkCutout && (() => {
         const preview = this.captureBrowseArtwork(artworkCutout, artwork, source);
         if (!preview) return;

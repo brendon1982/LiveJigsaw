@@ -461,8 +461,8 @@ function assertCompactBoardControls(layout) {
     layout.shuffleButton, layout.fitButton, layout.nativeSizeButton];
   for (const [index, button] of buttons.entries()) {
     assert.ok(button.visible);
-    assert.equal(button.width, 54);
-    assert.equal(button.height, 54);
+    assert.equal(button.width, 42);
+    assert.equal(button.height, 42);
     assert.ok(button.x >= board.x && button.x + button.width <= board.x + board.width,
       'Control must fit the board width');
     assert.ok(button.y >= board.y && button.y + button.height <= board.y + board.height, 'Control must fit the board height');
@@ -569,8 +569,8 @@ scenario('touch board tools fit on compact screens and distinguish taps from pin
   await waitForText('Resume');
   await clickDialog(100, resumeActionY);
   await waitForText('1 of 8 placed');
-  await page.setViewportSize({ width: 230, height: 680 });
-  await page.waitForFunction(() => document.querySelector('canvas').width === 230);
+  await page.setViewportSize({ width: 200, height: 680 });
+  await page.waitForFunction(() => document.querySelector('canvas').width === 200);
   const { dispatch } = await touchController(page);
   let layout = await playLayout(page);
   await pressIcon(page, layout.breakButton, true);
@@ -592,30 +592,30 @@ scenario('touch board tools fit on compact screens and distinguish taps from pin
   layout = await playLayout(page);
   assert.ok(layout.board.zoom > fittedZoom, 'The two contacts should zoom, not sort');
   assert.deepEqual((await readSave(page)).progress.Windmill, before);
-  assert.equal(layout.board.width, 230);
+  assert.equal(layout.board.width, 200);
   assertCompactBoardControls(layout);
   assert.ok(layout.shuffleButton.y > layout.breakButton.y, 'Parked tools should wrap');
   assert.ok(layout.fitButton.y >= layout.shuffleButton.y + layout.shuffleButton.height,
     'Zoom should wrap below both occupied tool rows when it cannot fit beside them');
 
-  await page.setViewportSize({ width: 275, height: 680 });
-  await page.waitForFunction(() => document.querySelector('canvas').width === 275);
+  await page.setViewportSize({ width: 230, height: 680 });
+  await page.waitForFunction(() => document.querySelector('canvas').width === 230);
   layout = await playLayout(page);
-  assert.equal(layout.board.width, 275);
+  assert.equal(layout.board.width, 230);
   assertCompactBoardControls(layout);
   assert.equal(layout.fitButton.y, layout.shuffleButton.y, 'Zoom should share the last row when it fits');
   await pressIcon(page, layout.fitButton, true);
   const wideFit = await playLayout(page);
   assert.equal(wideFit.fitButton.visible, false);
 
-  await page.setViewportSize({ width: 230, height: 680 });
-  await page.waitForFunction(() => document.querySelector('canvas').width === 230);
+  await page.setViewportSize({ width: 200, height: 680 });
+  await page.waitForFunction(() => document.querySelector('canvas').width === 200);
   layout = await playLayout(page);
-  assert.equal(layout.board.width, 230, 'The board viewport should shrink without a tray-side change');
+  assert.equal(layout.board.width, 200, 'The board viewport should shrink without a tray-side change');
   assert.equal(layout.fitButton.visible, false, 'The board should stay fitted after shrinking');
   assert.ok(layout.board.zoom < wideFit.board.zoom, 'Fit should use the narrower width');
   const artworkCenter = layout.boardPoint(compactSize.width / 2, compactSize.height / 2);
-  assert.ok(Math.abs(artworkCenter.x - 115) < 1, 'Fitted artwork should stay centered in the canvas');
+  assert.ok(Math.abs(artworkCenter.x - 100) < 1, 'Fitted artwork should stay centered in the canvas');
   const shuffle = iconCenter(layout.shuffleButton);
   const pinchStart = [shuffle[0], y + 50];
   const zoomBeforePinch = layout.board.zoom;
@@ -1532,6 +1532,33 @@ scenario('picker preview sizes reflow the cards, persist and stay centered on to
   assert.deepEqual(errors, []);
 });
 
+scenario('picker header controls receive mouse and touch input over clipped cards', async (t) => {
+  const { page, waitForText, errors } = await openPuzzle(t, { viewport: { width: 375, height: 640 }, hasTouch: true });
+  const filters = await uiControl(page, { sceneKey: 'SelectPuzzle', name: 'Filters' });
+  const settings = await uiControl(page, { sceneKey: 'SelectPuzzle', name: 'Settings' });
+  await page.mouse.move(filters.x, 300);
+  await page.mouse.wheel(0, 160);
+  await page.waitForFunction((controls) => {
+    const panel = window.puzzlePickerScene.children.list.find(({ type }) => type === 'rexScrollablePanel');
+    const cards = panel.getElement('panel.cards').getChildren();
+    return controls.every(({ x, y }) => y < panel.y && cards.some((card) => card.getChildren()
+      .some((child) => child.input && child.getBounds().contains(x, y))));
+  }, [filters, settings], { timeout: 4000 });
+
+  await pressHeader(page, 'Filters');
+  await uiControl(page, { text: 'Apply', action: true });
+  await page.keyboard.press('Escape');
+  await waitForDialogClosed(page, 'SelectPuzzle');
+
+  await pressHeader(page, 'Settings', true);
+  await pressSetting(page, 'Done', true);
+  await waitForDialogClosed(page, 'Settings');
+
+  await page.touchscreen.tap(filters.x, 180);
+  await waitForText('Piece count');
+  assert.deepEqual(errors, []);
+});
+
 scenario('the touch picker stays usable while the viewport width changes', async (t) => {
   const { page, waitForText, errors } = await openPuzzle(t, {
     viewport: { width: 1320, height: 780 }, hasTouch: true, isMobile: true,
@@ -2013,16 +2040,21 @@ scenario('the 1× board button restores native size and Fit board returns to the
   await waitForText('0 of 40 placed');
 
   const panelBackground = [32, 46, 42, 255];
-  const [leftSlot, rightSlot, buttonY] = [1223, 1285, 121];
+  const initialLayout = await playLayout(page);
+  const [rightSlot, buttonY] = iconCenter(initialLayout.nativeSizeButton);
+  const leftSlot = rightSlot - initialLayout.nativeSizeButton.width - 8;
   const fitted = await canvas.screenshot();
   assert.deepEqual(await pixelAt(page, fitted, 900, 112), panelBackground);
   assert.deepEqual(await pixelAt(page, fitted, leftSlot, buttonY), panelBackground, 'A lone button should not occupy the left slot');
-  await page.touchscreen.tap(rightSlot, buttonY);
+  await pressIcon(page, initialLayout.nativeSizeButton, true);
+  assert.equal((await playLayout(page)).board.zoom, 1);
 
   const native = await canvas.screenshot();
-  // The 624 px artwork is centered between y=86 and y=780, so it spans y=121 to y=745 at 1×.
-  for (const y of [117, 749]) assert.deepEqual(await pixelAt(page, native, 900, y), panelBackground);
-  for (const y of [125, 741]) assert.notDeepEqual(await pixelAt(page, native, 900, y), panelBackground);
+  const { y: boardTop, height: boardHeight } = initialLayout.board;
+  const nativeTop = Math.round(boardTop + (boardHeight - 624) / 2);
+  const nativeBottom = nativeTop + 624;
+  for (const y of [nativeTop - 4, nativeBottom + 4]) assert.deepEqual(await pixelAt(page, native, 900, y), panelBackground);
+  for (const y of [nativeTop + 4, nativeBottom - 4]) assert.notDeepEqual(await pixelAt(page, native, 900, y), panelBackground);
 
   const { moveFinger } = await touchController(page);
   await moveFinger(900, 420, 900, 460);
@@ -2031,14 +2063,16 @@ scenario('the 1× board button restores native size and Fit board returns to the
   assert.deepEqual(await pixelAt(page, panned, leftSlot, buttonY), panelBackground, 'Panning at 1× should not show the native size button');
   assert.notDeepEqual(await pixelAt(page, panned, rightSlot, buttonY), panelBackground, 'Fit should remain available after panning');
 
-  await page.mouse.move(900, 433);
+  // Wheel zoom and native size must use the same anchor to restore the pan.
+  const { x: boardLeft, width: boardWidth } = initialLayout.board;
+  await page.mouse.move(boardLeft + boardWidth / 2, boardTop + boardHeight / 2);
   await page.mouse.wheel(0, 200);
   const zoomedOut = await canvas.screenshot();
   assert.notDeepEqual(await pixelAt(page, zoomedOut, leftSlot, buttonY), panelBackground, '1× should move to the left slot');
   assert.notDeepEqual(await pixelAt(page, zoomedOut, rightSlot, buttonY), panelBackground, 'Fit should stay in the right slot');
   await page.touchscreen.tap(leftSlot, buttonY);
   const nativeAgain = await canvas.screenshot();
-  for (const y of [130, 155, 180]) {
+  for (const y of [nativeTop + 36, nativeTop + 44]) {
     assert.deepEqual(await pixelAt(page, nativeAgain, 900, y), await pixelAt(page, panned, 900, y),
       'Zooming out and back to 1× should restore the panned artwork edge');
   }

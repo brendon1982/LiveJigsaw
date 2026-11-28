@@ -992,7 +992,7 @@ scenario('landing offers specific filter values for Type, Completion and Artwork
   assert.deepEqual(categories, ['All', 'Theme', 'Artist', 'Type', 'Completion', 'Artwork motion']);
   const cases = [
     ['Type', ['Flat Illustration', 'Parallax', 'Procedural'], 'Parallax', { types: ['Parallax'] }],
-    ['Completion', ['Completed', 'Never completed', 'In progress'], 'In progress', { completion: 'In progress' }],
+    ['Completion', ['Completed', 'In progress', 'Never completed'], 'In progress', { completion: 'In progress' }],
     ['Artwork motion', ['Static', 'Animated'], 'Animated', { motion: 'Animated' }],
   ];
   for (const [category, values, choice, filter] of cases) {

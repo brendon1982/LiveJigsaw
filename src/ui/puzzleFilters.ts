@@ -1,7 +1,7 @@
 import { puzzleThemes, puzzleTypes, type PuzzleTheme, type PuzzleType } from '../puzzles/PuzzleTags.ts';
 import { creditedArtistName, type PuzzleMotion, type PuzzleSource } from '../puzzles/PuzzleSource.ts';
 
-const completionFilters = ['All', 'Completed', 'Never completed', 'In progress'] as const;
+const completionFilters = ['All', 'Completed', 'In progress', 'Never completed'] as const;
 type CompletionFilter = typeof completionFilters[number];
 type PuzzleCompletionState = Readonly<{ completions: number; hasResumableProgress: boolean }>;
 const motionFilters = ['All', 'Static', 'Animated'] as const satisfies readonly ('All' | PuzzleMotion)[];

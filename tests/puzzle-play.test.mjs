@@ -931,6 +931,76 @@ scenario('landing offers specific filter values for Type, Completion and Artwork
   assert.deepEqual(errors, []);
 });
 
+scenario('Artist cards fill with previews from their own puzzles, without loading gameplay artwork', async (t) => {
+  await buildCompactFixture();
+  const { page, errors, origin } = await openGamePage(t, { viewport: { width: 1320, height: 900 } });
+  await page.goto(`${origin}${compactPuzzlePath}?landing`);
+  const landingControl = (name) => ({ sceneKey: 'Landing', name });
+  const artwork = () => page.evaluate(() => {
+    const scene = window.puzzleLandingScene;
+    const panel = scene.children.list.find(({ type }) => type === 'rexScrollablePanel');
+    const cards = panel.getAllChildren();
+    const previewFor = (artist) => {
+      const card = cards.find(({ name }) => name === `value-${artist}`);
+      const preview = card.getElement('artwork');
+      const caption = card.getElement('text');
+      const backing = caption.getElement('background');
+      return {
+        texture: preview?.texture.key,
+        label: caption.getElement('text').text,
+        hasRoundedCaption: backing.radius > 0 && backing.fillAlpha > 0 && backing.fillAlpha < 1,
+        fillsCard: Boolean(preview) && preview.x === card.x && preview.y === card.y
+          && Math.abs(preview.displayWidth - card.width) < 1 && Math.abs(preview.displayHeight - card.height) < 1,
+      };
+    };
+    return {
+      image: previewFor('Kyunghee Yim'), drawn: previewFor('Me'),
+      loaded: scene.textures.getTextureKeys().filter((key) => /^(adrift-in-dreams|snowman-and-baubles)/.test(key)),
+      sourceStarted: Boolean(window.puzzleArtworkScene),
+    };
+  });
+  await clickControl(page, landingControl('browse-Artist'));
+  await uiControl(page, landingControl('value-Kyunghee Yim'));
+  const artistBounds = (artist) => page.evaluate((name) => window.puzzleLandingScene.children.list
+    .find(({ type }) => type === 'rexScrollablePanel').getAllChildren()
+    .find((card) => card.name === `value-${name}`).getBounds(), artist);
+  const screenshot = await page.screenshot();
+  for (const artist of ['Kyunghee Yim', 'Me']) {
+    const bounds = await artistBounds(artist);
+    const left = Math.ceil(bounds.x);
+    const right = Math.floor(bounds.x + bounds.width) - 1;
+    const top = Math.ceil(bounds.y);
+    const bottom = Math.floor(bounds.y + bounds.height) - 1;
+    for (const y of [top, bottom]) {
+      const outside = await pixelAt(page, screenshot, left - 3, y);
+      for (const x of [left, right]) {
+        assert.deepEqual(await pixelAt(page, screenshot, x, y), outside, 'Artwork stays inside the rounded card');
+      }
+    }
+    const interiorColors = new Set();
+    for (const xFraction of [0.2, 0.5, 0.8]) {
+      for (const yFraction of [0.2, 0.8]) {
+        const x = Math.floor(bounds.x + bounds.width * xFraction);
+        const y = Math.floor(bounds.y + bounds.height * yFraction);
+        interiorColors.add((await pixelAt(page, screenshot, x, y)).join(','));
+      }
+    }
+    assert.ok(interiorColors.size > 1, `${artist}'s artwork is visible behind the caption`);
+  }
+  const desktop = await artwork();
+  assert.equal(desktop.loaded.length, 1);
+  assert.ok(['adrift-in-dreams-preview', 'snowman-and-baubles-preview'].includes(desktop.loaded[0]));
+  assert.equal(desktop.image.label, 'Kyunghee Yim');
+  assert.ok(desktop.image.fillsCard && desktop.drawn.fillsCard);
+  assert.ok(desktop.image.hasRoundedCaption && desktop.drawn.hasRoundedCaption);
+  assert.equal(desktop.sourceStarted, false);
+
+  await page.setViewportSize({ width: 300, height: 900 });
+  await page.waitForFunction(() => document.querySelector('canvas').width === 300);
+  assert.deepEqual(await artwork(), desktop);
+  assert.deepEqual(errors, []);
+});
+
 scenario('Artist opens a filtered picker and the Filters dialog can add another artist', async (t) => {
   await buildCompactFixture();
   const { page, waitForText, errors, origin } = await openGamePage(t, { viewport: { width: 1320, height: 900 }, hasTouch: true });

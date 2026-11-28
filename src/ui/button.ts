@@ -91,6 +91,7 @@ type OptionTile = {
   height?: number;
   fontSize?: string;
   drawIcon?: () => Phaser.GameObjects.Container;
+  createArtwork?: () => Phaser.GameObjects.Image | undefined;
   depth?: number;
   contentDepth?: number;
   dragThreshold?: number;
@@ -99,30 +100,43 @@ type OptionTile = {
 
 export function makeOptionTile(scene: UIScene, {
   name, label, width, drawIcon, height = drawIcon ? 82 : 52, fontSize = '15px',
-  depth = 0, contentDepth = depth, dragThreshold, onClick,
+  createArtwork, depth = 0, contentDepth = depth, dragThreshold, onClick,
 }: OptionTile) {
   const background = scene.rexUI.add.roundRectangle(0, 0, 1, 1, 9).setDepth(depth);
+  const artwork = createArtwork?.()?.setDepth(depth);
+  const captionBackground = artwork && label !== undefined
+    ? scene.rexUI.add.roundRectangle(0, 0, 1, 1, 9, 0x000000, 0.73).setDepth(contentDepth)
+    : undefined;
   const text = label === undefined ? undefined : scene.add.text(0, 0, label, {
     fontFamily: 'system-ui', fontSize, align: 'center',
   }).setDepth(contentDepth);
+  const caption = captionBackground ? scene.rexUI.add.label({
+    background: captionBackground, text, space: { left: 8, right: 8, top: 4, bottom: 4 },
+  }) : text;
   const button = scene.rexUI.add.label({
-    name, width, height, orientation: 'y', align: 'center', background, text,
+    name, width, height, orientation: 'y', align: 'center', background, text: caption,
     icon: drawIcon?.().setDepth(contentDepth),
     space: { icon: 4 },
   }).setDepth(depth, true);
+  if (artwork) button.addBackground(artwork, 0, 'artwork');
   let selected = false;
   let pressed = false;
   const restyle = (colors: typeof palette) => {
     background.setFillStyle(pressed ? colors.buttonPressed : selected ? colors.selectedOption : colors.background)
       .setStrokeStyle(selected ? 2 : 1, selected ? colors.primaryButton : colors.optionBorder);
-    text?.setColor(colors.text);
+    artwork?.setTint(pressed ? 0xd8d8d8 : 0xffffff);
+    text?.setColor(artwork ? '#fff' : colors.text);
   };
   styleWithTheme(button, restyle);
   addPressFeedback(button, (value) => { pressed = value; restyle(palette); }, dragThreshold);
   if (onClick) {
     bindClick(scene, button, (pointer) => { if (!pointer.wasCanceled) onClick(pointer); }, dragThreshold);
   }
-  return { button, setSelected(value: boolean) { selected = value; restyle(palette); } };
+  return {
+    button,
+    setCornerRadius(radius: number) { background.setRadius(radius); },
+    setSelected(value: boolean) { selected = value; restyle(palette); },
+  };
 }
 
 function styleButton(

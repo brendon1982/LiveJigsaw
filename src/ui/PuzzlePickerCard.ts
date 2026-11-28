@@ -22,17 +22,19 @@ export function puzzleCardTags(source: PuzzleSource) {
   return `${source.tags.theme} · ${source.tags.type}`;
 }
 
-export function makePreviewCornerCutout(scene: UIScene): Phaser.Textures.CanvasTexture {
+export function makePreviewCornerCutout(scene: UIScene, corners: 'top' | 'all' = 'top'): Phaser.Textures.CanvasTexture {
   const cornerRadius = pickerCardCornerRadius;
-  const cutout = scene.textures.createCanvas('picker-preview-corners', maxPickerCardWidth, cornerRadius);
+  const allCorners = corners === 'all';
+  const cutoutHeight = allCorners ? previewHeight : cornerRadius;
+  const cutout = scene.textures.createCanvas(`preview-corners-${corners}`, maxPickerCardWidth, cutoutHeight);
   if (!cutout) throw new Error('Could not create the picker preview corner mask');
   const { context } = cutout;
   context.fillStyle = '#fff';
-  context.fillRect(0, 0, cornerRadius, cornerRadius);
-  context.fillRect(maxPickerCardWidth - cornerRadius, 0, cornerRadius, cornerRadius);
+  context.fillRect(0, 0, maxPickerCardWidth, cutoutHeight);
   context.globalCompositeOperation = 'destination-out';
   context.beginPath();
-  context.roundRect(0, 0, maxPickerCardWidth, previewHeight, [cornerRadius, cornerRadius, 0, 0]);
+  context.roundRect(0, 0, maxPickerCardWidth, previewHeight,
+    allCorners ? cornerRadius : [cornerRadius, cornerRadius, 0, 0]);
   context.fill();
   cutout.refresh();
   return cutout;
@@ -216,8 +218,8 @@ export function makePreview(scene: UIScene, source: PuzzleSource, cutout: Phaser
   const artwork = scene.add.container(0, 0, objects).setScale(maxPickerCardWidth / (width * sourceScale));
   const preview = scene.add.renderTexture(0, 0, maxPickerCardWidth, previewHeight).setOrigin(0);
   preview.texture.setFilter(Phaser.Textures.FilterMode.LINEAR);
-  // Capture and round the artwork once. Cards can then scale the finished preview as a single image.
-  preview.draw(artwork).erase(cutout.get(), maxPickerCardWidth / 2, pickerCardCornerRadius / 2).render();
+  // Capture and round the artwork once so cards can scale it as a single image.
+  preview.draw(artwork).erase(cutout.get(), cutout.width / 2, cutout.height / 2).render();
   artwork.destroy();
   return preview;
 }

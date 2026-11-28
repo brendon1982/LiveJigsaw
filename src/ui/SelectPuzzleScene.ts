@@ -129,7 +129,7 @@ export class SelectPuzzleScene extends Phaser.Scene {
           openDialog();
           showPuzzleDetails(this, source, status, copyPreview(), closeDialog);
         }, artworkCreditLines(source.attribution).length > 0);
-      return { card, source, completions };
+      return { card, source, completionState: { completions, hasResumableProgress: Boolean(progress) } };
     });
     const grid = this.rexUI.add.gridSizer({
       column: 1, row: 1,
@@ -198,7 +198,7 @@ export class SelectPuzzleScene extends Phaser.Scene {
     });
 
     const matchingCards = (filters: PuzzleFilters) =>
-      cards.filter(({ source, completions }) => matchesPuzzleFilters(source, completions, filters));
+      cards.filter(({ source, completionState }) => matchesPuzzleFilters(source, completionState, filters));
     let visibleCards = matchingCards(this.filters);
     let cardLayout: { columns: number; width: number; stackStatus: boolean; compact: boolean } | undefined;
     const updateFilterCaption = () => {

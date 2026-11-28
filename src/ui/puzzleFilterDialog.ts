@@ -57,7 +57,7 @@ export function showPuzzleFilters(
   addSection(puzzleFilterGroups.type, [120, 90, 104], (tag) => draft.types.includes(tag), (tag) => {
     draft = { ...draft, types: toggleChoice(draft.types, tag) };
   });
-  addSection(puzzleFilterGroups.completion, [50, 94, 156], (status) => draft.completion === status, (status) => {
+  addSection(puzzleFilterGroups.completion, [160, 160], (status) => draft.completion === status, (status) => {
     draft = { ...draft, completion: status };
   });
   addSection(puzzleFilterGroups.motion, [50, 94, 156], (motion) => draft.motion === motion, (motion) => {

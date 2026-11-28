@@ -1,8 +1,9 @@
 import { puzzleThemes, puzzleTypes, type PuzzleTheme, type PuzzleType } from '../puzzles/PuzzleTags.ts';
 import { creditedArtistName, type PuzzleMotion, type PuzzleSource } from '../puzzles/PuzzleSource.ts';
 
-const completionFilters = ['All', 'Completed', 'Never completed'] as const;
+const completionFilters = ['All', 'Completed', 'Never completed', 'In progress'] as const;
 type CompletionFilter = typeof completionFilters[number];
+type PuzzleCompletionState = Readonly<{ completions: number; hasResumableProgress: boolean }>;
 const motionFilters = ['All', 'Static', 'Animated'] as const satisfies readonly ('All' | PuzzleMotion)[];
 
 export type PuzzleFilters = Readonly<{
@@ -53,14 +54,24 @@ export function samePuzzleFilters(first: PuzzleFilters, second: PuzzleFilters) {
     && puzzleTypes.every((type) => first.types.includes(type) === second.types.includes(type));
 }
 
+function matchesCompletionFilter(filter: CompletionFilter, { completions, hasResumableProgress }: PuzzleCompletionState) {
+  switch (filter) {
+    case 'All': return true;
+    case 'Completed': return completions > 0;
+    case 'Never completed': return completions === 0;
+    case 'In progress': return hasResumableProgress;
+  }
+}
+
 export function matchesPuzzleFilters(
-  { tags, motion, attribution }: Pick<PuzzleSource, 'tags' | 'motion' | 'attribution'>, completions: number, filters: PuzzleFilters,
+  { tags, motion, attribution }: Pick<PuzzleSource, 'tags' | 'motion' | 'attribution'>,
+  completionState: PuzzleCompletionState,
+  filters: PuzzleFilters,
 ) {
   const matchesTheme = !filters.themes.length || filters.themes.includes(tags.theme);
   const artist = creditedArtistName(attribution);
   const matchesArtist = !filters.artists.length || (artist !== undefined && filters.artists.includes(artist));
   const matchesType = !filters.types.length || filters.types.includes(tags.type);
-  const status = completions > 0 ? 'Completed' : 'Never completed';
   return matchesTheme && matchesArtist && matchesType && (filters.motion === 'All' || filters.motion === motion)
-    && (filters.completion === 'All' || filters.completion === status);
+    && matchesCompletionFilter(filters.completion, completionState);
 }

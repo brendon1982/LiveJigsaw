@@ -26,7 +26,8 @@ function chooseBrowsePreviews(category?: PuzzleFilterCategory) {
   if (category !== 'theme' && category !== 'artist') return previews;
 
   for (const { label, filters } of puzzleFilterGroups[category].options) {
-    const matchingPuzzles = puzzleSources.filter((source) => matchesPuzzleFilters(source, 0, filters));
+    const matchingPuzzles = puzzleSources.filter((source) =>
+      matchesPuzzleFilters(source, { completions: 0, hasResumableProgress: false }, filters));
     const source = matchingPuzzles[Math.floor(Math.random() * matchingPuzzles.length)];
     if (source) previews.set(label, source);
   }

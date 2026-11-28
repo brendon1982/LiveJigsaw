@@ -992,7 +992,7 @@ scenario('landing offers specific filter values for Type, Completion and Artwork
   assert.deepEqual(categories, ['All', 'Theme', 'Artist', 'Type', 'Completion', 'Artwork motion']);
   const cases = [
     ['Type', ['Flat Illustration', 'Parallax', 'Procedural'], 'Parallax', { types: ['Parallax'] }],
-    ['Completion', ['Completed', 'Never completed'], 'Never completed', { completion: 'Never completed' }],
+    ['Completion', ['Completed', 'Never completed', 'In progress'], 'In progress', { completion: 'In progress' }],
     ['Artwork motion', ['Static', 'Animated'], 'Animated', { motion: 'Animated' }],
   ];
   for (const [category, values, choice, filter] of cases) {
@@ -3838,6 +3838,14 @@ scenario('picker tag and completion filters combine and refresh after play', asy
   await pickFirst();
   await waitForText('Meadow');
   await waitForText('Piece count');
+  await page.keyboard.press('Escape');
+
+  await openFilters();
+  await pressAction(page, 'Clear');
+  await clickControl(page, { text: 'In progress' });
+  await pressAction(page, 'Apply');
+  await waitForFilterCount(page, 1);
+  assert.deepEqual(await pickerResultTitles(page), ['Lighthouse']);
   assert.deepEqual(errors, []);
 });
 

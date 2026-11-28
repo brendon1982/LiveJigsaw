@@ -36,6 +36,16 @@ export function makeBackButton(scene: UIScene, open: () => void, name = 'All puz
   }).setPosition(headerInset, puzzleSpacing);
 }
 
+export function makeHomeButton(scene: UIScene, open: () => void) {
+  return makeIconButton(scene, 'Home', (art, color) => {
+    art.clear().lineStyle(2, color).beginPath()
+      .moveTo(-10, -1).lineTo(0, -10).lineTo(10, -1)
+      .moveTo(-7, -4).lineTo(-7, 9).lineTo(7, 9).lineTo(7, -4).strokePath();
+  }, (pointer) => {
+    if (!pointer.wasCanceled) open();
+  });
+}
+
 export function makeFiltersButton(scene: UIScene, open: () => void) {
   return makeIconButton(scene, 'Filters', (art, color) => {
     art.clear().lineStyle(2, color).beginPath()

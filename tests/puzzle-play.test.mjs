@@ -862,8 +862,11 @@ scenario('landing filter categories scroll, open Settings and filter the picker 
   await clickControl(page, landingControl('browse-Theme'), true);
   await waitForText('Theme');
   const categoryBack = await uiControl(page, landingControl('Back to filter categories'));
+  const categoryHome = await uiControl(page, landingControl('Home'));
   const categorySettings = await uiControl(page, landingControl('Settings'));
   assert.equal(categoryBack.y, categorySettings.y);
+  assert.equal(categoryHome.y, categoryBack.y);
+  assert.ok(categoryBack.x < categoryHome.x && categoryHome.x < categorySettings.x);
   assert.ok(categoryBack.x < 375 / 2 && categorySettings.x > 375 / 2);
   const christmas = await uiControl(page, landingControl('value-Christmas'));
   await moveFinger(christmas.x, christmas.y, christmas.x, christmas.y - 380, 'touchEnd', 120);
@@ -874,11 +877,14 @@ scenario('landing filter categories scroll, open Settings and filter the picker 
   assert.ok(!(await pickerResultTitles(page)).includes('Windmill'));
 
   const back = await uiControl(page, { name: 'Back to browse' });
+  const home = await uiControl(page, { name: 'Home' });
   const compact = await uiControl(page, { name: 'preview-size-Compact' });
   const full = await uiControl(page, { name: 'preview-size-Full' });
   const filters = await uiControl(page, { name: 'Filters' });
   const settings = await uiControl(page, { name: 'Settings' });
   assert.equal(back.y, compact.y);
+  assert.equal(home.y, back.y);
+  assert.ok(home.x >= full.x + (full.width + home.width) / 2);
   assert.equal(compact.y, full.y);
   assert.ok(Math.abs((compact.x + full.x) / 2 - 375 / 2) <= 1);
   assert.equal(filters.y, settings.y);
@@ -889,6 +895,8 @@ scenario('landing filter categories scroll, open Settings and filter the picker 
   await clickControl(page, landingControl('browse-All'), true);
   await uiControl(page, { sceneKey: 'SelectPuzzle', name: 'Filters', filterCount: 0 });
   assert.ok((await pickerResultTitles(page)).includes('Windmill'));
+  await pressHeader(page, 'Home', true);
+  await waitForText('Live Jigsaw');
   assert.deepEqual(errors, []);
 });
 
@@ -922,6 +930,53 @@ scenario('landing restores the scroll position when going back a level', async (
   await clickControl(page, landingControl('Back to filter categories'));
   await uiControl(page, landingControl('browse-Theme'));
   assert.equal(await scrollOffset(), categoriesOffset, 'Returning from Theme restores the main list');
+  assert.deepEqual(errors, []);
+});
+
+scenario('Home resets landing navigation and scroll from both the picker and a filter category', async (t) => {
+  await buildCompactFixture();
+  const { page, waitForText, errors, origin } = await openGamePage(t, { viewport: { width: 375, height: 900 } });
+  await page.goto(`${origin}${compactPuzzlePath}?landing`);
+  const landingControl = (name) => ({ sceneKey: 'Landing', name });
+  const scrollDown = async (delta) => {
+    await page.mouse.move(180, 350);
+    await page.mouse.wheel(0, delta);
+    await page.waitForFunction(() => window.puzzleLandingScene.children.list
+      .find(({ type }) => type === 'rexScrollablePanel')?.childOY < 0, undefined, { timeout: 4000 });
+  };
+  const assertAtHome = async () => {
+    await waitForText('Live Jigsaw');
+    await uiControl(page, landingControl('browse-All'));
+    const state = await page.evaluate(() => {
+      const { children } = window.puzzleLandingScene;
+      return {
+        offset: children.list.find(({ type }) => type === 'rexScrollablePanel').childOY,
+        hasHome: Boolean(children.getByName('Home')),
+        hasBack: Boolean(children.getByName('Back to filter categories')),
+      };
+    });
+    assert.deepEqual(state, { offset: 0, hasHome: false, hasBack: false });
+  };
+  const openScrolledTheme = async () => {
+    await scrollDown(100);
+    await clickControl(page, landingControl('browse-Theme'));
+    await uiControl(page, landingControl('value-Christmas'));
+    await scrollDown(500);
+  };
+
+  await assertAtHome();
+  await openScrolledTheme();
+  await clickControl(page, landingControl('value-Coast'));
+  await waitForPicker(page);
+  await pressHeader(page, 'Home');
+  await assertAtHome();
+
+  await openScrolledTheme();
+  await clickControl(page, landingControl('Home'));
+  await assertAtHome();
+  await clickControl(page, landingControl('browse-Theme'));
+  await clickControl(page, landingControl('Back to filter categories'));
+  await assertAtHome();
   assert.deepEqual(errors, []);
 });
 

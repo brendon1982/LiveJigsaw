@@ -12,7 +12,7 @@ import { cardScrollbarSpace, cardScrollThreshold, makePuzzleCardPanel } from './
 import { artworkCreditLines, showPuzzleDetails } from './puzzleDetailsDialog';
 import { showPuzzleFilters } from './puzzleFilterDialog';
 import { activeFilterCount, matchesPuzzleFilters, noPuzzleFilters, samePuzzleFilters, type PuzzleFilters } from './puzzleFilters';
-import { headerControlGap, headerInset, makeBackButton, makeFiltersButton, makeSettingsButton, puzzleSpacing } from './puzzleHeader';
+import { headerControlGap, headerInset, makeBackButton, makeFiltersButton, makeHomeButton, makeSettingsButton, puzzleSpacing } from './puzzleHeader';
 import { makePreviewCornerCutout, makePuzzlePickerCard, maxPickerCardWidth } from './PuzzlePickerCard';
 import { showPuzzleOptions, showResumePuzzle } from './puzzleOptions';
 import { openSettings } from './SettingsScene';
@@ -144,6 +144,11 @@ export class SelectPuzzleScene extends Phaser.Scene {
     const back = makeBackButton(this, () => {
       if (!dialogOpen) this.scene.start('Landing', this.returnToBrowse ?? {});
     }, 'Back to browse');
+    const home = makeHomeButton(this, () => {
+      if (dialogOpen) return;
+      this.returnToBrowse = undefined;
+      this.scene.start('Landing', {});
+    });
     const settings = makeSettingsButton(this, () => {
       if (dialogOpen) return;
       openDialog();
@@ -225,10 +230,18 @@ export class SelectPuzzleScene extends Phaser.Scene {
       const { width, height } = this.scale.gameSize;
       settings.layout(width);
       const filtersLeft = settings.button.x - filtersButton.width - headerControlGap;
-      const sizesLeft = Math.max((width - previewSizeRow.width) / 2, back.x + back.width + headerControlGap);
-      const stack = sizesLeft + previewSizeRow.width + headerControlGap > filtersLeft;
-      const firstRowHeight = Math.max(back.height, previewSizeRow.height);
+      const afterBack = back.x + back.width + headerControlGap;
+      const afterHome = afterBack + home.width + headerControlGap;
+      const centeredSizesLeft = (width - previewSizeRow.width) / 2;
+      const singleRowSizesLeft = Math.max(centeredSizesLeft, afterHome);
+      const stack = singleRowSizesLeft + previewSizeRow.width + headerControlGap > filtersLeft;
+      const sizesLeft = stack ? Math.max(centeredSizesLeft, afterBack) : singleRowSizesLeft;
+      const firstRowHeight = Math.max(back.height, home.height, previewSizeRow.height);
       const settingsTop = stack ? puzzleSpacing + firstRowHeight + headerControlGap : puzzleSpacing;
+      const homeFitsTopRight = sizesLeft + previewSizeRow.width + headerControlGap <= settings.button.x;
+      if (!stack) home.setPosition(afterBack, puzzleSpacing);
+      else if (homeFitsTopRight) home.setPosition(settings.button.x, puzzleSpacing);
+      else home.setPosition(back.x, settingsTop);
       previewSizeRow.setPosition(sizesLeft, puzzleSpacing);
       settings.button.setY(settingsTop);
       filtersButton.setPosition(filtersLeft, settingsTop);

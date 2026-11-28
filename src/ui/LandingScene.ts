@@ -5,7 +5,7 @@ import { makeOptionTile, type UIScene } from './button';
 import { cardScrollbarSpace, cardScrollThreshold, makePuzzleCardPanel } from './puzzleCardPanel';
 import { puzzleFilterGroups } from './puzzleFilterGroups';
 import { activeFilterCount, matchesPuzzleFilters, noPuzzleFilters, type PuzzleFilterCategory, type PuzzleFilters } from './puzzleFilters';
-import { headerInset, makeBackButton, makeSettingsButton, puzzleSpacing } from './puzzleHeader';
+import { headerControlGap, headerInset, makeBackButton, makeHomeButton, makeSettingsButton, puzzleSpacing } from './puzzleHeader';
 import { makePreview, makePreviewCornerCutout, maxPickerCardWidth, pickerCardCornerRadius } from './PuzzlePickerCard';
 import { SelectPuzzleScene } from './SelectPuzzleScene';
 import { openSettings } from './SettingsScene';
@@ -81,7 +81,9 @@ export class LandingScene extends Phaser.Scene {
       .add(grid, { align: 'center' });
     const panel = makePuzzleCardPanel(this, list);
     if (group) {
-      makeBackButton(this, () => this.scene.restart({ scrollOffset: categoriesScrollOffset }), 'Back to filter categories');
+      const back = makeBackButton(this, () => this.scene.restart({ scrollOffset: categoriesScrollOffset }), 'Back to filter categories');
+      makeHomeButton(this, () => this.scene.restart({}))
+        .setPosition(back.x + back.width + headerControlGap, back.y);
     }
     const settings = makeSettingsButton(this, () => {
       panel.setScrollerEnable(false).setMouseWheelScrollerEnable(false);

@@ -820,13 +820,13 @@ scenario('play opens artwork details and the active challenge rules without chan
     const body = dialog.getElement('content');
     return {
       boardInputEnabled: play.input.enabled,
-      artwork: body.getAllChildren().some(({ type }) => type === 'Image'),
+      artwork: dialog.getElement('title')?.getElement?.('artwork')?.type,
       description: body.getAllChildren().find(({ type }) => type === 'Text')?.text,
       bodyWidth: body.width,
       scrollRange: body.topChildOY - body.bottomChildOY,
       scale: dialog.scaleX,
       actionHeight: dialog.getElement('actions')[0].displayHeight,
-      progress: dialog.getElement('actionsSizer.footerLabel')?.text,
+      hasProgress: body.getAllChildren().some(({ text }) => text === '0 of 8 placed'),
     };
   });
   const dismiss = async () => {
@@ -839,8 +839,8 @@ scenario('play opens artwork details and the active challenge rules without chan
   await pressHeader(page, 'Artwork details', true);
   await waitForText('Artwork credits');
   const details = await playInfo();
-  assert.equal(details.artwork, true);
-  assert.equal(details.progress, '0 of 8 placed');
+  assert.equal(details.artwork, 'Image');
+  assert.equal(details.hasProgress, true);
   assert.equal(details.boardInputEnabled, false);
   await dismiss();
 
@@ -1289,15 +1289,23 @@ scenario('landing card artwork credits open separately from touch navigation', a
   const details = await page.evaluate(() => {
     const scene = window.puzzleLandingScene;
     const dialog = scene.children.list.find(({ type }) => type === 'rexDialog');
+    const header = dialog.getElement('title');
+    const body = dialog.getElement('content');
+    const artwork = header?.getElement('artwork');
     return {
       heading: scene.children.getByName('browse-heading').text,
-      bannerType: dialog.getElement('content').getAllChildren().find(({ type }) => type === 'Image')?.type,
-      texts: dialog.getAllChildren().filter(({ type }) => type === 'Text').map(({ text }) => text),
+      bannerType: artwork?.type,
+      bannerBounds: artwork?.getBounds(),
+      dialogBounds: dialog.getBounds(),
+      texts: body.getAllChildren().filter(({ type }) => type === 'Text').map(({ text }) => text),
       hasAllCredits: Boolean(scene.children.getByName('Artwork credits for All')),
     };
   });
   assert.equal(details.heading, 'Live Jigsaw', 'The ellipsis must not open the filter category');
   assert.equal(details.bannerType, 'Image');
+  assert.equal(details.bannerBounds.x, details.dialogBounds.x);
+  assert.equal(details.bannerBounds.y, details.dialogBounds.y);
+  assert.equal(details.bannerBounds.width, details.dialogBounds.width);
   assert.ok(details.texts.includes('Artwork credits'));
   assert.ok(details.texts.includes('Wildan Kurniawan'));
   const links = details.texts.filter((line) => line.startsWith('https://unsplash.com/'));
@@ -4368,14 +4376,18 @@ scenario('compact picker ellipsis opens details with the preview and inline cred
     const [card] = panel.getElement('panel.cards').getChildren();
     const preview = card.getChildren().find(({ type }) => type === 'RenderTexture');
     const body = dialog.getElement('content.panel');
-    const image = body.getAllChildren().find(({ type }) => type === 'Image');
+    const header = dialog.getElement('title');
+    const image = header?.getElement('artwork');
     const [title, metadata, ...credits] = body.getAllChildren().filter(({ type }) => type === 'Text');
-    const artworkBounds = image.getBounds();
+    const artworkBounds = image?.getBounds();
+    const dialogBounds = dialog.getBounds();
     return {
-      sameArtwork: image.texture === preview.texture,
-      artworkAboveTitle: artworkBounds.bottom <= title.getBounds().top,
-      aspectRatio: artworkBounds.width / artworkBounds.height,
-      alignedWithTitle: artworkBounds.left === title.getBounds().left,
+      sameArtwork: image?.texture === preview.texture,
+      artworkAboveTitle: artworkBounds?.bottom <= title.getBounds().top,
+      aspectRatio: artworkBounds && artworkBounds.width / artworkBounds.height,
+      fullBleed: artworkBounds?.x === dialogBounds.x && artworkBounds?.y === dialogBounds.y
+        && artworkBounds?.width === dialogBounds.width,
+      artworkInBody: body.getAllChildren().some(({ type }) => type === 'Image'),
       metadata: metadata.text,
       credits: credits.map(({ text }) => text),
       actions: dialog.getElement('actions').map(({ text }) => text),
@@ -4384,26 +4396,47 @@ scenario('compact picker ellipsis opens details with the preview and inline cred
   assert.equal(details.sameArtwork, true);
   assert.equal(details.artworkAboveTitle, true);
   assert.ok(Math.abs(details.aspectRatio - 16 / 9) < 0.01);
-  assert.equal(details.alignedWithTitle, true);
+  assert.equal(details.fullBleed, true);
+  assert.equal(details.artworkInBody, false);
   assert.match(details.metadata, / · Animated$/);
   assert.deepEqual(details.credits, ['Artwork credits', 'Me', 'Place holder art from the prototype. Left it in for fun.']);
   assert.deepEqual(details.actions, ['Close']);
   const waitForDetails = (open) => page.waitForFunction((open) => {
     const dialog = window.puzzlePickerScene.children.list.find(({ type }) => type === 'rexDialog');
-    return open ? dialog?.getElement('content').getAllChildren().some(({ type }) => type === 'Image') : !dialog;
+    return open ? Boolean(dialog?.getElement('title')?.getElement('artwork')) : !dialog;
   }, open, { timeout: 4000 });
   await page.setViewportSize({ width: 640, height: 240 });
   await page.waitForFunction(() => document.querySelector('canvas').height === 240);
   const close = await uiControl(page, { text: 'Close', action: true });
   assert.equal(close.height, 52);
-  await page.mouse.move(315, 80);
-  await page.mouse.wheel(0, 1000);
+  const getLayout = () => page.evaluate(() => {
+    const dialog = window.puzzlePickerScene.children.list.find(({ type }) => type === 'rexDialog');
+    const header = dialog.getElement('title');
+    const artwork = header.getElement('artwork');
+    const body = dialog.getElement('content');
+    return {
+      dialog: dialog.getBounds(), banner: header.getBounds(), artwork: artwork.getBounds(), body: body.getBounds(),
+      cropped: artwork.isCropped, uniformScale: artwork.scaleX === artwork.scaleY,
+    };
+  });
+  const layout = await getLayout();
+  assert.ok(layout.dialog.height <= 216 && layout.body.height >= 72);
+  assert.ok(layout.cropped && layout.uniformScale);
+  assert.equal(layout.banner.x, layout.dialog.x);
+  assert.equal(layout.banner.y, layout.dialog.y);
+  assert.equal(layout.banner.width, layout.dialog.width);
+  assert.equal(layout.artwork.x, layout.banner.x);
+  assert.equal(layout.artwork.y, layout.banner.y);
+  assert.equal(layout.artwork.width, layout.banner.width);
+  const { moveFinger, dispatch } = await touchController(page);
+  const bodyCenter = layout.body.x + layout.body.width / 2;
+  await moveFinger(bodyCenter, layout.body.y + layout.body.height - 6, bodyCenter, layout.body.y + 6);
   await page.waitForFunction(() => {
     const dialog = window.puzzlePickerScene.children.list.find(({ type }) => type === 'rexDialog');
     const body = dialog.getElement('content');
-    const artwork = body.getAllChildren().find(({ type }) => type === 'Image');
-    return artwork.getBounds().bottom < body.getBounds().top;
+    return body.childOY < 0;
   });
+  assert.deepEqual((await getLayout()).banner, layout.banner);
   assert.equal((await uiControl(page, { text: 'Close', action: true })).y, close.y);
   await page.keyboard.press('Escape');
   await waitForDetails(false);
@@ -4420,7 +4453,6 @@ scenario('compact picker ellipsis opens details with the preview and inline cred
   await page.keyboard.press('Escape');
   await waitForDetails(false);
 
-  const { dispatch, moveFinger } = await touchController(page);
   const initial = await canvas.screenshot();
   await dispatch('touchStart', card.more);
   await dispatch('touchCancel');
@@ -4430,7 +4462,7 @@ scenario('compact picker ellipsis opens details with the preview and inline cred
   assert.deepEqual(errors, []);
 });
 
-scenario('compact picker details puts saved progress in the Close row', async (t) => {
+scenario('compact picker details puts saved progress in the scrolling body', async (t) => {
   const { page, errors } = await openPuzzle(t, { viewport: { width: 375, height: 640 }, hasTouch: true },
     currentSizesPuzzlePath, async (page) => {
       await page.addInitScript(({ version, size }) => localStorage.setItem('live-jigsaw.save', JSON.stringify({
@@ -4450,22 +4482,18 @@ scenario('compact picker details puts saved progress in the Close row', async (t
   });
   await page.touchscreen.tap(...more);
   await page.waitForFunction(() => window.puzzlePickerScene.children.list.some(({ type }) => type === 'rexDialog'));
-  const footer = await page.evaluate(() => {
+  const details = await page.evaluate(() => {
     const dialog = window.puzzlePickerScene.children.list.find(({ type }) => type === 'rexDialog');
-    const progress = dialog.getElement('actionsSizer.footerLabel');
     const [close] = dialog.getElement('actions');
     const body = dialog.getElement('content');
+    const progress = body.getAllChildren().find(({ text }) => text === '1 of 8 placed');
     return {
       text: progress?.text,
-      inBody: body.getElement('panel').getChildren().some(({ text }) => text === '1 of 8 placed'),
-      leftOffset: progress && progress.getBounds().left - body.getBounds().left,
-      rowOffset: progress && progress.getBounds().centerY - close.getBounds().centerY,
+      closeBelowBody: close.getBounds().top > body.getBounds().bottom,
     };
   });
-  assert.equal(footer.text, '1 of 8 placed');
-  assert.equal(footer.inBody, false);
-  assert.ok(Math.abs(footer.leftOffset) <= 1, `Progress should align with the body (offset: ${footer.leftOffset})`);
-  assert.ok(Math.abs(footer.rowOffset) < 1, `Progress and Close should share a row (offset: ${footer.rowOffset})`);
+  assert.equal(details.text, '1 of 8 placed');
+  assert.equal(details.closeBelowBody, true);
   await pressAction(page, 'Close', true);
   await page.waitForFunction(() => !window.puzzlePickerScene.children.list.some(({ type }) => type === 'rexDialog'));
   assert.deepEqual(errors, []);

@@ -186,33 +186,46 @@ export function showResumePuzzle(
 }
 
 const pickerDialogInset = 20;
+const dialogViewportMargin = 12;
+const dialogTitleGap = 14;
+const dialogActionGap = 18;
+const minArtworkDialogBodyHeight = 72;
+
+type DialogArtworkHeader = {
+  view: ReturnType<UIScene['rexUI']['add']['sizer']>;
+  cornerRadius: (width: number) => number;
+  reflow: (width: number, maxHeight: number) => void;
+};
 
 export function showPickerDialog(
   scene: UIScene,
-  title: string | undefined,
+  title: string | DialogArtworkHeader,
   content: Phaser.GameObjects.GameObject & { height: number },
   actions: ReturnType<typeof makeButtonLabel>[],
   onClose: (action?: number) => void,
-  { responsive, handleAction, footerLabel }: {
+  { responsive, handleAction }: {
     responsive: { maxWidth: number; reflow: (width: number) => void; fitContent: (height: number) => void };
     handleAction?: (index: number) => boolean;
-    footerLabel?: Phaser.GameObjects.Text;
   },
 ) {
   const cover = scene.add.rectangle(0, 0, 1, 1, palette.modalBackdrop, 0.72)
     .setOrigin(0).setDepth(depth.cover).setInteractive();
   const background = scene.rexUI.add.roundRectangle(0, 0, 1, 1, 16).setDepth(depth.panel);
-  const titleLabel = title === undefined ? undefined : scene.add.text(0, 0, title, {
+  const artworkHeader = typeof title === 'string' ? undefined : title;
+  const titleLabel = typeof title !== 'string' ? undefined : scene.add.text(0, 0, title, {
     fontFamily: 'system-ui', fontSize: '25px', fontStyle: 'bold',
   }).setDepth(depth.controls);
   actions.forEach((button) => button.setDepth(depth.controls).layout());
+  const outerInset = artworkHeader ? 0 : pickerDialogInset;
+  const bodyInset = artworkHeader ? pickerDialogInset : 0;
   const dialog = scene.rexUI.add.dialog({
     background,
-    title: titleLabel,
+    title: artworkHeader?.view ?? titleLabel,
     content,
     align: { title: 'left' },
     space: {
-      top: pickerDialogInset, left: pickerDialogInset, right: pickerDialogInset, bottom: pickerDialogInset, title: 14,
+      top: outerInset, left: outerInset, right: outerInset, bottom: pickerDialogInset, title: dialogTitleGap,
+      contentLeft: bodyInset, contentRight: bodyInset,
     },
   });
   const actionGap = 8;
@@ -220,11 +233,10 @@ export function showPickerDialog(
     buttons: actions, groupName: 'actions', eventEmitter: dialog, align: 'right',
     space: { item: actionGap, line: actionGap }, click: { mode: 'release', clickInterval: 0 },
   });
-  dialog.add(wrappingActions, { padding: { top: 18 } });
+  dialog.add(wrappingActions, { padding: { top: dialogActionGap, left: bodyInset, right: bodyInset } });
   dialog.addChildrenMap('actionsSizer', wrappingActions);
   // @ts-expect-error RexUI maps the action array here in its own Dialog constructor.
   dialog.addChildrenMap('actions', actions);
-  if (footerLabel) wrappingActions.add(footerLabel.setDepth(depth.controls), { index: 0, key: 'footerLabel' });
   styleWithTheme(dialog, (colors) => {
     cover.setFillStyle(colors.modalBackdrop, 0.72);
     background.setFillStyle(colors.surface).setStrokeStyle(1, colors.border);
@@ -238,18 +250,22 @@ export function showPickerDialog(
     dialog.setScale(1);
     cover.setSize(width / zoom, height / zoom);
     dialog.setPosition(width / (2 * zoom), height / (2 * zoom));
-    const innerWidth = Math.max(1, Math.min(responsive.maxWidth, width - 24 - 2 * pickerDialogInset));
+    const availableHeight = height - 2 * dialogViewportMargin;
+    const innerWidth = Math.max(1, Math.min(responsive.maxWidth, width - 2 * (dialogViewportMargin + pickerDialogInset)));
     if (titleLabel) wrapDialogText(titleLabel, innerWidth);
-    if (footerLabel) {
-      const [close] = actions;
-      wrapDialogText(footerLabel, Math.max(1, innerWidth - close.width - actionGap));
-      wrappingActions.setChildOuterPadding(footerLabel, 'top', Math.max(0, (close.height - footerLabel.height) / 2));
-    }
     wrappingActions.setMinWidth(innerWidth);
+    if (artworkHeader) {
+      const dialogWidth = innerWidth + 2 * pickerDialogInset;
+      const footerHeight = wrappingActions.layout().height + dialogActionGap + pickerDialogInset;
+      const maxArtworkHeight = availableHeight - footerHeight - dialogTitleGap - minArtworkDialogBodyHeight;
+      artworkHeader.reflow(dialogWidth, maxArtworkHeight);
+      const radius = artworkHeader.cornerRadius(dialogWidth);
+      background.setRadius({ tl: radius, tr: radius, bl: 16, br: 16 });
+    }
     responsive.reflow(innerWidth);
     dialog.layout();
     const chromeHeight = dialog.height - content.height;
-    responsive.fitContent(Math.max(1, height - 24 - chromeHeight));
+    responsive.fitContent(Math.max(1, availableHeight - chromeHeight));
     dialog.layout().setScale(1 / zoom);
   };
   const cancel = () => dialog.modalClose();

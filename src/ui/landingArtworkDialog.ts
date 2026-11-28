@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import type { LandingArtwork } from '../landingArtwork/catalog';
 import type { UIScene } from './button';
 import { captureImageArtwork, makePreviewCornerCutout, makeScalableArtwork } from './PuzzlePickerCard';
-import { showArtworkDetails } from './puzzleDetailsDialog';
+import { setArtworkBannerTexture, showArtworkDetails } from './puzzleDetailsDialog';
 
 export function showLandingArtworkDetails(scene: UIScene, title: string, entry: LandingArtwork, onClose: () => void) {
   const artwork = makeLandingArtworkBanner(scene, entry);
@@ -22,10 +22,7 @@ function makeLandingArtworkBanner(scene: UIScene, { image, banner, focus }: Land
   const loaded = `filecomplete-image-${banner.key}`;
   const showFullArtwork = () => {
     const fullArtwork = captureImageArtwork(scene, banner.key, cutout, focus).removeFromDisplayList();
-    const { displayWidth, displayHeight } = artwork;
-    artwork.texture = fullArtwork.texture;
-    artwork.setFrame(fullArtwork.texture.get().name).setDisplaySize(displayWidth, displayHeight);
-    scene.rexUI.getParentSizer(artwork)?.resetChildScaleState(artwork);
+    setArtworkBannerTexture(scene, artwork, fullArtwork.texture);
     artwork.once(Phaser.GameObjects.Events.DESTROY, () => fullArtwork.destroy());
   };
   scene.load.once(loaded, showFullArtwork);

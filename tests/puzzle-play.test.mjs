@@ -864,6 +864,40 @@ scenario('play opens artwork details and the active challenge rules without chan
   assert.deepEqual(errors, []);
 });
 
+scenario('Resume Puzzle wraps its actions and preserves the save when cancelled', async (t) => {
+  const { page, errors } = await openPuzzle(t, { viewport: { width: 375, height: 640 }, hasTouch: true },
+    currentSizesPuzzlePath, async (page) => {
+      await page.addInitScript(({ version, size }) => localStorage.setItem('live-jigsaw.save', JSON.stringify({
+        version,
+        progress: { Windmill: {
+          setup: { size, seed: 42, connectorStyle: 'classic', animationSpeed: 'Normal', challengeMode: 'none', pieceRotation: false },
+          placedPieceIds: ['piece-0-0'], trayOrientations: {}, parkedGroups: [],
+        } },
+      })), { version: saveVersion, size: compactSize });
+    });
+  const saved = await readSave(page);
+  await page.touchscreen.tap(187, 180);
+  await uiControl(page, { text: 'Resume', action: true });
+  await page.setViewportSize({ width: 320, height: 260 });
+  await page.waitForFunction(() => document.querySelector('canvas').width === 320);
+  const { bounds, scrollRange, actions } = await page.evaluate(() => {
+    const dialog = window.puzzlePickerScene.children.list.find(({ type }) => type === 'rexDialog');
+    const body = dialog.getElement('content');
+    return {
+      bounds: dialog.getBounds(), scrollRange: body.topChildOY - body.bottomChildOY,
+      actions: dialog.getElement('actions').map((button) => button.getBounds()),
+    };
+  });
+  assert.ok(bounds.width <= 296 && bounds.height <= 236);
+  assert.ok(scrollRange > 0);
+  assert.ok(actions.every(({ height }) => height === 52));
+  assert.ok(actions[2].y > actions[0].y);
+  await pressAction(page, 'Cancel', true);
+  await waitForDialogClosed(page, 'SelectPuzzle');
+  assert.deepEqual(await readSave(page), saved);
+  assert.deepEqual(errors, []);
+});
+
 scenario('the board keeps fixed pan bounds through zoom with a parked piece', async (t) => {
   const { page, waitForText, errors, playSelection } = await openCompactPuzzle(t, {
     viewport: { width: 1320, height: 780 }, hasTouch: true,

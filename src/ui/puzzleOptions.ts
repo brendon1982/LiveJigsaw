@@ -10,7 +10,7 @@ import { puzzleSizeChoices } from '../puzzles/puzzleSizeChoices';
 import { makeButtonLabel, makeOptionTile, type UIScene } from './button';
 import { challengeDescriptions } from './challengeDescriptions';
 import { makeHoverTooltip } from './hoverTooltip';
-import { makeScrollableDialogBody } from './scrollableDialogBody';
+import { makeScrollableDialogBody, wrapDialogText } from './scrollableDialogBody';
 import { metadataTextStyle, palette, styleWithTheme } from './theme';
 
 const optionWidth = 96;
@@ -159,18 +159,23 @@ export function showResumePuzzle(
     `Challenge mode: ${challengeModes[challengeMode].label}`,
   ];
   const content = scene.rexUI.add.sizer({ orientation: 'y', space: { item: 4 } });
-  for (const line of lines) {
-    content.add(scene.add.text(0, 0, line, {
+  const labels = lines.map((line) => {
+    const label = scene.add.text(0, 0, line, {
       fontFamily: 'system-ui', fontSize: '17px', color: palette.mutedText,
-    }).setFixedSize(0, 24).setDepth(depth.controls), { align: 'left' });
-  }
+    }).setDepth(depth.controls);
+    content.add(label, { align: 'left' });
+    return label;
+  });
+  const scroll = makeScrollableDialogBody(scene, content, depth.controls);
   const actions = [
     makeButtonLabel(scene, 'Cancel', 92, 52),
     makeButtonLabel(scene, 'Reset', 92, 52),
     makeButtonLabel(scene, 'Resume', 104, 52, true),
   ];
-  return showPickerDialog(scene, source.title, content, actions, (action) => {
+  return showPickerDialog(scene, source.title, scroll.body, actions, (action) => {
     onClose(action === 2 ? 'resume' : action === 1 ? 'reset' : 'cancel');
+  }, {
+    responsive: scroll.responsiveLayout(304, (width) => labels.forEach((label) => wrapDialogText(label, width))),
   });
 }
 

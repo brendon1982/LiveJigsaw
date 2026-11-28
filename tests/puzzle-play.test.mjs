@@ -831,7 +831,7 @@ scenario('the board keeps fixed pan bounds through zoom with a parked piece', as
   assert.deepEqual(errors, []);
 });
 
-scenario('landing theme cards scroll, open Settings and filter the picker with touch', async (t) => {
+scenario('landing filter categories scroll, open Settings and filter the picker with touch', async (t) => {
   await buildCompactFixture();
   const { page, waitForText, errors, origin } = await openGamePage(t, {
     viewport: { width: 375, height: 900 }, hasTouch: true, isMobile: true,
@@ -844,7 +844,7 @@ scenario('landing theme cards scroll, open Settings and filter the picker with t
   await pressSetting(page, 'Done', true);
   await waitForDialogClosed(page, 'Settings');
 
-  const { x, y } = await uiControl(page, landingControl('theme-All'));
+  const { x, y } = await uiControl(page, landingControl('browse-All'));
   const { moveFinger } = await touchController(page);
   await moveFinger(x, y, x, y - 92);
   await page.waitForFunction(() => window.puzzleLandingScene.children.list
@@ -852,7 +852,13 @@ scenario('landing theme cards scroll, open Settings and filter the picker with t
   assert.ok(await page.evaluate(() => window.puzzleLandingScene.sys.isActive()), 'A swipe starting on All must not open the picker');
 
   await page.reload();
-  await clickControl(page, landingControl('theme-Coast'), true);
+  await clickControl(page, landingControl('browse-Theme'), true);
+  await waitForText('Theme');
+  const categoryBack = await uiControl(page, landingControl('Back to filter categories'));
+  const categorySettings = await uiControl(page, landingControl('Settings'));
+  assert.equal(categoryBack.y, categorySettings.y);
+  assert.ok(categoryBack.x < 375 / 2 && categorySettings.x > 375 / 2);
+  await clickControl(page, landingControl('value-Coast'), true);
   await waitForPicker(page);
   await waitForFilterCount(page, 1);
   const visiblePuzzles = () => page.evaluate(() => window.puzzlePickerScene.children.list
@@ -861,7 +867,7 @@ scenario('landing theme cards scroll, open Settings and filter the picker with t
   assert.ok((await visiblePuzzles()).includes('Lighthouse'));
   assert.ok(!(await visiblePuzzles()).includes('Windmill'));
 
-  const back = await uiControl(page, { name: 'Back to themes' });
+  const back = await uiControl(page, { name: 'Back to browse' });
   const compact = await uiControl(page, { name: 'preview-size-Compact' });
   const full = await uiControl(page, { name: 'preview-size-Full' });
   const filters = await uiControl(page, { name: 'Filters' });
@@ -872,10 +878,45 @@ scenario('landing theme cards scroll, open Settings and filter the picker with t
   assert.equal(filters.y, settings.y);
   assert.ok(filters.y > back.y);
 
-  await pressHeader(page, 'Back to themes', true);
-  await clickControl(page, landingControl('theme-All'), true);
+  await pressHeader(page, 'Back to browse', true);
+  await clickControl(page, landingControl('Back to filter categories'), true);
+  await clickControl(page, landingControl('browse-All'), true);
   await uiControl(page, { sceneKey: 'SelectPuzzle', name: 'Filters', filterCount: 0 });
   assert.ok((await visiblePuzzles()).includes('Windmill'));
+  assert.deepEqual(errors, []);
+});
+
+scenario('landing offers specific filter values for Type, Completion and Artwork motion', async (t) => {
+  await buildCompactFixture();
+  const { page, errors, origin } = await openGamePage(t, { viewport: { width: 1320, height: 900 } });
+  await page.goto(`${origin}${compactPuzzlePath}?landing`);
+  const landingControl = (name) => ({ sceneKey: 'Landing', name });
+  const cases = [
+    ['Type', ['Flat Illustration', 'Parallax', 'Procedural'], 'Parallax', { types: ['Parallax'] }],
+    ['Completion', ['Completed', 'Never completed'], 'Never completed', { completion: 'Never completed' }],
+    ['Artwork motion', ['Static', 'Animated'], 'Animated', { motion: 'Animated' }],
+  ];
+  for (const [category, values, choice, filter] of cases) {
+    await clickControl(page, landingControl(`browse-${category}`));
+    await uiControl(page, landingControl(`value-${choice}`));
+    const available = await page.evaluate(() => {
+      const scene = window.puzzleLandingScene;
+      const panel = scene.children.list.find(({ type }) => type === 'rexScrollablePanel');
+      return {
+        heading: scene.children.getByName('browse-heading').text,
+        values: panel.getAllChildren().filter(({ name }) => name.startsWith('value-')).map(({ name }) => name.slice(6)),
+      };
+    });
+    assert.equal(available.heading, category);
+    assert.deepEqual(available.values, values);
+    await clickControl(page, landingControl(`value-${choice}`));
+    await waitForPicker(page);
+    assert.deepEqual(await page.evaluate(() => window.puzzlePickerScene.filters), {
+      themes: [], types: [], completion: 'All', motion: 'All', ...filter,
+    });
+    await pressHeader(page, 'Back to browse');
+    await clickControl(page, landingControl('Back to filter categories'));
+  }
   assert.deepEqual(errors, []);
 });
 

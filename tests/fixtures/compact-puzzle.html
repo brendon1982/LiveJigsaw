@@ -21,8 +21,8 @@
         window.puzzlePickerScene = this;
       };
       const createLanding = LandingScene.prototype.create;
-      LandingScene.prototype.create = function () {
-        createLanding.call(this);
+      LandingScene.prototype.create = function (data) {
+        createLanding.call(this, data);
         window.puzzleLandingScene = this;
         if (!new URLSearchParams(location.search).has('landing')) this.scene.start(SelectPuzzleScene.key);
       };

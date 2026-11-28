@@ -10,7 +10,7 @@ import type { PuzzleSelection } from './PlayPuzzleScene';
 import { cardScrollbarSpace, cardScrollThreshold, makePuzzleCardPanel } from './puzzleCardPanel';
 import { artworkCreditLines, showPuzzleDetails } from './puzzleDetailsDialog';
 import { showPuzzleFilters } from './puzzleFilterDialog';
-import { activeFilterCount, matchesPuzzleFilters, noPuzzleFilters, samePuzzleFilters, type PuzzleFilters } from './puzzleFilters';
+import { activeFilterCount, matchesPuzzleFilters, noPuzzleFilters, samePuzzleFilters, type PuzzleFilterCategory, type PuzzleFilters } from './puzzleFilters';
 import { headerControlGap, headerInset, makeBackButton, makeFiltersButton, makeSettingsButton, puzzleSpacing } from './puzzleHeader';
 import { makePreviewCornerCutout, makePuzzlePickerCard, maxPickerCardWidth } from './PuzzlePickerCard';
 import { showPuzzleOptions, showResumePuzzle } from './puzzleOptions';
@@ -58,15 +58,17 @@ export class SelectPuzzleScene extends Phaser.Scene {
   static readonly key = 'SelectPuzzle';
   declare rexUI: RexUIPlugin;
   private filters = noPuzzleFilters;
+  private browseCategory?: PuzzleFilterCategory;
   private scrollOffset = 0;
 
   constructor() {
     super(SelectPuzzleScene.key);
   }
 
-  init({ filters }: { filters?: PuzzleFilters } = {}) {
+  init({ filters, category }: { filters?: PuzzleFilters; category?: PuzzleFilterCategory } = {}) {
     if (!filters) return;
     this.filters = filters;
+    this.browseCategory = category;
     this.scrollOffset = 0;
   }
 
@@ -139,8 +141,8 @@ export class SelectPuzzleScene extends Phaser.Scene {
       headerBackground.setFillStyle(colors.background);
     });
     const back = makeBackButton(this, () => {
-      if (!dialogOpen) this.scene.start('Landing');
-    }, 'Back to themes');
+      if (!dialogOpen) this.scene.start('Landing', { category: this.browseCategory });
+    }, 'Back to browse');
     const settings = makeSettingsButton(this, () => {
       if (dialogOpen) return;
       openDialog();

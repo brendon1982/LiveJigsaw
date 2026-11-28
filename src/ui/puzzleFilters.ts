@@ -1,9 +1,9 @@
 import { puzzleThemes, puzzleTypes, type PuzzleTheme, type PuzzleType } from '../puzzles/PuzzleTags.ts';
 import type { PuzzleMotion, PuzzleSource } from '../puzzles/PuzzleSource.ts';
 
-export const completionFilters = ['All', 'Completed', 'Never completed'] as const;
+const completionFilters = ['All', 'Completed', 'Never completed'] as const;
 type CompletionFilter = typeof completionFilters[number];
-export const motionFilters = ['All', 'Static', 'Animated'] as const satisfies readonly ('All' | PuzzleMotion)[];
+const motionFilters = ['All', 'Static', 'Animated'] as const satisfies readonly ('All' | PuzzleMotion)[];
 
 export type PuzzleFilters = Readonly<{
   themes: readonly PuzzleTheme[];
@@ -13,6 +13,22 @@ export type PuzzleFilters = Readonly<{
 }>;
 
 export const noPuzzleFilters: PuzzleFilters = { themes: [], types: [], completion: 'All', motion: 'All' };
+
+function filterGroup<T extends string>(title: string, choices: readonly T[], select: (choice: T) => Partial<PuzzleFilters>) {
+  return {
+    title,
+    choices,
+    options: choices.map((label) => ({ label, filters: { ...noPuzzleFilters, ...select(label) } })),
+  };
+}
+
+export const puzzleFilterGroups = {
+  theme: filterGroup('Theme', puzzleThemes, (theme) => ({ themes: [theme] })),
+  type: filterGroup('Type', puzzleTypes, (type) => ({ types: [type] })),
+  completion: filterGroup('Completion', completionFilters, (completion) => ({ completion })),
+  motion: filterGroup('Artwork motion', motionFilters, (motion) => ({ motion })),
+};
+export type PuzzleFilterCategory = keyof typeof puzzleFilterGroups;
 
 export function activeFilterCount({ themes, types, completion, motion }: PuzzleFilters) {
   return themes.length + types.length + Number(completion !== 'All') + Number(motion !== 'All');

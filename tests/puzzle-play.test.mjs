@@ -171,6 +171,14 @@ function waitForDialogClosed(page, sceneKey) {
   }, sceneKey, { timeout: 4000 });
 }
 
+function waitForLandingArtwork(page, ...cardNames) {
+  return page.waitForFunction((names) => {
+    const panel = window.puzzleLandingScene?.children.list.find(({ type }) => type === 'rexScrollablePanel');
+    const cards = panel?.getAllChildren();
+    return names.every((name) => cards?.find((card) => card.name === name)?.getElement('artwork')?.visible);
+  }, cardNames, { timeout: 4000 });
+}
+
 async function waitForFilterCount(page, filterCount) {
   await uiControl(page, { sceneKey: 'SelectPuzzle', name: 'Filters', filterCount });
   assert.ok(await page.evaluate((count) => {
@@ -980,6 +988,55 @@ scenario('Home resets landing navigation and scroll from both the picker and a f
   assert.deepEqual(errors, []);
 });
 
+scenario('landing cards are usable while artwork loads and request more artwork as you scroll', async (t) => {
+  await buildCompactFixture();
+  const { page, waitForText, errors, origin } = await openGamePage(t, { viewport: { width: 375, height: 480 } });
+  const themeAsset = /\/theme-card-[\w-]+\.webp$/;
+  const motionAsset = /\/motion-card-[\w-]+\.webp$/;
+  const themeGate = Promise.withResolvers();
+  const motionGate = Promise.withResolvers();
+  let motionRequested = false;
+  await page.route(themeAsset, async (route) => {
+    await themeGate.promise;
+    await route.continue();
+  });
+  await page.route(motionAsset, async (route) => {
+    motionRequested = true;
+    await motionGate.promise;
+    await route.continue();
+  });
+
+  try {
+    const themeRequested = page.waitForRequest(themeAsset, { timeout: 4000 });
+    await page.goto(`${origin}${compactPuzzlePath}?landing`, { waitUntil: 'commit' });
+    await themeRequested;
+    await waitForText('Live Jigsaw');
+    const landingControl = (name) => ({ sceneKey: 'Landing', name });
+    const theme = await uiControl(page, landingControl('browse-Theme'));
+    assert.equal(motionRequested, false, 'Artwork far below the fold should not load yet');
+
+    const x = Math.floor(theme.x - theme.width / 4);
+    const y = Math.floor(theme.y - theme.height / 4);
+    const cardPixel = async () => pixelAt(page, await page.screenshot(), x, y);
+    const placeholder = await cardPixel();
+    themeGate.resolve();
+    await uiControl(page, landingControl('Artwork credits for Theme'));
+    assert.notDeepEqual(await cardPixel(), placeholder, 'Artwork should replace the placeholder');
+    assert.deepEqual(await uiControl(page, landingControl('browse-Theme')), theme, 'Loading should not move cards');
+
+    const motionRequest = page.waitForRequest(motionAsset, { timeout: 4000 });
+    await page.mouse.move(180, 350);
+    await page.mouse.wheel(0, 100_000);
+    await motionRequest;
+    await clickControl(page, landingControl('browse-Artwork motion'));
+    await uiControl(page, landingControl('value-Animated'));
+    assert.deepEqual(errors, []);
+  } finally {
+    themeGate.resolve();
+    motionGate.resolve();
+  }
+});
+
 scenario('landing offers specific filter values for Type, Completion and Artwork motion', async (t) => {
   await buildCompactFixture();
   const { page, errors, origin } = await openGamePage(t, { viewport: { width: 1320, height: 900 } });
@@ -993,6 +1050,7 @@ scenario('landing offers specific filter values for Type, Completion and Artwork
   assert.deepEqual(categories.map(({ label }) => label), ['All', 'Theme', 'Artist', 'Type', 'Completion', 'Artwork motion']);
   assert.deepEqual(categories.filter(({ artwork }) => !artwork).map(({ label }) => label), ['All']);
   const typeCard = await uiControl(page, landingControl('browse-Type'));
+  await waitForLandingArtwork(page, 'browse-Type');
   const screenshot = PNG.sync.read(await page.screenshot({ clip: {
     x: Math.ceil(typeCard.x - typeCard.width / 2), y: Math.ceil(typeCard.y - typeCard.height / 2),
     width: Math.floor(typeCard.width), height: Math.floor(typeCard.height),
@@ -1162,7 +1220,7 @@ scenario('Artist cards fill with previews from their own puzzles, without loadin
     };
   });
   await clickControl(page, landingControl('browse-Artist'));
-  await uiControl(page, landingControl('value-Kyunghee Yim'));
+  await waitForLandingArtwork(page, 'value-Kyunghee Yim', 'value-Me');
   const artistBounds = (artist) => page.evaluate((name) => window.puzzleLandingScene.children.list
     .find(({ type }) => type === 'rexScrollablePanel').getAllChildren()
     .find((card) => card.name === `value-${name}`).getBounds(), artist);
@@ -1208,7 +1266,7 @@ scenario('Theme cards fill with puzzle previews from their own themes', async (t
   const { page, errors, origin } = await openGamePage(t, { viewport: { width: 1320, height: 900 } });
   await page.goto(`${origin}${compactPuzzlePath}?landing`);
   await clickControl(page, { sceneKey: 'Landing', name: 'browse-Theme' });
-  await uiControl(page, { sceneKey: 'Landing', name: 'value-Christmas' });
+  await waitForLandingArtwork(page, 'value-Christmas');
 
   const christmasArtwork = /^(among-the-evergreens|cats-at-christmas|choosing-the-tree|christmas-stickers|christmas-tree-farm|dala-horse-christmas|festive-favorites|folk-art-christmas-tree|holly-bells|pine-and-baubles|snowman-and-baubles|starburst-santa)(-preview)?$/;
   const result = await page.evaluate(({ source }) => {

@@ -8,7 +8,7 @@ import type { PuzzleSource } from '../puzzles/PuzzleSource';
 import { makeButton, makeOptionTile, type UIScene } from './button';
 import type { LandingPage } from './LandingScene';
 import type { PuzzleSelection } from './PlayPuzzleScene';
-import { cardScrollbarSpace, cardScrollThreshold, makePuzzleCardPanel } from './puzzleCardPanel';
+import { cardScrollbarSpace, cardScrollThreshold, isNearCardViewport, makePuzzleCardPanel } from './puzzleCardPanel';
 import { artworkCreditLines, showPuzzleDetails } from './puzzleDetailsDialog';
 import { showPuzzleFilters } from './puzzleFilterDialog';
 import { activeFilterCount, matchesPuzzleFilters, noPuzzleFilters, samePuzzleFilters, type PuzzleFilters } from './puzzleFilters';
@@ -301,9 +301,7 @@ export class SelectPuzzleScene extends Phaser.Scene {
     const loadNearbyPreviews = () => {
       let queuedImages = false;
       for (const { card } of visibleCards) {
-        const { y, height } = card.container;
-        const buffer = height + puzzleSpacing;
-        if (y + height <= listBounds.top - buffer || y >= listBounds.bottom + buffer) continue;
+        if (!isNearCardViewport(card.container, listBounds, puzzleSpacing)) continue;
         if (card.preparePreview()) queuedImages = true;
       }
       if (queuedImages) this.load.start();

@@ -91,7 +91,7 @@ type OptionTile = {
   height?: number;
   fontSize?: string;
   drawIcon?: () => Phaser.GameObjects.Container;
-  createArtwork?: () => Phaser.GameObjects.Image | undefined;
+  createArtwork?: () => Phaser.GameObjects.Image;
   useArtworkCaption?: boolean;
   depth?: number;
   contentDepth?: number;
@@ -116,7 +116,7 @@ export function addArtworkCreditsButton(
     .setName(name).setOrigin(1, 1).layout();
   card.pin(credits).setSizerEventsEnable();
   card.on('postlayout', () => card.setChildPosition(credits, card.right - 8, card.bottom - 8));
-  bindClick(scene, credits, onClick, dragThreshold);
+  return bindClick(scene, credits, onClick, dragThreshold);
 }
 
 export function makeOptionTile(scene: UIScene, {
@@ -124,7 +124,7 @@ export function makeOptionTile(scene: UIScene, {
   createArtwork, useArtworkCaption, depth = 0, contentDepth = depth, dragThreshold, onClick,
 }: OptionTile) {
   const background = scene.rexUI.add.roundRectangle(0, 0, 1, 1, 9).setDepth(depth);
-  const artwork = createArtwork?.()?.setDepth(depth);
+  const artwork = createArtwork?.().setDepth(depth);
   const text = label === undefined ? undefined : scene.add.text(0, 0, label, {
     fontFamily: 'system-ui', fontSize, align: 'center',
   }).setDepth(contentDepth);
@@ -150,7 +150,7 @@ export function makeOptionTile(scene: UIScene, {
     bindClick(scene, button, (pointer) => { if (!pointer.wasCanceled) onClick(pointer); }, dragThreshold);
   }
   return {
-    button,
+    button, artwork,
     setCornerRadius(radius: number) { background.setRadius(radius); },
     setSelected(value: boolean) { selected = value; restyle(palette); },
   };

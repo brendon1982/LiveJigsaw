@@ -6,6 +6,15 @@ const scrollbarGap = 14;
 export const cardScrollbarSpace = scrollbarWidth + scrollbarGap;
 export const cardScrollThreshold = 10;
 
+export function isNearCardViewport(
+  { y, height, originY }: { y: number; height: number; originY: number },
+  { top, bottom }: { top: number; bottom: number }, rowGap: number,
+) {
+  const cardTop = y - height * originY;
+  const buffer = height + rowGap;
+  return cardTop + height > top - buffer && cardTop < bottom + buffer;
+}
+
 export function makePuzzleCardPanel(scene: UIScene, list: ReturnType<UIScene['rexUI']['add']['sizer']>) {
   const track = scene.rexUI.add.roundRectangle(0, 0, 8, 10, 4);
   const thumb = scene.rexUI.add.roundRectangle(0, 0, scrollbarWidth, 36, 5);

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { activeFilterCount, matchesPuzzleFilters, noPuzzleFilters, samePuzzleFilters } from '../../src/ui/puzzleFilters.ts';
+import { activeFilterCount, makePuzzleFilterGroups, matchesPuzzleFilters, noPuzzleFilters, samePuzzleFilters } from '../../src/ui/puzzleFilters.ts';
 
 const source = (theme, type, motion = 'Animated') => ({ tags: { theme, type }, motion });
 
@@ -37,4 +37,27 @@ test('artwork motion is independent of illustration style and combines with the 
   assert.ok(matchesPuzzleFilters(source('Woodland', 'Flat Illustration', 'Static'), 1, filters));
   assert.ok(!matchesPuzzleFilters(source('Woodland', 'Flat Illustration'), 1, filters));
   assert.ok(!matchesPuzzleFilters(source('Ocean', 'Parallax', 'Static'), 1, filters));
+});
+
+test('artist choices are the unique credited names in alphabetical order', () => {
+  const { artist } = makePuzzleFilterGroups([
+    { attribution: { name: 'Rosa' } }, {}, { attribution: { description: 'No name' } },
+    { attribution: { name: 'Ada' } }, { attribution: { name: 'Rosa' } },
+  ]);
+  assert.deepEqual(artist.choices, ['Ada', 'Rosa']);
+  assert.deepEqual(artist.options.map(({ filters }) => filters.artists), [['Ada'], ['Rosa']]);
+});
+
+test('artist filters match any selected credit and combine with the theme filter', () => {
+  const filters = { ...noPuzzleFilters, artists: ['Ada', 'Rosa'], themes: ['Ocean'] };
+  const credited = (name, theme = 'Ocean') => ({ ...source(theme, 'Parallax'), attribution: { name } });
+  assert.equal(activeFilterCount(filters), 3);
+  assert.ok(samePuzzleFilters(filters, { ...filters, artists: ['Rosa', 'Ada'] }));
+  assert.ok(!samePuzzleFilters(filters, { ...filters, artists: ['Ada', 'Lee'] }));
+  assert.ok(!samePuzzleFilters(filters, { ...filters, artists: [] }));
+  assert.ok(matchesPuzzleFilters(credited('Ada'), 0, filters));
+  assert.ok(matchesPuzzleFilters(credited('Rosa'), 0, filters));
+  assert.ok(!matchesPuzzleFilters(credited('Lee'), 0, filters));
+  assert.ok(!matchesPuzzleFilters(credited('Ada', 'Space'), 0, filters));
+  assert.ok(!matchesPuzzleFilters(source('Ocean', 'Parallax'), 0, filters));
 });

@@ -1,6 +1,7 @@
 import type Phaser from 'phaser';
 import { makeButtonLabel, makeOptionTile, type UIScene } from './button';
-import { noPuzzleFilters, puzzleFilterGroups, type PuzzleFilters } from './puzzleFilters';
+import { puzzleFilterGroups } from './puzzleFilterGroups';
+import { noPuzzleFilters, type PuzzleFilters } from './puzzleFilters';
 import { pickerControlDepth, showPickerDialog } from './puzzleOptions';
 import { makeScrollableDialogBody } from './scrollableDialogBody';
 import { palette } from './theme';
@@ -49,6 +50,9 @@ export function showPuzzleFilters(
   };
   addSection(puzzleFilterGroups.theme, [100, 100, 100], (tag) => draft.themes.includes(tag), (tag) => {
     draft = { ...draft, themes: toggleChoice(draft.themes, tag) };
+  });
+  addSection(puzzleFilterGroups.artist, [160, 160], (artist) => draft.artists.includes(artist), (artist) => {
+    draft = { ...draft, artists: toggleChoice(draft.artists, artist) };
   });
   addSection(puzzleFilterGroups.type, [120, 90, 104], (tag) => draft.types.includes(tag), (tag) => {
     draft = { ...draft, types: toggleChoice(draft.types, tag) };

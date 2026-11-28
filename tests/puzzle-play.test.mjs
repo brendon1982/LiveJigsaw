@@ -97,6 +97,12 @@ function waitForPicker(page) {
     && window.puzzlePickerScene.children.getByName('Settings')?.input?.enabled, undefined, { timeout: 4000 });
 }
 
+function pickerResultTitles(page) {
+  return page.evaluate(() => window.puzzlePickerScene.children.list
+    .find(({ type }) => type === 'rexScrollablePanel').getElement('panel.cards').getElement('items')
+    .filter(Boolean).map((card) => card.getChildren().find(({ type }) => type === 'Text').text));
+}
+
 function uiControl(page, { sceneKey, name, text, action, filterCount, primary }) {
   return page.waitForFunction(({ sceneKey, name, text, action, filterCount, primary }) => {
     const game = (window.puzzlePickerScene ?? window.puzzleLandingScene)?.sys.game;
@@ -861,11 +867,8 @@ scenario('landing filter categories scroll, open Settings and filter the picker 
   await clickControl(page, landingControl('value-Coast'), true);
   await waitForPicker(page);
   await waitForFilterCount(page, 1);
-  const visiblePuzzles = () => page.evaluate(() => window.puzzlePickerScene.children.list
-    .find(({ type }) => type === 'rexScrollablePanel').getElement('panel.cards').getElement('items')
-    .filter(Boolean).map((card) => card.getChildren().find(({ type }) => type === 'Text').text));
-  assert.ok((await visiblePuzzles()).includes('Lighthouse'));
-  assert.ok(!(await visiblePuzzles()).includes('Windmill'));
+  assert.ok((await pickerResultTitles(page)).includes('Lighthouse'));
+  assert.ok(!(await pickerResultTitles(page)).includes('Windmill'));
 
   const back = await uiControl(page, { name: 'Back to browse' });
   const compact = await uiControl(page, { name: 'preview-size-Compact' });
@@ -882,7 +885,7 @@ scenario('landing filter categories scroll, open Settings and filter the picker 
   await clickControl(page, landingControl('Back to filter categories'), true);
   await clickControl(page, landingControl('browse-All'), true);
   await uiControl(page, { sceneKey: 'SelectPuzzle', name: 'Filters', filterCount: 0 });
-  assert.ok((await visiblePuzzles()).includes('Windmill'));
+  assert.ok((await pickerResultTitles(page)).includes('Windmill'));
   assert.deepEqual(errors, []);
 });
 
@@ -912,11 +915,40 @@ scenario('landing offers specific filter values for Type, Completion and Artwork
     await clickControl(page, landingControl(`value-${choice}`));
     await waitForPicker(page);
     assert.deepEqual(await page.evaluate(() => window.puzzlePickerScene.filters), {
-      themes: [], types: [], completion: 'All', motion: 'All', ...filter,
+      themes: [], artists: [], types: [], completion: 'All', motion: 'All', ...filter,
     });
     await pressHeader(page, 'Back to browse');
     await clickControl(page, landingControl('Back to filter categories'));
   }
+  assert.deepEqual(errors, []);
+});
+
+scenario('Artist opens a filtered picker and the Filters dialog can add another artist', async (t) => {
+  await buildCompactFixture();
+  const { page, waitForText, errors, origin } = await openGamePage(t, { viewport: { width: 1320, height: 900 }, hasTouch: true });
+  await page.goto(`${origin}${compactPuzzlePath}?landing`);
+  const landingControl = (name) => ({ sceneKey: 'Landing', name });
+  await clickControl(page, landingControl('browse-Artist'), true);
+  await waitForText('Artist');
+  await clickControl(page, landingControl('value-Craftpix'), true);
+  await waitForFilterCount(page, 1);
+
+  const craftpixTitles = await pickerResultTitles(page);
+  assert.ok(craftpixTitles.includes('Afterglow'));
+  assert.ok(!craftpixTitles.includes('Adrift in Dreams'));
+
+  await pressHeader(page, 'Filters', true);
+  await waitForText('Theme');
+  const artistSection = await page.evaluate(() => window.puzzlePickerScene.children.list.find(({ type }) => type === 'rexDialog')
+    .getAllChildren().filter(({ type, text }) => type === 'Text' && ['Theme', 'Artist', 'Type'].includes(text)).map(({ text }) => text));
+  assert.deepEqual(artistSection, ['Theme', 'Artist', 'Type']);
+  await clickControl(page, { text: 'Kyunghee Yim' }, true);
+  await pressAction(page, 'Apply', true);
+  await waitForFilterCount(page, 2);
+  assert.deepEqual(new Set(await pickerResultTitles(page)), new Set([...craftpixTitles, 'Adrift in Dreams', 'Snowman and Baubles']));
+
+  await pressHeader(page, 'Back to browse', true);
+  await uiControl(page, landingControl('value-Craftpix'));
   assert.deepEqual(errors, []);
 });
 

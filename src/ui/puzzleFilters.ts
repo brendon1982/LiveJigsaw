@@ -7,12 +7,13 @@ const motionFilters = ['All', 'Static', 'Animated'] as const satisfies readonly 
 
 export type PuzzleFilters = Readonly<{
   themes: readonly PuzzleTheme[];
+  artists: readonly string[];
   types: readonly PuzzleType[];
   completion: CompletionFilter;
   motion: typeof motionFilters[number];
 }>;
 
-export const noPuzzleFilters: PuzzleFilters = { themes: [], types: [], completion: 'All', motion: 'All' };
+export const noPuzzleFilters: PuzzleFilters = { themes: [], artists: [], types: [], completion: 'All', motion: 'All' };
 
 function filterGroup<T extends string>(title: string, choices: readonly T[], select: (choice: T) => Partial<PuzzleFilters>) {
   return {
@@ -22,29 +23,42 @@ function filterGroup<T extends string>(title: string, choices: readonly T[], sel
   };
 }
 
-export const puzzleFilterGroups = {
-  theme: filterGroup('Theme', puzzleThemes, (theme) => ({ themes: [theme] })),
-  type: filterGroup('Type', puzzleTypes, (type) => ({ types: [type] })),
-  completion: filterGroup('Completion', completionFilters, (completion) => ({ completion })),
-  motion: filterGroup('Artwork motion', motionFilters, (motion) => ({ motion })),
-};
-export type PuzzleFilterCategory = keyof typeof puzzleFilterGroups;
+export function makePuzzleFilterGroups(sources: readonly Pick<PuzzleSource, 'attribution'>[]) {
+  const artistNames = new Set<string>();
+  for (const { attribution } of sources) {
+    if (attribution?.name) artistNames.add(attribution.name);
+  }
+  const artists = [...artistNames].sort((first, second) => first.localeCompare(second));
+  return {
+    theme: filterGroup('Theme', puzzleThemes, (theme) => ({ themes: [theme] })),
+    artist: filterGroup('Artist', artists, (artist) => ({ artists: [artist] })),
+    type: filterGroup('Type', puzzleTypes, (type) => ({ types: [type] })),
+    completion: filterGroup('Completion', completionFilters, (completion) => ({ completion })),
+    motion: filterGroup('Artwork motion', motionFilters, (motion) => ({ motion })),
+  };
+}
+export type PuzzleFilterCategory = keyof ReturnType<typeof makePuzzleFilterGroups>;
 
-export function activeFilterCount({ themes, types, completion, motion }: PuzzleFilters) {
-  return themes.length + types.length + Number(completion !== 'All') + Number(motion !== 'All');
+export function activeFilterCount({ themes, artists, types, completion, motion }: PuzzleFilters) {
+  return themes.length + artists.length + types.length + Number(completion !== 'All') + Number(motion !== 'All');
 }
 
 export function samePuzzleFilters(first: PuzzleFilters, second: PuzzleFilters) {
   return first.completion === second.completion
     && first.motion === second.motion
     && puzzleThemes.every((theme) => first.themes.includes(theme) === second.themes.includes(theme))
+    && first.artists.length === second.artists.length && first.artists.every((artist) => second.artists.includes(artist))
     && puzzleTypes.every((type) => first.types.includes(type) === second.types.includes(type));
 }
 
-export function matchesPuzzleFilters({ tags, motion }: Pick<PuzzleSource, 'tags' | 'motion'>, completions: number, filters: PuzzleFilters) {
+export function matchesPuzzleFilters(
+  { tags, motion, attribution }: Pick<PuzzleSource, 'tags' | 'motion' | 'attribution'>, completions: number, filters: PuzzleFilters,
+) {
   const matchesTheme = !filters.themes.length || filters.themes.includes(tags.theme);
+  const artist = attribution?.name;
+  const matchesArtist = !filters.artists.length || (artist !== undefined && filters.artists.includes(artist));
   const matchesType = !filters.types.length || filters.types.includes(tags.type);
   const status = completions > 0 ? 'Completed' : 'Never completed';
-  return matchesTheme && matchesType && (filters.motion === 'All' || filters.motion === motion)
+  return matchesTheme && matchesArtist && matchesType && (filters.motion === 'All' || filters.motion === motion)
     && (filters.completion === 'All' || filters.completion === status);
 }

@@ -1,7 +1,8 @@
 import Phaser from 'phaser';
 import { makeOptionTile, type UIScene } from './button';
 import { cardScrollbarSpace, cardScrollThreshold, makePuzzleCardPanel } from './puzzleCardPanel';
-import { activeFilterCount, noPuzzleFilters, puzzleFilterGroups, type PuzzleFilterCategory, type PuzzleFilters } from './puzzleFilters';
+import { puzzleFilterGroups } from './puzzleFilterGroups';
+import { activeFilterCount, noPuzzleFilters, type PuzzleFilterCategory, type PuzzleFilters } from './puzzleFilters';
 import { headerInset, makeBackButton, makeSettingsButton, puzzleSpacing } from './puzzleHeader';
 import { SelectPuzzleScene } from './SelectPuzzleScene';
 import { openSettings } from './SettingsScene';

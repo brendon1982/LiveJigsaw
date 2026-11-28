@@ -100,9 +100,40 @@ function waitForPicker(page) {
 
 function pickerResultTitles(page) {
   return page.evaluate(() => window.puzzlePickerScene.children.list
-    .find(({ type }) => type === 'rexScrollablePanel').getElement('panel.cards').getElement('items')
-    .filter(Boolean).map((card) => card.getChildren().find(({ type }) => type === 'Text').text));
+    .find(({ type }) => type === 'rexScrollablePanel').getElement('panel.cards').getChildren()
+    .toSorted((a, b) => a.y - b.y || a.x - b.x)
+    .map((card) => card.getChildren().find(({ type }) => type === 'Text').text));
 }
+
+scenario('picker mounts only nearby cards and releases them when scrolling to the end', async (t) => {
+  const { page, errors } = await openPuzzle(t, { viewport: { width: 375, height: 640 } });
+  const before = await page.evaluate(() => {
+    const panel = window.puzzlePickerScene.children.list.find(({ type }) => type === 'rexScrollablePanel');
+    const cards = panel.getElement('panel.cards').getChildren();
+    window.firstMountedPickerCard = cards[0];
+    return { count: cards.length, scrollRange: panel.bottomChildOY };
+  });
+  assert.ok(before.count > 0 && before.count < 10, `Expected a viewport-sized window, got ${before.count} cards`);
+  assert.ok(before.scrollRange < -10_000, 'Unmounted rows should still contribute to the full scroll range');
+
+  await page.mouse.move(180, 320);
+  await page.mouse.wheel(0, 100_000);
+  await page.waitForFunction(() => !window.firstMountedPickerCard.scene);
+  const after = await page.evaluate(() => {
+    const panel = window.puzzlePickerScene.children.list.find(({ type }) => type === 'rexScrollablePanel');
+    return { count: panel.getElement('panel.cards').getChildren().length, atEnd: panel.childOY === panel.bottomChildOY };
+  });
+  assert.ok(after.count > 0 && after.count < 10);
+  assert.equal(after.atEnd, true);
+
+  await page.mouse.wheel(0, -100_000);
+  await page.waitForFunction(() => {
+    const panel = window.puzzlePickerScene.children.list.find(({ type }) => type === 'rexScrollablePanel');
+    const [card] = panel.getElement('panel.cards').getChildren();
+    return panel.childOY === 0 && card?.getChildren().some(({ text }) => text === 'Windmill');
+  });
+  assert.deepEqual(errors, []);
+});
 
 function uiControl(page, { sceneKey, name, text, action, filterCount, primary }) {
   return page.waitForFunction(({ sceneKey, name, text, action, filterCount, primary }) => {
@@ -1342,7 +1373,8 @@ scenario('picker preview sizes reflow the cards, persist and stay centered on to
     const { children } = window.puzzlePickerScene;
     const panel = children.list.find(({ type }) => type === 'rexScrollablePanel');
     const grid = panel.getElement('panel.cards');
-    const [card] = grid.getElement('items');
+    const cards = grid.getChildren();
+    const [card] = cards;
     const options = children.list.filter(({ name }) => name.startsWith('preview-size-')).map((tile) => {
       return {
         size: tile.name.slice('preview-size-'.length), x: tile.x, y: tile.y,
@@ -1351,8 +1383,10 @@ scenario('picker preview sizes reflow the cards, persist and stay centered on to
       };
     });
     const [title] = card.getChildren().filter(({ type }) => type === 'Text');
+    const rowMiddle = card.y + card.height / 2;
+    const columns = cards.filter(({ y, height }) => y <= rowMiddle && y + height > rowMiddle).length;
     return {
-      options, columns: grid.columnCount, width: card.width, height: card.height, panelTop: panel.y,
+      options, columns, width: card.width, height: card.height, panelTop: panel.y,
       titleStyle: title.style.fontStyle,
     };
   });
@@ -1664,7 +1698,7 @@ scenario('Folk Art Christmas Tree shows Sara Oliveira’s full wrapped artwork c
 
   const artist = await page.evaluate(() => {
     const panel = window.puzzlePickerScene.children.list.find(({ type }) => type === 'rexScrollablePanel');
-    const card = panel.getElement('panel.cards.items').find((card) => card?.getChildren()
+    const card = panel.getElement('panel.cards').getChildren().find((card) => card.getChildren()
       .some(({ type, text }) => type === 'Text' && text === 'Folk Art Christmas Tree'));
     const button = card?.getChildren().find(({ name }) => name === 'picker-credits');
     if (!button) return;
@@ -2866,7 +2900,7 @@ scenario('picker Settings remembers the theme and filter on a narrow touch scree
   await waitForPicker(page);
   const previewY = await page.evaluate(() => {
     const panel = window.puzzlePickerScene.children.list.find(({ type }) => type === 'rexScrollablePanel');
-    const [firstCard] = panel.getElement('panel.cards.items');
+    const [firstCard] = panel.getElement('panel.cards').getChildren();
     return Math.round(firstCard.y + 65);
   });
   const forest = await canvas.screenshot();
@@ -3022,7 +3056,7 @@ scenario('version 1 through 10 saves migrate with settings, options, progress, a
   await page.waitForFunction(() => document.querySelector('canvas').width === 320);
   const artworkBottom = await page.evaluate(() => {
     const panel = window.puzzlePickerScene.children.list.find(({ type }) => type === 'rexScrollablePanel');
-    const [card] = panel.getElement('panel.cards.items');
+    const [card] = panel.getElement('panel.cards').getChildren();
     return Math.round(card.getChildren().find(({ type }) => type === 'RenderTexture').getBounds().bottom);
   });
   assert.ok(hasStatusInk(await canvas.screenshot(), 30, artworkBottom + 62, 185, artworkBottom + 84),
@@ -4142,7 +4176,7 @@ scenario('touch artist name taps open credits but swipes and cancellation do not
   const { dispatch, moveFinger } = await touchController(page);
   const credits = await page.evaluate(() => {
     const panel = window.puzzlePickerScene.children.list.find(({ type }) => type === 'rexScrollablePanel');
-    const [card] = panel.getElement('panel.cards.items');
+    const [card] = panel.getElement('panel.cards').getChildren();
     const button = card.getChildren().find(({ name }) => name === 'picker-credits');
     return { text: button.text, point: [button.x - button.width / 2, button.y] };
   });
@@ -4175,7 +4209,7 @@ scenario('compact picker ellipsis opens details with the preview and inline cred
   const firstCard = () => page.evaluate(() => {
     const scene = window.puzzlePickerScene;
     const panel = scene.children.list.find(({ type }) => type === 'rexScrollablePanel');
-    const [card] = panel.getElement('panel.cards.items');
+    const [card] = panel.getElement('panel.cards').getChildren();
     const children = card.getChildren();
     const more = children.find(({ name }) => name === 'picker-more');
     return {
@@ -4206,7 +4240,7 @@ scenario('compact picker ellipsis opens details with the preview and inline cred
     const scene = window.puzzlePickerScene;
     const dialog = scene.children.list.find(({ type }) => type === 'rexDialog');
     const [panel] = scene.children.list.filter(({ type }) => type === 'rexScrollablePanel');
-    const [card] = panel.getElement('panel.cards.items');
+    const [card] = panel.getElement('panel.cards').getChildren();
     const preview = card.getChildren().find(({ type }) => type === 'RenderTexture');
     const body = dialog.getElement('content.panel');
     const image = dialog.getElement('title');
@@ -4272,7 +4306,7 @@ scenario('compact picker details puts saved progress in the Close row', async (t
     });
   const more = await page.evaluate(() => {
     const panel = window.puzzlePickerScene.children.list.find(({ type }) => type === 'rexScrollablePanel');
-    const [card] = panel.getElement('panel.cards.items');
+    const [card] = panel.getElement('panel.cards').getChildren();
     const button = card.getChildren().find(({ name }) => name === 'picker-more');
     return [button.x - button.width / 2, button.y];
   });

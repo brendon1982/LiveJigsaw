@@ -23,6 +23,19 @@ export function puzzleCardTags(source: PuzzleSource) {
   return `${source.tags.theme} · ${source.tags.type}`;
 }
 
+export function pickerCardHeight(width: number, stackStatus: boolean, compact: boolean, hasCredits: boolean) {
+  const artworkHeight = previewHeight * width / maxPickerCardWidth;
+  if (compact) return artworkHeight + footerActionHeight;
+  const stackCredits = hasCredits && width < compactFooterWidth;
+  return artworkHeight + footerHeight + (stackStatus ? statusRowHeight : 0) + (stackCredits ? creditsRowHeight : 0);
+}
+
+export function measurePickerStatus(source: PuzzleSource, status: string, context: CanvasRenderingContext2D) {
+  if (!status) return 0;
+  const measure = (text: string) => Math.ceil(context.measureText(text).width);
+  return measure(puzzleCardTags(source)) + headerControlGap + measure(status) + 2 * footerInset;
+}
+
 export function makePreviewCornerCutout(scene: UIScene, corners: 'top' | 'all' = 'top'): Phaser.Textures.CanvasTexture {
   const cornerRadius = pickerCardCornerRadius;
   const allCorners = corners === 'all';
@@ -62,7 +75,6 @@ export function makePuzzlePickerCard(
   }).setOrigin(0, 0.5);
   const tags = scene.add.text(0, 0, metadata, metadataTextStyle).setOrigin(0, 0.5);
   const statusLabel = scene.add.text(0, 0, status, metadataTextStyle).setOrigin(1, 0.5);
-  const inlineStatusWidth = status ? tags.width + headerControlGap + statusLabel.width : 0;
 
   const isInsideList = (x: number, y: number) => {
     const point = scene.cameras.main.getWorldPoint(x, y);
@@ -109,8 +121,11 @@ export function makePuzzlePickerCard(
     container.addLocal(button);
     return { button, caption };
   };
+  let openPreviewCopies = 0;
   function copyPreview() {
     const artwork = scene.add.image(0, 0, preview?.texture ?? '__DEFAULT');
+    openPreviewCopies += 1;
+    artwork.once(Phaser.GameObjects.Events.DESTROY, () => { openPreviewCopies -= 1; });
     if (!preview) {
       const usePreviewWhenReady = () => {
         if (!preview) return;
@@ -132,6 +147,7 @@ export function makePuzzlePickerCard(
   const credits = hasCredits && makeFooterAction('credits', artistName, footerActionHeight, () => openDetails(copyPreview));
   return {
     container,
+    get previewInUse() { return openPreviewCopies > 0; },
     preparePreview() {
       if (preview) return false;
       const image = source.previewImage;
@@ -147,15 +163,13 @@ export function makePuzzlePickerCard(
       container.addLocal(preview).setChildLocalScale(preview, scale, scale);
       return false;
     },
-    needsStatusRow(width: number) { return inlineStatusWidth > width - 2 * footerInset; },
     layout(width: number, stackStatus: boolean, compactLayout: boolean) {
       compact = compactLayout;
       const scale = width / maxPickerCardWidth;
       const artworkBottom = previewHeight * scale;
       const compactFooter = width < compactFooterWidth;
       const stackCredits = credits && compactFooter;
-      const height = artworkBottom + (compact ? footerActionHeight
-        : footerHeight + (stackStatus ? statusRowHeight : 0) + (stackCredits ? creditsRowHeight : 0));
+      const height = pickerCardHeight(width, stackStatus, compact, hasCredits);
       const inset = compact ? compactFooterInset : footerInset;
       const right = width - inset;
       const textWidth = Math.max(0, right - inset);

@@ -38,3 +38,8 @@ export function makePuzzleCardPanel(scene: UIScene, list: ReturnType<UIScene['re
   });
   return panel;
 }
+
+export function refreshPuzzleCardMask(panel: ReturnType<typeof makePuzzleCardPanel>) {
+  const block = panel.getElement('scrollableBlock') as { setMaskChildrenFlag(): void } | null;
+  block?.setMaskChildrenFlag();
+}

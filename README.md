@@ -22,6 +22,10 @@ Run `pnpm check` for type checking, `pnpm build` for the production build, and `
 Run `pnpm test` for fast puzzle-rule and geometry tests. Run `pnpm test:browser` with Google Chrome installed to verify scrolling, resizing, panning, and dragging. Set `LIVE_JIGSAW_BROWSER=msedge` to use Microsoft Edge.
 The browser suite runs up to eight scenarios at once. Set `LIVE_JIGSAW_BROWSER_CONCURRENCY=1` for a serial run.
 
+### Listing Unsplash artists
+
+Run `pnpm --silent artists:unsplash` to print a sorted list of unique Unsplash profile URLs from the puzzle and landing artwork credits, one per line. The command reads the local catalogs and does not need internet access.
+
 ### Preparing sprite atlases
 
 Run `pnpm atlas:prepare input.png input.xml path/to/output.xml` to prepare a Phaser `TextureAtlas` XML sheet. The tool writes `output.xml` and `output.png` together. It repeats each frame's edge pixels into a two-pixel gutter so linear filtering can sample the edge without picking up a neighboring sprite's colors. The XML still describes the original frame dimensions.

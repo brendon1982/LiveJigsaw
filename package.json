@@ -6,6 +6,7 @@
   "packageManager": "pnpm@12.21.0",
   "scripts": {
     "atlas:prepare": "node scripts/prepare-atlas.mjs",
+    "artists:unsplash": "node scripts/list-unsplash-artists.mjs",
     "dev": "vite",
     "check": "tsc --noEmit",
     "build": "tsc --noEmit && vite build",

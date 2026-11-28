@@ -185,65 +185,51 @@ export function showResumePuzzle(
   });
 }
 
-export const pickerDialogInset = 20;
-export type PickerDialogTitle = string | { artwork: Phaser.GameObjects.Image; cornerRadius: number };
+const pickerDialogInset = 20;
 
 export function showPickerDialog(
   scene: UIScene,
-  title: PickerDialogTitle,
+  title: string | undefined,
   content: Phaser.GameObjects.GameObject & { height: number },
   actions: ReturnType<typeof makeButtonLabel>[],
   onClose: (action?: number) => void,
-  options?: {
-    fitContent?: (height: number) => void;
-    responsive?: { maxWidth: number; reflow: (width: number) => void; fitContent: (height: number) => void };
+  { responsive, handleAction, footerLabel }: {
+    responsive: { maxWidth: number; reflow: (width: number) => void; fitContent: (height: number) => void };
     handleAction?: (index: number) => boolean;
     footerLabel?: Phaser.GameObjects.Text;
   },
 ) {
   const cover = scene.add.rectangle(0, 0, 1, 1, palette.modalBackdrop, 0.72)
     .setOrigin(0).setDepth(depth.cover).setInteractive();
-  const artworkHeader = typeof title !== 'string';
-  const responsive = options?.responsive;
-  const radius = artworkHeader ? { tl: title.cornerRadius, tr: title.cornerRadius, bl: 16, br: 16 } : 16;
-  const inset = artworkHeader ? 0 : pickerDialogInset;
-  const bodyInset = artworkHeader ? pickerDialogInset : 0;
-  const background = scene.rexUI.add.roundRectangle(0, 0, 1, 1, radius).setDepth(depth.panel);
-  const titleLabel = artworkHeader ? undefined : scene.add.text(0, 0, title, {
+  const background = scene.rexUI.add.roundRectangle(0, 0, 1, 1, 16).setDepth(depth.panel);
+  const titleLabel = title === undefined ? undefined : scene.add.text(0, 0, title, {
     fontFamily: 'system-ui', fontSize: '25px', fontStyle: 'bold',
-  }).setFixedSize(0, responsive ? 0 : 34).setDepth(depth.controls);
-  actions.forEach((button) => button.setDepth(depth.controls));
+  }).setDepth(depth.controls);
+  actions.forEach((button) => button.setDepth(depth.controls).layout());
   const dialog = scene.rexUI.add.dialog({
     background,
-    title: artworkHeader ? title.artwork.setDepth(depth.controls) : titleLabel,
+    title: titleLabel,
     content,
-    actions: responsive ? undefined : actions,
-    align: { title: 'left', actions: 'right' },
+    align: { title: 'left' },
     space: {
-      top: inset, left: inset, right: inset, bottom: pickerDialogInset, title: 14, content: 18, action: 8,
-      contentLeft: bodyInset, contentRight: bodyInset, actionsLeft: bodyInset, actionsRight: bodyInset,
+      top: pickerDialogInset, left: pickerDialogInset, right: pickerDialogInset, bottom: pickerDialogInset, title: 14,
     },
-    click: { mode: 'release', clickInterval: 0 },
   });
-  const wrappingActions = responsive && scene.rexUI.add.fixWidthButtons({
+  const actionGap = 8;
+  const wrappingActions = scene.rexUI.add.fixWidthButtons({
     buttons: actions, groupName: 'actions', eventEmitter: dialog, align: 'right',
-    space: { item: 8, line: 8 }, click: { mode: 'release', clickInterval: 0 },
+    space: { item: actionGap, line: actionGap }, click: { mode: 'release', clickInterval: 0 },
   });
-  if (wrappingActions) {
-    dialog.add(wrappingActions, { padding: { top: 18 } });
-    dialog.addChildrenMap('actionsSizer', wrappingActions);
-    // @ts-expect-error RexUI maps the action array here in its own Dialog constructor.
-    dialog.addChildrenMap('actions', actions);
-  }
+  dialog.add(wrappingActions, { padding: { top: 18 } });
+  dialog.addChildrenMap('actionsSizer', wrappingActions);
+  // @ts-expect-error RexUI maps the action array here in its own Dialog constructor.
+  dialog.addChildrenMap('actions', actions);
+  if (footerLabel) wrappingActions.add(footerLabel.setDepth(depth.controls), { index: 0, key: 'footerLabel' });
   styleWithTheme(dialog, (colors) => {
     cover.setFillStyle(colors.modalBackdrop, 0.72);
     background.setFillStyle(colors.surface).setStrokeStyle(1, colors.border);
     titleLabel?.setColor(colors.text);
   });
-  if (options?.footerLabel) {
-    const actionsRow = dialog.getElement('actionsSizer') as ReturnType<UIScene['rexUI']['add']['sizer']>;
-    actionsRow.insert(0, options.footerLabel.setDepth(depth.controls), { key: 'footerLabel' });
-  }
   actions.forEach((button) => { button.input!.cursor = 'pointer'; });
 
   const fit = () => {
@@ -252,31 +238,24 @@ export function showPickerDialog(
     dialog.setScale(1);
     cover.setSize(width / zoom, height / zoom);
     dialog.setPosition(width / (2 * zoom), height / (2 * zoom));
-    if (responsive && wrappingActions) {
-      const innerWidth = Math.max(1, Math.min(responsive.maxWidth, width - 24 - 2 * pickerDialogInset));
-      titleLabel?.setWordWrapWidth(innerWidth, true).setFixedSize(innerWidth, 0);
-      wrappingActions.setMinWidth(innerWidth);
-      responsive.reflow(innerWidth);
-      dialog.layout();
-      const chromeHeight = dialog.height - content.height;
-      responsive.fitContent(Math.max(1, height - 24 - chromeHeight));
-      dialog.layout().setScale(1 / zoom);
-      return;
+    const innerWidth = Math.max(1, Math.min(responsive.maxWidth, width - 24 - 2 * pickerDialogInset));
+    if (titleLabel) wrapDialogText(titleLabel, innerWidth);
+    if (footerLabel) {
+      const [close] = actions;
+      wrapDialogText(footerLabel, Math.max(1, innerWidth - close.width - actionGap));
+      wrappingActions.setChildOuterPadding(footerLabel, 'top', Math.max(0, (close.height - footerLabel.height) / 2));
     }
+    wrappingActions.setMinWidth(innerWidth);
+    responsive.reflow(innerWidth);
     dialog.layout();
-    if (options?.fitContent) {
-      const widthScale = Math.min(1, Math.max(1, width - 24) / dialog.width);
-      const chromeHeight = dialog.height - content.height;
-      options.fitContent(Math.max(1, (height - 24) / widthScale - chromeHeight));
-      dialog.layout();
-    }
-    const scale = Math.min(1, Math.max(1, width - 24) / dialog.width, Math.max(1, height - 24) / dialog.height);
-    dialog.setScale(scale / zoom);
+    const chromeHeight = dialog.height - content.height;
+    responsive.fitContent(Math.max(1, height - 24 - chromeHeight));
+    dialog.layout().setScale(1 / zoom);
   };
   const cancel = () => dialog.modalClose();
   let action: number | undefined;
   dialog.on('action.click', (_button: Phaser.GameObjects.GameObject, index: number, pointer: Phaser.Input.Pointer) => {
-    if (pointer.wasCanceled || options?.handleAction?.(index)) return;
+    if (pointer.wasCanceled || handleAction?.(index)) return;
     action = index;
     dialog.modalClose();
   });
@@ -334,7 +313,6 @@ function drawPieceShapeIcon(scene: UIScene, shape: PieceShape) {
 }
 
 function drawConnectorIcon(scene: UIScene, style: ConnectorStyleId) {
-  const art = scene.add.graphics();
   const profile = connectorStyles[style].profiles[0] ?? [];
   const points = [
     new Phaser.Math.Vector2(-28, -5),
@@ -343,7 +321,7 @@ function drawConnectorIcon(scene: UIScene, style: ConnectorStyleId) {
     new Phaser.Math.Vector2(28, 16),
     new Phaser.Math.Vector2(-28, 16),
   ];
-  art.fillStyle(palette.optionIcon).fillPoints(points, true);
-  art.lineStyle(1.5, palette.optionIconOutline).strokePoints(points, true);
+  const art = scene.add.polygon(0, 0, points, palette.optionIcon)
+    .setDisplayOrigin(0, 0).setStrokeStyle(1.5, palette.optionIconOutline);
   return scene.add.container(0, 0, [art]).setSize(64, 44);
 }

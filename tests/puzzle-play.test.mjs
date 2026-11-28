@@ -811,6 +811,7 @@ scenario('play opens artwork details and the active challenge rules without chan
   await playSelection({ challengeMode: 'sequential' });
   await waitForText('0 of 8 placed');
   const originalSave = await readSave(page);
+  assert.equal(originalSave.recentOptions.challengeMode, 'sequential');
   const playInfo = () => page.evaluate(() => {
     const { scene } = window.puzzlePickerScene.sys.game;
     const play = scene.getScene('PlayPuzzle');
@@ -819,7 +820,7 @@ scenario('play opens artwork details and the active challenge rules without chan
     const body = dialog.getElement('content');
     return {
       boardInputEnabled: play.input.enabled,
-      artwork: dialog.getElement('title').type === 'Image',
+      artwork: body.getAllChildren().some(({ type }) => type === 'Image'),
       description: body.getAllChildren().find(({ type }) => type === 'Text')?.text,
       bodyWidth: body.width,
       scrollRange: body.topChildOY - body.bottomChildOY,
@@ -1290,7 +1291,7 @@ scenario('landing card artwork credits open separately from touch navigation', a
     const dialog = scene.children.list.find(({ type }) => type === 'rexDialog');
     return {
       heading: scene.children.getByName('browse-heading').text,
-      bannerType: dialog.getElement('title').type,
+      bannerType: dialog.getElement('content').getAllChildren().find(({ type }) => type === 'Image')?.type,
       texts: dialog.getAllChildren().filter(({ type }) => type === 'Text').map(({ text }) => text),
       hasAllCredits: Boolean(scene.children.getByName('Artwork credits for All')),
     };
@@ -1794,11 +1795,14 @@ scenario('Folk Art Christmas Tree shows Sara Oliveira’s full wrapped artwork c
   await page.mouse.click(artist.x, artist.y);
   await waitForText('Artwork credits');
   await waitForText('Sara Oliveira');
-  const paintedCredits = await page.evaluate(() => window.paintedText);
   const sourceUrl = 'https://unsplash.com/illustrations/folk-art-christmas-tree-illustration-2Q4GUNelC5w';
-  assert.ok(paintedCredits.join('').includes(sourceUrl), 'The wrapped lines should contain the complete source URL');
-  assert.ok(!paintedCredits.includes(sourceUrl), 'The long source URL should wrap across lines');
-  assert.ok(paintedCredits.join('').includes('https://unsplash.com/@shireillustrations/illustrations'));
+  const credits = await page.evaluate(() => window.puzzlePickerScene.children.list
+    .find(({ type }) => type === 'rexDialog').getElement('content').getAllChildren()
+    .filter(({ type }) => type === 'Text').map((label) => label.getWrappedText()));
+  const sourceLines = credits.find((lines) => lines.join('') === sourceUrl);
+  assert.ok(sourceLines, 'The wrapped lines should contain the complete source URL');
+  assert.ok(sourceLines.length > 1, 'The long source URL should wrap across lines');
+  assert.ok(credits.some((lines) => lines.join('') === 'https://unsplash.com/@shireillustrations/illustrations'));
   assert.deepEqual(errors, []);
 });
 
@@ -4364,16 +4368,14 @@ scenario('compact picker ellipsis opens details with the preview and inline cred
     const [card] = panel.getElement('panel.cards').getChildren();
     const preview = card.getChildren().find(({ type }) => type === 'RenderTexture');
     const body = dialog.getElement('content.panel');
-    const image = dialog.getElement('title');
+    const image = body.getAllChildren().find(({ type }) => type === 'Image');
     const [title, metadata, ...credits] = body.getAllChildren().filter(({ type }) => type === 'Text');
     const artworkBounds = image.getBounds();
-    const borderBounds = dialog.getElement('background').getBounds();
     return {
       sameArtwork: image.texture === preview.texture,
       artworkAboveTitle: artworkBounds.bottom <= title.getBounds().top,
-      artworkInsets: [artworkBounds.left - borderBounds.left, borderBounds.right - artworkBounds.right,
-        artworkBounds.top - borderBounds.top],
-      titleInset: title.getBounds().left - borderBounds.left,
+      aspectRatio: artworkBounds.width / artworkBounds.height,
+      alignedWithTitle: artworkBounds.left === title.getBounds().left,
       metadata: metadata.text,
       credits: credits.map(({ text }) => text),
       actions: dialog.getElement('actions').map(({ text }) => text),
@@ -4381,17 +4383,32 @@ scenario('compact picker ellipsis opens details with the preview and inline cred
   });
   assert.equal(details.sameArtwork, true);
   assert.equal(details.artworkAboveTitle, true);
-  assert.ok(details.artworkInsets.every((inset) => Math.abs(inset) < 1), `Artwork insets: ${details.artworkInsets}`);
-  assert.equal(details.titleInset, 22);
+  assert.ok(Math.abs(details.aspectRatio - 16 / 9) < 0.01);
+  assert.equal(details.alignedWithTitle, true);
   assert.match(details.metadata, / · Animated$/);
   assert.deepEqual(details.credits, ['Artwork credits', 'Me', 'Place holder art from the prototype. Left it in for fun.']);
   assert.deepEqual(details.actions, ['Close']);
   const waitForDetails = (open) => page.waitForFunction((open) => {
     const dialog = window.puzzlePickerScene.children.list.find(({ type }) => type === 'rexDialog');
-    return open ? Boolean(dialog?.getElement('title')?.texture) : !dialog;
+    return open ? dialog?.getElement('content').getAllChildren().some(({ type }) => type === 'Image') : !dialog;
   }, open, { timeout: 4000 });
+  await page.setViewportSize({ width: 640, height: 240 });
+  await page.waitForFunction(() => document.querySelector('canvas').height === 240);
+  const close = await uiControl(page, { text: 'Close', action: true });
+  assert.equal(close.height, 52);
+  await page.mouse.move(315, 80);
+  await page.mouse.wheel(0, 1000);
+  await page.waitForFunction(() => {
+    const dialog = window.puzzlePickerScene.children.list.find(({ type }) => type === 'rexDialog');
+    const body = dialog.getElement('content');
+    const artwork = body.getAllChildren().find(({ type }) => type === 'Image');
+    return artwork.getBounds().bottom < body.getBounds().top;
+  });
+  assert.equal((await uiControl(page, { text: 'Close', action: true })).y, close.y);
   await page.keyboard.press('Escape');
   await waitForDetails(false);
+  await page.setViewportSize({ width: 1320, height: 780 });
+  await page.waitForFunction(() => document.querySelector('canvas').width === 1320);
 
   await page.touchscreen.tap(...card.more);
   await waitForDetails(true);
@@ -4441,13 +4458,13 @@ scenario('compact picker details puts saved progress in the Close row', async (t
     return {
       text: progress?.text,
       inBody: body.getElement('panel').getChildren().some(({ text }) => text === '1 of 8 placed'),
-      leftAligned: progress?.getBounds().left === body.getBounds().left,
+      leftOffset: progress && progress.getBounds().left - body.getBounds().left,
       rowOffset: progress && progress.getBounds().centerY - close.getBounds().centerY,
     };
   });
   assert.equal(footer.text, '1 of 8 placed');
   assert.equal(footer.inBody, false);
-  assert.equal(footer.leftAligned, true);
+  assert.ok(Math.abs(footer.leftOffset) <= 1, `Progress should align with the body (offset: ${footer.leftOffset})`);
   assert.ok(Math.abs(footer.rowOffset) < 1, `Progress and Close should share a row (offset: ${footer.rowOffset})`);
   await pressAction(page, 'Close', true);
   await page.waitForFunction(() => !window.puzzlePickerScene.children.list.some(({ type }) => type === 'rexDialog'));
@@ -4578,19 +4595,26 @@ scenario('the picker scrolls past two cards and clips previews', async (t) => {
     for (const label of ['Square', 'Vertical Long', 'Horizontal Long', 'Vertical Short', 'Horizontal Short']) {
       assert.ok(!paintedText.includes(label), `The ${label} piece shape should not draw a caption`);
     }
-    const classic = await uiControl(page, { name: 'classic' });
-    const rounded = await uiControl(page, { name: 'rounded' });
-    const count = await uiControl(page, { text: '40' });
-    const shape = await uiControl(page, { name: 'vertical-short' });
-    const connectorless = await uiControl(page, { name: 'none', text: '' });
     const tilePixel = (screenshot, tile, dx = 0, dy = 0) => pixelAt(page, screenshot, tile.x + dx, tile.y + dy);
     const selectedFill = [75, 108, 94, 255];
+    const iconFill = [101, 135, 122, 255];
+    const count = await uiControl(page, { text: '40' });
+    const shape = await uiControl(page, { name: 'vertical-short' });
+    const topOfSetup = await canvas.screenshot();
+    assert.deepEqual(await tilePixel(topOfSetup, count, 0, -16), selectedFill, 'The count tile should have no illustration');
+    assert.deepEqual(await tilePixel(topOfSetup, shape), iconFill, 'The first shape illustration should draw above its tile');
+    const { x, y, clip } = await uiControl(page, { name: 'classic' });
+    await page.mouse.move(x, (clip.top + clip.bottom) / 2);
+    await page.mouse.wheel(0, y - clip.top - 65);
+    await page.waitForFunction(() => window.puzzlePickerScene.children.list.find(({ type }) => type === 'rexDialog')
+      .getElement('content').childOY < 0);
+    const classic = await uiControl(page, { name: 'classic' });
+    const rounded = await uiControl(page, { name: 'rounded' });
+    const connectorless = await uiControl(page, { name: 'none', text: '' });
     const beforeSelection = await canvas.screenshot();
     assert.deepEqual(await tilePixel(beforeSelection, classic, -26, 20), selectedFill);
-    const iconFill = [101, 135, 122, 255];
-    assert.deepEqual(await tilePixel(beforeSelection, count, 0, -16), selectedFill, 'The count tile should have no illustration');
-    assert.deepEqual(await tilePixel(beforeSelection, shape), iconFill, 'The first shape illustration should draw above its tile');
-    assert.deepEqual(await tilePixel(beforeSelection, connectorless, 0, 5), iconFill, 'The connector illustration should draw above its tile');
+    assert.deepEqual(await tilePixel(beforeSelection, connectorless, 0, 5), iconFill,
+      `The connector illustration should draw above its tile (${JSON.stringify({ classic, connectorless })})`);
     await clickControl(page, { name: 'rounded' });
     const afterSelection = await canvas.screenshot();
     assert.notDeepEqual(await tilePixel(afterSelection, classic, -26, 20), selectedFill);

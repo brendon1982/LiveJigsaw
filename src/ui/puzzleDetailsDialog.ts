@@ -1,12 +1,10 @@
 import Phaser from 'phaser';
 import type { PuzzleAttribution, PuzzleSource } from '../puzzles/PuzzleSource';
 import { makeButtonLabel, type UIScene } from './button';
-import { makePreview, makePreviewCornerCutout, maxPickerCardWidth, pickerCardCornerRadius, puzzleCardTags } from './PuzzlePickerCard';
-import { pickerControlDepth, pickerDialogInset, showPickerDialog } from './puzzleOptions';
-import { makeScrollableDialogBody } from './scrollableDialogBody';
+import { makePreview, makePreviewCornerCutout, puzzleCardTags } from './PuzzlePickerCard';
+import { pickerControlDepth, showPickerDialog } from './puzzleOptions';
+import { makeScrollableDialogBody, wrapDialogText } from './scrollableDialogBody';
 import { metadataTextStyle, palette } from './theme';
-
-const contentWidth = 326;
 
 export function artworkCreditLines(attribution?: PuzzleAttribution) {
   if (!attribution) return [];
@@ -56,12 +54,13 @@ export function showArtworkDetails(
   scene: UIScene, artwork: Phaser.GameObjects.Image, onClose: () => void,
   { title, subtitle, credits, status }: { title: string; subtitle?: string; credits: readonly string[]; status?: string },
 ) {
-  const content = scene.rexUI.add.sizer({ orientation: 'y', width: contentWidth, space: { item: 8 } });
+  artwork.setDisplaySize(1, 9 / 16).setDepth(pickerControlDepth);
+  const content = scene.rexUI.add.sizer({ orientation: 'y', space: { item: 8 } }).add(artwork);
+  const labels: Phaser.GameObjects.Text[] = [];
 
   const addLine = (text: string, style: Phaser.Types.GameObjects.Text.TextStyle, top = 0) => {
-    const label = scene.add.text(0, 0, text, {
-      ...style, wordWrap: { width: contentWidth, useAdvancedWrap: true },
-    }).setDepth(pickerControlDepth);
+    const label = scene.add.text(0, 0, text, style).setDepth(pickerControlDepth);
+    labels.push(label);
     content.add(label, { align: 'left', padding: { top } });
   };
   addLine(title, { fontFamily: 'system-ui', fontSize: '22px', fontStyle: 'bold', color: palette.text });
@@ -72,13 +71,15 @@ export function showArtworkDetails(
     for (const credit of credits) addLine(credit, { ...metadataTextStyle, fontSize: '17px', color: palette.text });
   }
 
-  const artworkWidth = contentWidth + 2 * pickerDialogInset;
-  artwork.setDisplaySize(artworkWidth, artworkWidth * 9 / 16);
-  const cornerRadius = pickerCardCornerRadius * artworkWidth / maxPickerCardWidth;
   const progressLabel = status ? scene.add.text(0, 0, status, { ...metadataTextStyle, color: palette.text }) : undefined;
-  const scroll = makeScrollableDialogBody(scene, content, pickerControlDepth, false);
-  return showPickerDialog(scene, { artwork, cornerRadius }, scroll.body,
+  const scroll = makeScrollableDialogBody(scene, content, pickerControlDepth);
+  return showPickerDialog(scene, undefined, scroll.body,
     [makeButtonLabel(scene, 'Close', 88, 52, true)], onClose, {
-      footerLabel: progressLabel, fitContent: scroll.fitContent,
+      footerLabel: progressLabel,
+      responsive: scroll.responsiveLayout(342, (width) => {
+        artwork.setDisplaySize(width, width * 9 / 16);
+        content.resetChildScaleState(artwork);
+        for (const label of labels) wrapDialogText(label, width);
+      }),
     });
 }

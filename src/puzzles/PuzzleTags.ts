@@ -1,5 +1,5 @@
 export const puzzleThemes = [
-  'Alien Worlds', 'Candy', 'Coast', 'Countryside', 'Desert', 'Flowers',
+  'Abstract', 'Alien Worlds', 'Candy', 'Coast', 'Countryside', 'Desert', 'Flowers',
   'Halloween', 'Medieval', 'Mountains', 'Ocean', 'Sky', 'Space', 'Wildlife', 'Woodland', 'City',
   'Food', 'Christmas', 'Pets', 'Dragons', 'Thanksgiving',
 ] as const;

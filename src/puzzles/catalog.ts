@@ -118,6 +118,12 @@ import { oceanLinerSource } from './oceanLiner/oceanLinerSource';
 import { snowmanAndBaublesSource } from './snowmanAndBaubles/snowmanAndBaublesSource';
 import { adriftInDreamsSource } from './adriftInDreams/adriftInDreamsSource';
 import { amongTheEvergreensSource } from './amongTheEvergreens/amongTheEvergreensSource';
+import { colorInMotionSource } from './colorInMotion/colorInMotionSource';
+import { paintedGeometrySource } from './paintedGeometry/paintedGeometrySource';
+import { blossomAtSunsetSource } from './blossomAtSunset/blossomAtSunsetSource';
+import { starlitHeartSource } from './starlitHeart/starlitHeartSource';
+import { alpenglowReflectionsSource } from './alpenglowReflections/alpenglowReflectionsSource';
+import { birdOfTheFallsSource } from './birdOfTheFalls/birdOfTheFallsSource';
 
 export const puzzleSources: readonly PuzzleSource[] = [
   windmillSource,
@@ -239,4 +245,10 @@ export const puzzleSources: readonly PuzzleSource[] = [
   snowmanAndBaublesSource,
   adriftInDreamsSource,
   amongTheEvergreensSource,
+  colorInMotionSource,
+  paintedGeometrySource,
+  blossomAtSunsetSource,
+  starlitHeartSource,
+  alpenglowReflectionsSource,
+  birdOfTheFallsSource,
 ];

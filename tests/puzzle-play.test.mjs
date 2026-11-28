@@ -1322,7 +1322,7 @@ scenario('landing card artwork credits open separately from touch navigation', a
 
 scenario('Artist cards fill with previews from their own puzzles, without loading gameplay artwork', async (t) => {
   await buildCompactFixture();
-  const { page, errors, origin } = await openGamePage(t, { viewport: { width: 1320, height: 900 } });
+  const { page, errors, origin } = await openGamePage(t, { viewport: { width: 1320, height: 1400 } });
   await page.goto(`${origin}${compactPuzzlePath}?landing`);
   const landingControl = (name) => ({ sceneKey: 'Landing', name });
   const artwork = () => page.evaluate(() => {
@@ -1384,7 +1384,7 @@ scenario('Artist cards fill with previews from their own puzzles, without loadin
   assert.ok(desktop.image.hasRoundedCaption && desktop.drawn.hasRoundedCaption);
   assert.equal(desktop.sourceStarted, false);
 
-  await page.setViewportSize({ width: 300, height: 900 });
+  await page.setViewportSize({ width: 300, height: 1400 });
   await page.waitForFunction(() => document.querySelector('canvas').width === 300);
   assert.deepEqual(await artwork(), desktop);
   assert.deepEqual(errors, []);
@@ -1707,7 +1707,7 @@ scenario('the picker shows newest puzzles first and only loads nearby previews',
       await waitForText(title);
       await page.keyboard.press('Escape');
     };
-    await expectPuzzleAt(220, 'Among the Evergreens', 'Target piece count');
+    await expectPuzzleAt(220, 'Bird of the Falls', 'Target piece count');
     await page.mouse.move(380, 400);
     await page.mouse.wheel(0, 100_000);
     await canvas.screenshot();
@@ -1806,6 +1806,30 @@ scenario('all 27 new Unsplash puzzles capture a first frame and have artwork cre
   assert.deepEqual(errors, []);
 }, 90_000);
 
+scenario('the six new static illustrations capture opaque artwork and have clean credits', async (t) => {
+  const { page, errors, catalogue } = await openCatalogueCapture(t);
+  const artists = {
+    ColorInMotion: 'Bessy Caleze',
+    PaintedGeometry: 'Martin Sanchez',
+    BlossomAtSunset: 'SERAFINA SEELY',
+    StarlitHeart: 'Migrastar',
+    AlpenglowReflections: 'the iop',
+    BirdOfTheFalls: 'Getty Images',
+  };
+
+  for (const [key, artist] of Object.entries(artists)) {
+    const source = catalogue.find((entry) => entry.key === key);
+    assert.ok(source, `${key} should be in the catalogue`);
+    assert.equal(source.type, 'Flat Illustration', key);
+    assert.equal(source.motion, 'Static', key);
+    assert.equal(source.attribution?.name, artist);
+    assert.match(source.attribution.artistUrl, /^https:\/\/unsplash\.com\/@[^?#]+$/);
+    assert.match(source.attribution.sourceUrl, /^https:\/\/unsplash\.com\/illustrations\/[^?#]+$/);
+    await assertArtworkCapture(page, source);
+  }
+  assert.deepEqual(errors, []);
+});
+
 scenario('Folk Art Christmas Tree shows Sara Oliveira’s full wrapped artwork credit', async (t) => {
   const { page, waitForText, errors } = await openPuzzle(t, { viewport: { width: 1320, height: 780 } });
   await pressHeader(page, 'Filters');
@@ -1841,19 +1865,20 @@ scenario('Folk Art Christmas Tree shows Sara Oliveira’s full wrapped artwork c
   assert.deepEqual(errors, []);
 });
 
-scenario('the Flowers and Static filters open Cherry Blossoms with an adaptive cut that survives reload', async (t) => {
+scenario('the Flowers, Static, and Artist filters open Cherry Blossoms with an adaptive cut that survives reload', async (t) => {
   const { page, waitForText, errors, clickDialog } = await openPuzzle(t, {
     viewport: { width: 1320, height: 780 }, hasTouch: true,
   }, currentSizesPuzzlePath, trackPieceDraws);
   const { moveFinger } = await touchController(page);
-  const filterFlowers = async () => {
+  const filterCherryBlossoms = async () => {
     await pressHeader(page, 'Filters', true);
     await clickControl(page, { text: 'Flowers' }, true);
     await clickControl(page, { text: 'Static' }, true);
+    await clickControl(page, { text: 'Umme Hani Ali' }, true);
     await pressAction(page, 'Apply', true);
-    await waitForFilterCount(page, 2);
+    await waitForFilterCount(page, 3);
   };
-  await filterFlowers();
+  await filterCherryBlossoms();
   await page.touchscreen.tap(900, 430);
   await waitForText('Artwork credits');
   await waitForText('Umme Hani Ali');
@@ -1892,7 +1917,7 @@ scenario('the Flowers and Static filters open Cherry Blossoms with an adaptive c
   const resume = async (savedSize) => {
     await page.reload();
     await waitForPicker(page);
-    await filterFlowers();
+    await filterCherryBlossoms();
     await page.touchscreen.tap(660, 220);
     await waitForText('Resume');
     await page.evaluate(() => { window.paintedText = []; });
@@ -4292,7 +4317,7 @@ async function swipeToOption(page, moveFinger, selector, footer) {
   const action = await uiControl(page, footer);
   const { x, top, bottom } = option.clip;
   const center = (top + bottom) / 2;
-  for (let swipe = 0; swipe < 8 && (option.y < top || option.y > bottom); swipe += 1) {
+  for (let swipe = 0; swipe < 16 && (option.y < top || option.y > bottom); swipe += 1) {
     const distance = Math.min(Math.abs(option.y - center), bottom - top - 20);
     const halfSwipe = Math.sign(option.y - center) * distance / 2;
     await moveFinger(x, center + halfSwipe, x, center - halfSwipe, 'touchEnd', 120);

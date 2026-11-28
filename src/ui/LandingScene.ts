@@ -22,13 +22,18 @@ export class LandingScene extends Phaser.Scene {
   create({ category }: { category?: PuzzleFilterCategory } = {}) {
     const group = category && puzzleFilterGroups[category];
     const entries = this.browseEntries(category);
+    const camera = this.cameras.main;
     const listBounds = new Phaser.Geom.Rectangle();
+    const isInsideList = (x: number, y: number) => {
+      const point = camera.getWorldPoint(x, y);
+      return listBounds.contains(point.x, point.y);
+    };
     const cards = entries.map(({ label, open }) => makeOptionTile(this, {
       name: `${group ? 'value' : 'browse'}-${label}`, label, width: 1, height: browseCardHeight, fontSize: '24px',
       dragThreshold: cardScrollThreshold,
       onClick: (pointer) => {
         if (pointer.getDistance() >= cardScrollThreshold
-          || !listBounds.contains(pointer.downX, pointer.downY) || !listBounds.contains(pointer.x, pointer.y)) return;
+          || !isInsideList(pointer.downX, pointer.downY) || !isInsideList(pointer.x, pointer.y)) return;
         open();
       },
     }).button);
@@ -46,9 +51,21 @@ export class LandingScene extends Phaser.Scene {
     }).setOrigin(0.5, 0).setName('browse-heading');
     styleWithTheme(title, (colors) => title.setColor(colors.text));
 
+    const reflowGrid = (listWidth: number) => {
+      const availableWidth = listWidth - 2 * headerInset;
+      const cardWidth = Phaser.Math.Clamp(availableWidth, 1, maxBrowseCardWidth);
+      const fittingColumns = Math.floor((availableWidth + puzzleSpacing) / (cardWidth + puzzleSpacing));
+      const columns = Math.min(cards.length, Math.max(1, fittingColumns));
+      const rows = Math.ceil(cards.length / columns);
+      grid.resetGrid(columns, rows, 0, 0, { column: puzzleSpacing, row: puzzleSpacing });
+      cards.forEach((card, index) => {
+        card.setMinSize(cardWidth, browseCardHeight);
+        grid.add(card, { column: index % columns, row: Math.floor(index / columns) });
+      });
+    };
     const layout = () => {
       const { width, height } = this.scale.gameSize;
-      this.cameras.main.setViewport(0, 0, width, height).setOrigin(0);
+      camera.setViewport(0, 0, width, height).setOrigin(0);
       settings.layout(width);
       const titleTop = settings.button.y + settings.button.height;
       title.setFontSize(Phaser.Math.Clamp(Math.floor(width / 8), 30, 64)).setPosition(width / 2, titleTop);
@@ -57,17 +74,9 @@ export class LandingScene extends Phaser.Scene {
       const listWidth = width - cardScrollbarSpace;
       listBounds.setTo(0, panelTop, listWidth, panelHeight);
 
-      const availableWidth = listWidth - 2 * headerInset;
-      const cardWidth = Phaser.Math.Clamp(availableWidth, 1, maxBrowseCardWidth);
-      const columns = Math.min(cards.length, Math.max(1, Math.floor((availableWidth + puzzleSpacing) / (cardWidth + puzzleSpacing))));
-      const rows = Math.ceil(cards.length / columns);
-      grid.resetGrid(columns, rows, 0, 0, { column: puzzleSpacing, row: puzzleSpacing });
-      cards.forEach((card, index) => {
-        card.setMinSize(cardWidth, browseCardHeight);
-        grid.add(card, { column: index % columns, row: Math.floor(index / columns) });
-      });
-      const offset = panel.childOY;
-      panel.setPosition(0, panelTop).setMinSize(width, panelHeight).layout().setChildOY(offset, true);
+      reflowGrid(listWidth);
+      const scrollOffset = panel.childOY;
+      panel.setPosition(0, panelTop).setMinSize(width, panelHeight).layout().setChildOY(scrollOffset, true);
     };
     this.scale.on(Phaser.Scale.Events.RESIZE, layout);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.scale.off(Phaser.Scale.Events.RESIZE, layout));

@@ -3,7 +3,7 @@ import { makeButtonLabel, makeOptionTile, type UIScene } from './button';
 import { puzzleFilterGroups } from './puzzleFilterGroups';
 import { noPuzzleFilters, type PuzzleFilters } from './puzzleFilters';
 import { pickerControlDepth, showPickerDialog } from './puzzleOptions';
-import { makeScrollableDialogBody } from './scrollableDialogBody';
+import { makeScrollableDialogBody, wrapDialogText } from './scrollableDialogBody';
 import { palette } from './theme';
 
 const contentWidth = 326;
@@ -20,7 +20,8 @@ export function showPuzzleFilters(
 ) {
   let draft = filters;
   const refreshButtons: (() => void)[] = [];
-  const content = scene.rexUI.add.sizer({ orientation: 'y', width: contentWidth, space: { item: 10 } });
+  const content = scene.rexUI.add.sizer({ orientation: 'y', space: { item: 10 } });
+  const sections: { heading: Phaser.GameObjects.Text; tiles: ReturnType<UIScene['rexUI']['add']['fixWidthSizer']> }[] = [];
 
   const addSection = <T extends string>(
     { title, choices }: { title: string; choices: readonly T[] },
@@ -28,25 +29,24 @@ export function showPuzzleFilters(
     isSelected: (choice: T) => boolean,
     select: (choice: T) => void,
   ) => {
-    content.add(scene.add.text(0, 0, title, {
+    const heading = scene.add.text(0, 0, title, {
       fontFamily: 'system-ui', fontSize: '17px', color: palette.mutedText,
-    }).setDepth(pickerControlDepth), { align: 'left' });
-    for (let start = 0; start < choices.length; start += widths.length) {
-      const row = scene.rexUI.add.sizer({ orientation: 'x', space: { item: gap } });
-      choices.slice(start, start + widths.length).forEach((choice, column) => {
-        const tile = makeOptionTile(scene, {
-          label: choice, width: widths[column], fontSize: '14px', depth: pickerControlDepth, dragThreshold: 10,
-          onClick: (pointer) => {
-            if (!scroll.containsTap(pointer)) return;
-            select(choice);
-            refreshButtons.forEach((refresh) => refresh());
-          },
-        });
-        refreshButtons.push(() => tile.setSelected(isSelected(choice)));
-        row.add(tile.button);
+    }).setDepth(pickerControlDepth);
+    const tiles = scene.rexUI.add.fixWidthSizer({ space: { item: gap, line: gap } });
+    choices.forEach((choice, index) => {
+      const tile = makeOptionTile(scene, {
+        label: choice, width: widths[index % widths.length], fontSize: '14px', depth: pickerControlDepth, dragThreshold: 10,
+        onClick: (pointer) => {
+          if (!scroll.containsTap(pointer)) return;
+          select(choice);
+          refreshButtons.forEach((refresh) => refresh());
+        },
       });
-      content.add(row, { align: 'left' });
-    }
+      refreshButtons.push(() => tile.setSelected(isSelected(choice)));
+      tiles.add(tile.button);
+    });
+    sections.push({ heading, tiles });
+    content.add(heading, { align: 'left' }).add(tiles, { align: 'left' });
   };
   addSection(puzzleFilterGroups.theme, [100, 100, 100], (tag) => draft.themes.includes(tag), (tag) => {
     draft = { ...draft, themes: toggleChoice(draft.themes, tag) };
@@ -73,7 +73,12 @@ export function showPuzzleFilters(
     makeButtonLabel(scene, 'Apply', 88, 52, true),
   ];
   return showPickerDialog(scene, 'Filters', scroll.body, actions, (action) => onClose(action === 2 ? draft : undefined), {
-    fitContent: scroll.fitContent,
+    responsive: scroll.responsiveLayout(contentWidth + 16, (width) => {
+      for (const { heading, tiles } of sections) {
+        wrapDialogText(heading, width);
+        tiles.setMinWidth(width);
+      }
+    }),
     handleAction: (action) => {
       if (action !== 0) return false;
       draft = noPuzzleFilters;

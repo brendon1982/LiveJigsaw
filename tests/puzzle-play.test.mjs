@@ -4227,6 +4227,11 @@ scenario('touch can scroll the filter dialog and apply choices on a short screen
   const firstPreview = await pixelAt(page, await canvas.screenshot(), 120, 165);
   await pressHeader(page, 'Filters', true);
   await clickControl(page, { text: 'Coast' }, true);
+  await page.setViewportSize({ width: 320, height: 375 });
+  await page.waitForFunction(() => document.querySelector('canvas').width === 320);
+  const [firstArtist, secondArtist] = await Promise.all(['Me', 'Craftpix'].map((text) => uiControl(page, { text })));
+  assert.ok(firstArtist.y !== secondArtist.y, 'Artist tiles should wrap without shrinking');
+  assert.equal((await uiControl(page, { text: 'Apply', action: true })).height, 52);
   await swipeToOption(page, moveFinger, { text: 'Craftpix' }, { text: 'Apply', action: true });
   await pressAction(page, 'Apply', true);
   await waitForFilterCount(page, 2);

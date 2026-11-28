@@ -50,7 +50,7 @@ export function makeIconButton(
   click: (pointer: Phaser.Input.Pointer) => void,
   { dragThreshold, clickInterval }: { dragThreshold?: number; clickInterval?: number } = {},
 ) {
-  const size = hasTouchTargets() ? 54 : 42;
+  const size = 42;
   const background = scene.rexUI.add.roundRectangle(0, 0, 1, 1, 9);
   const art = scene.add.graphics();
   const icon = scene.add.container(0, 0, [art]).setSize(24, 24);

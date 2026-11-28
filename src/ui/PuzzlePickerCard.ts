@@ -245,7 +245,9 @@ function captureCardArtwork(
   scene: UIScene, artwork: Phaser.GameObjects.GameObject, cutout: Phaser.Textures.CanvasTexture,
   background?: number,
 ) {
-  const preview = scene.add.renderTexture(0, 0, maxPickerCardWidth, previewHeight).setOrigin(0);
+  // Keep the capture the same size as the artwork and cutout, even with an odd height.
+  const preview = new Phaser.GameObjects.RenderTexture(scene, 0, 0, maxPickerCardWidth, previewHeight, false).setOrigin(0);
+  scene.add.existing(preview);
   preview.texture.setFilter(Phaser.Textures.FilterMode.LINEAR);
   // Capture and round the artwork once so cards can scale it as a single image.
   if (background !== undefined) preview.fill(background);

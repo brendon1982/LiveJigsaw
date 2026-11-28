@@ -1140,6 +1140,14 @@ scenario('landing card artwork credits open separately from touch navigation', a
     pixelAt(page, image, Math.floor(left + card.width * fraction), top + 20)));
   assert.ok(new Set(interior.map(String)).size > 1, 'The artwork should be visible across the card');
 
+  // The Theme artwork is a flat color here, right up to the bottom edge.
+  const bottom = Math.floor(card.y + card.height / 2) - 1;
+  const artworkX = Math.floor(left + card.width * 0.15);
+  const lastRow = await pixelAt(page, image, artworkX, bottom);
+  const artworkColor = await pixelAt(page, image, artworkX, bottom - 2);
+  assert.ok(lastRow.every((channel, index) => Math.abs(channel - artworkColor[index]) <= 8),
+    `Artwork should reach the last row without a pale stripe: ${lastRow} vs ${artworkColor}`);
+
   const { moveFinger } = await touchController(page);
   await moveFinger(x, y, x, y - 50, 'touchEnd', 120);
   const state = await page.evaluate(() => {

@@ -15,10 +15,24 @@
 
       // Keep Windmill first on screen for the fixed-coordinate gameplay scenarios.
       puzzleSources.reverse();
+      const measurePreviewFrames = new URLSearchParams(location.search).has('previewFrames');
+      if (measurePreviewFrames) {
+        const drawn = puzzleSources.filter(({ previewImage }) => !previewImage);
+        puzzleSources.splice(0, puzzleSources.length, ...drawn);
+      }
       const createPicker = SelectPuzzleScene.prototype.create;
       SelectPuzzleScene.prototype.create = function () {
         createPicker.call(this);
         window.puzzlePickerScene = this;
+        if (measurePreviewFrames) {
+          const counts = window.pickerPreviewFrames = [];
+          const record = () => {
+            const panel = this.children.list.find(({ type }) => type === 'rexScrollablePanel');
+            counts.push(panel.getAllChildren().filter(({ type }) => type === 'RenderTexture').length);
+            if (counts.length === 3) this.events.off('render', record);
+          };
+          this.events.on('render', record);
+        }
       };
       const createLanding = LandingScene.prototype.create;
       LandingScene.prototype.create = function (data) {

@@ -91,6 +91,7 @@ async function scrollPickerTo(page, wheelDelta) {
   await page.mouse.move(340, 300);
   await page.mouse.wheel(0, -100_000);
   await page.mouse.wheel(0, wheelDelta);
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
 }
 
 function waitForPicker(page) {
@@ -103,6 +104,28 @@ function pickerResultTitles(page) {
     .find(({ type }) => type === 'rexScrollablePanel').getElement('panel.cards').getChildren()
     .toSorted((a, b) => a.y - b.y || a.x - b.x)
     .map((card) => card.getChildren().find(({ type }) => type === 'Text').text));
+}
+
+function allPickerResultTitles(page) {
+  return page.evaluate(async () => {
+    const panel = window.puzzlePickerScene.children.list.find(({ type }) => type === 'rexScrollablePanel');
+    const grid = panel.getElement('panel.cards');
+    const titles = new Set();
+    const originalOffset = panel.childOY;
+    const renderAt = async (offset) => {
+      panel.setChildOY(offset, true);
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    };
+    for (let offset = 0; ; offset -= Math.max(1, panel.height / 2)) {
+      await renderAt(offset);
+      for (const card of grid.getChildren()) {
+        titles.add(card.getChildren().find(({ type }) => type === 'Text').text);
+      }
+      if (panel.childOY === panel.bottomChildOY) break;
+    }
+    await renderAt(originalOffset);
+    return [...titles];
+  });
 }
 
 scenario('picker mounts only nearby cards and releases them when scrolling to the end', async (t) => {
@@ -132,6 +155,14 @@ scenario('picker mounts only nearby cards and releases them when scrolling to th
     const [card] = panel.getElement('panel.cards').getChildren();
     return panel.childOY === 0 && card?.getChildren().some(({ text }) => text === 'Windmill');
   });
+  assert.deepEqual(errors, []);
+});
+
+scenario('the picker paints placeholders first and budgets drawn previews across frames', async (t) => {
+  const { page, errors } = await openPuzzle(t, { viewport: { width: 1320, height: 1024 } },
+    `${currentSizesPuzzlePath}&previewFrames`);
+  await page.waitForFunction(() => window.pickerPreviewFrames?.length === 3);
+  assert.deepEqual(await page.evaluate(() => window.pickerPreviewFrames), [0, 1, 2]);
   assert.deepEqual(errors, []);
 });
 
@@ -1344,7 +1375,7 @@ scenario('Artist opens a filtered picker and the Filters dialog can add another 
   await clickControl(page, landingControl('value-Craftpix'), true);
   await waitForFilterCount(page, 1);
 
-  const craftpixTitles = await pickerResultTitles(page);
+  const craftpixTitles = await allPickerResultTitles(page);
   assert.ok(craftpixTitles.includes('Afterglow'));
   assert.ok(!craftpixTitles.includes('Adrift in Dreams'));
 
@@ -1356,7 +1387,7 @@ scenario('Artist opens a filtered picker and the Filters dialog can add another 
   await clickControl(page, { text: 'Kyunghee Yim' }, true);
   await pressAction(page, 'Apply', true);
   await waitForFilterCount(page, 2);
-  assert.deepEqual(new Set(await pickerResultTitles(page)), new Set([...craftpixTitles, 'Adrift in Dreams', 'Snowman and Baubles']));
+  assert.deepEqual(new Set(await allPickerResultTitles(page)), new Set([...craftpixTitles, 'Adrift in Dreams', 'Snowman and Baubles']));
 
   await pressHeader(page, 'Back to browse', true);
   await uiControl(page, landingControl('value-Craftpix'));

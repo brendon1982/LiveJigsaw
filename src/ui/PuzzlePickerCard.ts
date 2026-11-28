@@ -67,7 +67,6 @@ export function makePuzzlePickerCard(
 ) {
   const background = scene.rexUI.add.roundRectangle(0, 0, 1, 1, pickerCardCornerRadius).setOrigin(0);
   let preview: Phaser.GameObjects.RenderTexture | undefined;
-  let previewRequested = false;
   const metadata = puzzleCardTags(source);
   const title = scene.add.text(0, 0, '', {
     fontFamily: 'system-ui', fontSize: '22px', fontStyle: 'bold', color: palette.text,
@@ -122,23 +121,11 @@ export function makePuzzlePickerCard(
     container.addLocal(button);
     return { button, caption };
   };
-  let openPreviewCopies = 0;
+  const previewCopies = new Set<Phaser.GameObjects.Image>();
   function copyPreview() {
     const artwork = scene.add.image(0, 0, preview?.texture ?? '__DEFAULT');
-    openPreviewCopies += 1;
-    artwork.once(Phaser.GameObjects.Events.DESTROY, () => { openPreviewCopies -= 1; });
-    if (!preview) {
-      const usePreviewWhenReady = () => {
-        if (!preview) return;
-        const { displayWidth, displayHeight } = artwork;
-        artwork.texture = preview.texture;
-        artwork.setFrame(preview.texture.get().name).setDisplaySize(displayWidth, displayHeight);
-        scene.rexUI.getParentSizer(artwork)?.resetChildScaleState(artwork);
-        scene.events.off(Phaser.Scenes.Events.UPDATE, usePreviewWhenReady);
-      };
-      scene.events.on(Phaser.Scenes.Events.UPDATE, usePreviewWhenReady);
-      artwork.once('destroy', () => scene.events.off(Phaser.Scenes.Events.UPDATE, usePreviewWhenReady));
-    }
+    previewCopies.add(artwork);
+    artwork.once(Phaser.GameObjects.Events.DESTROY, () => previewCopies.delete(artwork));
     return artwork;
   }
   let more: ReturnType<typeof makeFooterAction>['button'] | undefined;
@@ -160,21 +147,19 @@ export function makePuzzlePickerCard(
   };
   return {
     container,
-    get previewInUse() { return openPreviewCopies > 0; },
-    preparePreview() {
-      if (preview) return false;
-      const image = source.previewImage;
-      if (image && !scene.textures.exists(image.key)) {
-        if (previewRequested) return false;
-        previewRequested = true;
-        scene.load.image(image.key, image.url);
-        return true;
-      }
-
+    previewImage: source.previewImage,
+    get previewInUse() { return previewCopies.size > 0; },
+    get hasPreview() { return preview !== undefined; },
+    drawPreview() {
       preview = makePreview(scene, source, cutout).setTint(pressed ? 0xececec : 0xffffff);
       const scale = container.width / maxPickerCardWidth;
       container.addLocal(preview).setChildLocalScale(preview, scale, scale);
-      return false;
+      for (const artwork of previewCopies) {
+        const { displayWidth, displayHeight } = artwork;
+        artwork.texture = preview.texture;
+        artwork.setFrame(preview.texture.get().name).setDisplaySize(displayWidth, displayHeight);
+        scene.rexUI.getParentSizer(artwork)?.resetChildScaleState(artwork);
+      }
     },
     layout(width: number, stackStatus: boolean, compact: boolean) {
       const scale = width / maxPickerCardWidth;

@@ -9,7 +9,8 @@ import { makeButton, makeOptionTile, type UIScene } from './button';
 import type { LandingPage } from './LandingScene';
 import type { PuzzleSelection } from './PlayPuzzleScene';
 import { makePickerCardGrid } from './pickerCardGrid';
-import { cardScrollbarSpace, cardScrollThreshold, isNearCardViewport, makePuzzleCardPanel, refreshPuzzleCardMask } from './puzzleCardPanel';
+import { makePickerPreviews } from './pickerPreviews';
+import { cardScrollbarSpace, cardScrollThreshold, makePuzzleCardPanel, refreshPuzzleCardMask } from './puzzleCardPanel';
 import { artworkCreditLines, showPuzzleDetails } from './puzzleDetailsDialog';
 import { showPuzzleFilters } from './puzzleFilterDialog';
 import { activeFilterCount, matchesPuzzleFilters, noPuzzleFilters, samePuzzleFilters, type PuzzleFilters } from './puzzleFilters';
@@ -84,6 +85,7 @@ export class SelectPuzzleScene extends Phaser.Scene {
       dialogOpen = false;
       setPickerScrolling(true);
       grid.refreshWindow();
+      windowOffset = undefined;
     };
     const openDialog = () => {
       dialogOpen = true;
@@ -140,6 +142,7 @@ export class SelectPuzzleScene extends Phaser.Scene {
           showPuzzleDetails(this, source, status, copyPreview(), closeDialog);
         }, hasCredits(index));
     });
+    const previews = makePickerPreviews(this, listBounds, grid.mountedCards);
     const list = this.rexUI.add.sizer({ orientation: 'y', space: { bottom: puzzleSpacing } })
       .add(grid.content, { align: 'center', key: 'cards' });
     let panel: ReturnType<typeof makePuzzleCardPanel> | undefined;
@@ -299,32 +302,32 @@ export class SelectPuzzleScene extends Phaser.Scene {
       const nextOffset = anchorIndex === undefined ? offset : grid.offsetFor(anchorIndex);
       layoutResultsPanel({ width, height, panelTop, listWidth, offset: nextOffset });
       showCardWindow();
+      previews.invalidate();
     };
+    let windowOffset: number | undefined;
     const showCardWindow = () => {
+      windowOffset = panel?.childOY;
       if (panel && results.length && grid.showWindow(-panel.childOY, listBounds.height)) {
         refreshPuzzleCardMask(panel);
       }
     };
-    const loadNearbyPreviews = () => {
-      showCardWindow();
-      let queuedImages = false;
-      for (const card of grid.mountedCards()) {
-        if (!isNearCardViewport(card.container, listBounds, puzzleSpacing)) continue;
-        if (card.preparePreview()) queuedImages = true;
+    const updatePicker = () => {
+      if (windowOffset !== panel?.childOY) {
+        showCardWindow();
+        previews.invalidate();
       }
-      if (queuedImages) this.load.start();
+      if (previews.update() && panel) refreshPuzzleCardMask(panel);
     };
     const fitPicker = () => layoutPicker(panel?.childOY ?? 0);
     this.scale.on(Phaser.Scale.Events.RESIZE, fitPicker);
-    this.events.on(Phaser.Scenes.Events.UPDATE, loadNearbyPreviews);
+    this.events.on(Phaser.Scenes.Events.POST_UPDATE, updatePicker);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.scale.off(Phaser.Scale.Events.RESIZE, fitPicker);
-      this.events.off(Phaser.Scenes.Events.UPDATE, loadNearbyPreviews);
+      this.events.off(Phaser.Scenes.Events.POST_UPDATE, updatePicker);
       this.textures.remove(cutout);
     });
     updateFilterCaption();
     updatePreviewSizeTiles();
     layoutPicker(this.scrollOffset);
-    loadNearbyPreviews();
   }
 }

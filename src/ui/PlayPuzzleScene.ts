@@ -48,7 +48,8 @@ export class PlayPuzzleScene extends Phaser.Scene {
     let board: PuzzleBoardView | undefined;
     let loading: ReturnType<typeof showPuzzleLoading> | undefined = showPuzzleLoading(this);
 
-    const backButton = makeBackButton(this, () => this.scene.start(SelectPuzzleScene.key));
+    // Explicit scene data prevents Phaser from replaying the filters supplied by Landing.
+    const backButton = makeBackButton(this, () => this.scene.start(SelectPuzzleScene.key, {}));
     const settings = makeSettingsButton(this, () => {
       board?.cancelInteraction();
       openSettings(this, {

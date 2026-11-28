@@ -4097,6 +4097,28 @@ scenario('picker tag and completion filters combine and refresh after play', asy
   assert.deepEqual(errors, []);
 });
 
+scenario('returning from play keeps the filters applied after entering the picker from Landing', async (t) => {
+  await buildCompactFixture();
+  const { page, waitForText, errors, origin } = await openGamePage(t, { viewport: { width: 1320, height: 780 } });
+  await page.goto(`${origin}${currentSizesPuzzlePath}&landing`);
+  await clickControl(page, { sceneKey: 'Landing', name: 'browse-All' });
+  await uiControl(page, { sceneKey: 'SelectPuzzle', name: 'Filters', filterCount: 0 });
+
+  await pressHeader(page, 'Filters');
+  await clickControl(page, { text: 'Parallax' });
+  await pressAction(page, 'Apply');
+  await waitForFilterCount(page, 1);
+  const filteredTitles = await pickerResultTitles(page);
+
+  await page.mouse.click(340, 180);
+  await pressAction(page, 'Play');
+  await waitForText('0 of 40 placed');
+  await pressHeader(page, 'All puzzles');
+  await waitForFilterCount(page, 1);
+  assert.deepEqual(await pickerResultTitles(page), filteredTitles);
+  assert.deepEqual(errors, []);
+});
+
 scenario('the picker preserves an active filter and its scroll offset until reload', async (t) => {
   const { page, canvas, waitForText, errors, playSelection } = await openPuzzle(t, {
     viewport: { width: 1320, height: 780 },

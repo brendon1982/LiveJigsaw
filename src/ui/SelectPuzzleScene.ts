@@ -226,8 +226,7 @@ export class SelectPuzzleScene extends Phaser.Scene {
       updateFilterCaption();
       layoutPicker(0);
     };
-    const layoutPicker = (offset: number) => {
-      const { width, height } = this.scale.gameSize;
+    const layoutHeader = (width: number) => {
       settings.layout(width);
       const filtersLeft = settings.button.x - filtersButton.width - headerControlGap;
       const afterBack = back.x + back.width + headerControlGap;
@@ -246,9 +245,10 @@ export class SelectPuzzleScene extends Phaser.Scene {
       settings.button.setY(settingsTop);
       filtersButton.setPosition(filtersLeft, settingsTop);
       filterBadge.setPosition(filtersButton.x + filtersButton.width - 2, filtersButton.y + 2);
-      const panelTop = settingsTop + Math.max(firstRowHeight, settings.button.height, filtersButton.height) + puzzleSpacing;
-      const panelHeight = Math.max(1, height - panelTop);
-      const listWidth = width - cardScrollbarSpace;
+      return settingsTop + Math.max(firstRowHeight, settings.button.height, filtersButton.height) + puzzleSpacing;
+    };
+
+    const reflowCardGrid = (listWidth: number) => {
       const availableWidth = listWidth - 2 * puzzleSpacing;
       const size = gameSave.settings.pickerPreviewSize;
       const compact = size === 'Compact';
@@ -269,11 +269,17 @@ export class SelectPuzzleScene extends Phaser.Scene {
         });
         cardLayout = { columns, width: cardWidth, stackStatus, compact };
       }
+    };
 
+    const layoutResultsPanel = ({ width, height, panelTop, listWidth, offset }: {
+      width: number; height: number; panelTop: number; listWidth: number; offset: number;
+    }) => {
+      const panelHeight = Math.max(1, height - panelTop);
       this.cameras.main.setViewport(0, 0, width, height).setOrigin(0);
       headerBackground.setDisplaySize(width, panelTop);
       listBounds.setTo(0, panelTop, listWidth, panelHeight);
-      panel.setPosition(0, panelTop).setMinSize(width, panelHeight).layout().setChildOY(offset, true);
+      panel.setPosition(0, panelTop).setMinSize(width, panelHeight).layout();
+      panel.setChildOY(offset, true);
       const empty = visibleCards.length === 0;
       panel.setVisible(!empty);
       emptyState.setVisible(empty);
@@ -282,6 +288,15 @@ export class SelectPuzzleScene extends Phaser.Scene {
         emptyMessage.setWordWrapWidth(Math.max(1, messageWidth), true);
         emptyState.layout().setPosition(width / 2, panelTop + 36);
       }
+    };
+
+    const layoutPicker = (offset: number) => {
+      const { width, height } = this.scale.gameSize;
+      const panelTop = layoutHeader(width);
+      const listWidth = width - cardScrollbarSpace;
+
+      reflowCardGrid(listWidth);
+      layoutResultsPanel({ width, height, panelTop, listWidth, offset });
     };
     const loadNearbyPreviews = () => {
       let queuedImages = false;

@@ -3871,6 +3871,20 @@ scenario('the picker preserves an active filter and its scroll offset until relo
   assert.deepEqual(errors, []);
 });
 
+scenario('the filter dialog shows the full outline of an edge option', async (t) => {
+  const { page, canvas } = await openPuzzle(t, { viewport: { width: 1320, height: 780 } });
+  const choice = { text: 'Alien Worlds' };
+  await pressHeader(page, 'Filters');
+  await clickControl(page, choice);
+  const { x, y, width } = await uiControl(page, choice);
+  const left = Math.floor(x - width / 2);
+  const image = await canvas.screenshot();
+  const stroke = await pixelAt(page, image, left, Math.floor(y + 14));
+  assert.deepEqual(stroke, [199, 225, 209, 255], 'The selected option should have an outline');
+  assert.deepEqual(await pixelAt(page, image, left - 1, Math.floor(y + 14)), stroke,
+    'The outer half of the outline should be visible');
+});
+
 scenario('touch can scroll the filter dialog and apply choices on a short screen', async (t) => {
   const { page, canvas, errors } = await openPuzzle(t, {
     viewport: { width: 640, height: 375 }, hasTouch: true, isMobile: true,

@@ -2,15 +2,21 @@ import type Phaser from 'phaser';
 import type { UIScene } from './button';
 import { styleWithTheme } from './theme';
 
+const outlineInset = 2;
+
 export function makeScrollableDialogBody(
   scene: UIScene, content: ReturnType<UIScene['rexUI']['add']['sizer']>, depth: number, scrollbar = true,
 ) {
-  const { width, height } = content.layout();
+  const paddedContent = scene.rexUI.add.sizer({
+    orientation: 'y',
+    space: { left: outlineInset, right: outlineInset, top: outlineInset, bottom: outlineInset },
+  }).add(content);
+  const { width, height } = paddedContent.layout();
   const track = scrollbar ? scene.rexUI.add.roundRectangle(0, 0, 6, 10, 3).setDepth(depth) : undefined;
   const thumb = scrollbar ? scene.rexUI.add.roundRectangle(0, 0, 6, 28, 3).setDepth(depth) : undefined;
   const body = scene.rexUI.add.scrollablePanel({
     width, height,
-    panel: { child: content, mask: { maskType: 'stencil' } },
+    panel: { child: paddedContent, mask: { maskType: 'stencil' } },
     clampChildOY: true,
     scrollDetectionMode: 'rectBounds',
     scroller: { threshold: 10 },

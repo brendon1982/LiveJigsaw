@@ -2107,6 +2107,12 @@ scenario('setup challenge tooltips explain the rules without interfering with sc
   assert.equal(await tooltip(), null, 'Closing setup should destroy its tooltip');
 
   await openSetup();
+  const wideRow = await Promise.all(['none', 'seed'].map(pointFor));
+  assert.equal(wideRow[0].y, wideRow[1].y);
+  await page.setViewportSize({ width: 320, height: 500 });
+  await page.waitForFunction(() => document.querySelector('canvas').width === 320);
+  const narrowRows = await Promise.all(['none', 'seed'].map(pointFor));
+  assert.ok(narrowRows[1].y > narrowRows[0].y);
   await scrollToChallenges();
   const { x, y } = await pointFor('seed');
   await page.touchscreen.tap(x, y);

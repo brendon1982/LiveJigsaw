@@ -66,7 +66,8 @@ export function showPuzzleOptions(
     label: mode === 'sequential-window' ? challengeModes[mode].label.replace(' ', '\n') : challengeModes[mode].label,
   })), defaults?.challengeMode ?? 'none', fiveOptionWidth, '14px');
 
-  const content = scene.rexUI.add.sizer({ orientation: 'y', width: contentWidth, space: { item: 14 } });
+  const content = scene.rexUI.add.sizer({ orientation: 'y', space: { item: 14 } });
+  let cutSummary: Phaser.GameObjects.Text | undefined;
   const currentCut = () => {
     const targetCount = Number(sizeButtons.getSelectedButtonName());
     const sizeChoice = sizeChoices.find((choice) => choice.targetCount === targetCount);
@@ -89,19 +90,19 @@ export function showPuzzleOptions(
     }).setFixedSize(0, 24).setDepth(depth.controls), { align: 'left' });
     section.add(buttons, { align: 'left' });
     if (source.motion === 'Static' && buttons === sizeButtons) {
-      const sizeRowWidth = sizeChoices.length * (sizeTileWidth + optionGap) - optionGap;
-      const cutSummary = scene.add.text(0, 0, '', {
+      const summary = scene.add.text(0, 0, '', {
         ...metadataTextStyle, align: 'right',
-      }).setFixedSize(sizeRowWidth, 22).setDepth(depth.controls);
-      styleWithTheme(cutSummary, (colors) => cutSummary.setColor(colors.mutedText));
+      }).setDepth(depth.controls);
+      cutSummary = summary;
+      styleWithTheme(summary, (colors) => summary.setColor(colors.mutedText));
       const updateCutSummary = () => {
         const cut = currentCut();
-        if (cut) cutSummary.setText(`${getPieceCount(cut.size)} pieces · ${cut.size.columns} × ${cut.size.rows}`);
+        if (cut) summary.setText(`${getPieceCount(cut.size)} pieces · ${cut.size.columns} × ${cut.size.rows}`);
       };
       sizeButtons.on('button.click', updateCutSummary);
       shapeButtons.on('button.click', updateCutSummary);
       updateCutSummary();
-      section.add(cutSummary, { align: 'left' });
+      section.add(summary, { align: 'left' });
     }
     content.add(section, { align: 'left' });
   }
@@ -137,7 +138,12 @@ export function showPuzzleOptions(
         connectorStyle: style, animationSpeed: speed, challengeMode, pieceRotation,
       });
     }
-  }, { fitContent: scroll.fitContent });
+  }, {
+    responsive: scroll.responsiveLayout(contentWidth + 16, (width) => {
+      for (const [, buttons] of sections) buttons?.setMinWidth(width);
+      if (cutSummary) wrapDialogText(cutSummary, width);
+    }),
+  });
   dialog.once('destroy', tooltips.destroy);
   return dialog;
 }
@@ -299,7 +305,7 @@ function makeRadioButtons<Name extends string>(
   scene: UIScene, options: readonly Option<Name>[], selectedName: string, canSelect: (pointer: Phaser.Input.Pointer) => boolean,
   width = optionWidth, fontSize = '15px',
 ) {
-  const buttons = scene.rexUI.add.sizer({ orientation: 'x', space: { item: optionGap } });
+  const buttons = scene.rexUI.add.fixWidthSizer({ space: { item: optionGap, line: optionGap } });
   const tiles = options.map((option) => ({
     name: option.name,
     ...makeOptionTile(scene, {

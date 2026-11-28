@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { makeOptionTile, type UIScene } from './button';
 import { cardScrollbarSpace, cardScrollThreshold, makePuzzleCardPanel } from './puzzleCardPanel';
-import { noPuzzleFilters, puzzleFilterGroups, type PuzzleFilterCategory, type PuzzleFilters } from './puzzleFilters';
+import { activeFilterCount, noPuzzleFilters, puzzleFilterGroups, type PuzzleFilterCategory, type PuzzleFilters } from './puzzleFilters';
 import { headerInset, makeBackButton, makeSettingsButton, puzzleSpacing } from './puzzleHeader';
 import { SelectPuzzleScene } from './SelectPuzzleScene';
 import { openSettings } from './SettingsScene';
@@ -77,7 +77,7 @@ export class LandingScene extends Phaser.Scene {
   private browseEntries(category?: PuzzleFilterCategory) {
     const openPicker = (filters: PuzzleFilters) => this.scene.start(SelectPuzzleScene.key, { filters, category });
     if (category) {
-      return puzzleFilterGroups[category].options.filter(({ label }) => label !== 'All')
+      return puzzleFilterGroups[category].options.filter(({ filters }) => activeFilterCount(filters) > 0)
         .map(({ label, filters }) => ({ label, open: () => openPicker(filters) }));
     }
 

@@ -2725,6 +2725,16 @@ scenario('picker Settings remembers the theme and filter on a narrow touch scree
   await page.reload();
   await waitForPicker(page);
   assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 5, 105), [250, 233, 238, 255]);
+  await pressHeader(page, 'Settings', true);
+  await clickSetting('Light');
+  assert.equal((await readSave(page)).settings.theme, 'Light');
+  await clickSetting('Done');
+  const light = await canvas.screenshot();
+  assert.deepEqual(await pixelAt(page, light, 5, 105), [245, 246, 248, 255]);
+  assert.deepEqual(await pixelAt(page, light, 75, previewY), await pixelAt(page, forest, 75, previewY), 'Light should preserve preview artwork');
+  await page.reload();
+  await waitForPicker(page);
+  assert.deepEqual(await pixelAt(page, await canvas.screenshot(), 5, 105), [245, 246, 248, 255]);
   await page.evaluate(() => {
     localStorage.removeItem('live-jigsaw.save');
     localStorage.setItem('live-jigsaw.theme', 'Slate');

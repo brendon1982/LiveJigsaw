@@ -51,9 +51,15 @@ export class SettingsScene extends Phaser.Scene {
       return tile.button;
     };
     const row = () => this.rexUI.add.sizer({ orientation: 'x', space: { item: 8 } });
-    const themeChoices = row();
-    for (const theme of Object.keys(themes) as (keyof typeof themes)[]) {
-      themeChoices.add(choice(theme, 70, () => selectTheme(theme), () => activeTheme === theme));
+    const themeChoices = this.rexUI.add.sizer({ orientation: 'y', space: { item: 8 } });
+    const themeNames = Object.keys(themes) as (keyof typeof themes)[];
+    const themesPerRow = 3;
+    for (let start = 0; start < themeNames.length; start += themesPerRow) {
+      const choices = row();
+      for (const theme of themeNames.slice(start, start + themesPerRow)) {
+        choices.add(choice(theme, 70, () => selectTheme(theme), () => activeTheme === theme));
+      }
+      themeChoices.add(choices, { align: 'left' });
     }
     const filterChoice = (filter: keyof typeof puzzleFilters, width: number) =>
       choice(puzzleFilters[filter], width, () => selectPuzzleFilter(filter), () => activePuzzleFilter === filter);

@@ -5,7 +5,7 @@ import previewUrl from './preview.jpg';
 export const bedtimeWithCatsSource = staticImageSource({
   sceneKey: 'BedtimeWithCats',
   title: 'Bedtime with Cats',
-  tags: { theme: 'Animals', type: 'Flat Illustration' },
+  tags: { theme: 'Pets', type: 'Flat Illustration' },
   attribution: {
     name: 'Sara Oliveira',
     sourceUrl: 'https://unsplash.com/illustrations/a-woman-laying-on-a-bed-with-a-cat-HnfZmjCspAE',

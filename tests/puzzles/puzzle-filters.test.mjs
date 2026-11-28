@@ -46,6 +46,14 @@ test('theme choices and landing options share alphabetical order', () => {
   assert.deepEqual(theme.options.map(({ label }) => label), alphabetical);
 });
 
+test('Pets replaces Animals in the theme choices', () => {
+  const { theme } = makePuzzleFilterGroups([]);
+  assert.ok(theme.choices.includes('Pets'));
+  assert.ok(!theme.choices.includes('Animals'));
+  const pets = theme.options.find(({ label }) => label === 'Pets');
+  assert.deepEqual(pets?.filters.themes, ['Pets']);
+});
+
 test('artist choices are the unique credited names in alphabetical order', () => {
   const { artist } = makePuzzleFilterGroups([
     { attribution: { name: 'Rosa' } }, {}, { attribution: { description: 'No name' } },

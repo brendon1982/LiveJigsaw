@@ -103,7 +103,7 @@ import { meltingAppleSource } from './meltingApple/meltingAppleSource';
 import { festiveFavoritesSource } from './festiveFavorites/festiveFavoritesSource';
 import { bedtimeWithCatsSource } from './bedtimeWithCats/bedtimeWithCatsSource';
 import { tableForTwoSource } from './tableForTwo/tableForTwoSource';
-import { yellowEyedCatSource } from './yellowEyedCat/yellowEyedCatSource';
+import { catfaceSource } from './catface/catfaceSource';
 import { pinkSkyOverJapanSource } from './pinkSkyOverJapan/pinkSkyOverJapanSource';
 import { dalaHorseChristmasSource } from './dalaHorseChristmas/dalaHorseChristmasSource';
 import { catsAtChristmasSource } from './catsAtChristmas/catsAtChristmasSource';
@@ -224,7 +224,7 @@ export const puzzleSources: readonly PuzzleSource[] = [
   festiveFavoritesSource,
   bedtimeWithCatsSource,
   tableForTwoSource,
-  yellowEyedCatSource,
+  catfaceSource,
   pinkSkyOverJapanSource,
   dalaHorseChristmasSource,
   catsAtChristmasSource,

@@ -2,9 +2,9 @@ import { staticImageSource } from '../staticImageSource';
 import artworkUrl from './artwork.png';
 import previewUrl from './preview.jpg';
 
-export const yellowEyedCatSource = staticImageSource({
+export const catfaceSource = staticImageSource({
   sceneKey: 'YellowEyedCat',
-  title: 'Yellow-Eyed Cat',
+  title: 'Catface',
   tags: { theme: 'Animals', type: 'Flat Illustration' },
   attribution: {
     name: 'Sara Oliveira',

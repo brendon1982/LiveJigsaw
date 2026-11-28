@@ -20,6 +20,10 @@ export type PuzzleAttribution = Readonly<{
   artistUrl?: string;
 }>;
 
+export function creditedArtistName(attribution?: PuzzleAttribution) {
+  return attribution?.name?.trim() || undefined;
+}
+
 /**
  * Artwork for the puzzle. The host starts the scene with PuzzleSourceSceneData
  * and captures the scene's display list. Each scene sets its own animation

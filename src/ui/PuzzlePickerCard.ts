@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import type { PuzzleSource } from '../puzzles/PuzzleSource';
+import { creditedArtistName, type PuzzleSource } from '../puzzles/PuzzleSource';
 import { puzzleSizeChoices } from '../puzzles/puzzleSizeChoices';
 import { addPressFeedback, type UIScene } from './button';
 import { headerControlGap, puzzleSpacing } from './puzzleHeader';
@@ -125,7 +125,7 @@ export function makePuzzlePickerCard(
   const { button: more } = makeFooterAction('more', '...', moreWidth, () => {
     if (compact) openDetails(copyPreview);
   });
-  const artistName = source.attribution?.name?.trim() || 'Credits';
+  const artistName = creditedArtistName(source.attribution) ?? 'Credits';
   const credits = hasCredits && makeFooterAction('credits', artistName, footerActionHeight, () => openDetails(copyPreview));
   return {
     container,

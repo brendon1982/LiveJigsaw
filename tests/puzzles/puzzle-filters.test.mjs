@@ -42,7 +42,7 @@ test('artwork motion is independent of illustration style and combines with the 
 test('artist choices are the unique credited names in alphabetical order', () => {
   const { artist } = makePuzzleFilterGroups([
     { attribution: { name: 'Rosa' } }, {}, { attribution: { description: 'No name' } },
-    { attribution: { name: 'Ada' } }, { attribution: { name: 'Rosa' } },
+    { attribution: { name: ' Ada ' } }, { attribution: { name: ' Rosa ' } }, { attribution: { name: '  ' } },
   ]);
   assert.deepEqual(artist.choices, ['Ada', 'Rosa']);
   assert.deepEqual(artist.options.map(({ filters }) => filters.artists), [['Ada'], ['Rosa']]);
@@ -56,7 +56,7 @@ test('artist filters match any selected credit and combine with the theme filter
   assert.ok(!samePuzzleFilters(filters, { ...filters, artists: ['Ada', 'Lee'] }));
   assert.ok(!samePuzzleFilters(filters, { ...filters, artists: [] }));
   assert.ok(matchesPuzzleFilters(credited('Ada'), 0, filters));
-  assert.ok(matchesPuzzleFilters(credited('Rosa'), 0, filters));
+  assert.ok(matchesPuzzleFilters(credited(' Rosa '), 0, filters));
   assert.ok(!matchesPuzzleFilters(credited('Lee'), 0, filters));
   assert.ok(!matchesPuzzleFilters(credited('Ada', 'Space'), 0, filters));
   assert.ok(!matchesPuzzleFilters(source('Ocean', 'Parallax'), 0, filters));

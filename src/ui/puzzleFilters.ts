@@ -1,5 +1,5 @@
 import { puzzleThemes, puzzleTypes, type PuzzleTheme, type PuzzleType } from '../puzzles/PuzzleTags.ts';
-import type { PuzzleMotion, PuzzleSource } from '../puzzles/PuzzleSource.ts';
+import { creditedArtistName, type PuzzleMotion, type PuzzleSource } from '../puzzles/PuzzleSource.ts';
 
 const completionFilters = ['All', 'Completed', 'Never completed'] as const;
 type CompletionFilter = typeof completionFilters[number];
@@ -26,7 +26,8 @@ function filterGroup<T extends string>(title: string, choices: readonly T[], sel
 export function makePuzzleFilterGroups(sources: readonly Pick<PuzzleSource, 'attribution'>[]) {
   const artistNames = new Set<string>();
   for (const { attribution } of sources) {
-    if (attribution?.name) artistNames.add(attribution.name);
+    const artist = creditedArtistName(attribution);
+    if (artist) artistNames.add(artist);
   }
   const artists = [...artistNames].sort((first, second) => first.localeCompare(second));
   return {
@@ -55,7 +56,7 @@ export function matchesPuzzleFilters(
   { tags, motion, attribution }: Pick<PuzzleSource, 'tags' | 'motion' | 'attribution'>, completions: number, filters: PuzzleFilters,
 ) {
   const matchesTheme = !filters.themes.length || filters.themes.includes(tags.theme);
-  const artist = attribution?.name;
+  const artist = creditedArtistName(attribution);
   const matchesArtist = !filters.artists.length || (artist !== undefined && filters.artists.includes(artist));
   const matchesType = !filters.types.length || filters.types.includes(tags.type);
   const status = completions > 0 ? 'Completed' : 'Never completed';

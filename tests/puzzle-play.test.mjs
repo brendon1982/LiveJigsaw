@@ -76,11 +76,12 @@ async function touchController(page) {
   const dispatch = (type, ...points) => touch.send('Input.dispatchTouchEvent', {
     type, touchPoints: points.map(([x, y], id) => ({ x, y, id })),
   });
-  const moveFinger = async (x, y, endX, endY, end = 'touchEnd') => {
+  const moveFinger = async (x, y, endX, endY, end = 'touchEnd', holdBeforeRelease = 0) => {
     await dispatch('touchStart', [x, y]);
     for (let step = 1; step <= 8; step += 1) {
       await dispatch('touchMove', [x + (endX - x) * step / 8, y + (endY - y) * step / 8]);
     }
+    if (holdBeforeRelease) await delay(holdBeforeRelease);
     await dispatch(end);
   };
   return { dispatch, moveFinger };
@@ -3669,9 +3670,10 @@ scenario('touch can scroll the filter dialog and apply choices on a short screen
   const firstPreview = await pixelAt(page, await canvas.screenshot(), 120, 165);
   await pressHeader(page, 'Filters', true);
   await clickControl(page, { text: 'Coast' }, true);
-  await swipeToOption(page, moveFinger, { text: 'Animated' }, { text: 'Apply', action: true });
+  await swipeToOption(page, moveFinger, { text: 'Craftpix' }, { text: 'Apply', action: true });
   await pressAction(page, 'Apply', true);
   await waitForFilterCount(page, 2);
+  assert.deepEqual(await page.evaluate(() => window.puzzlePickerScene.filters.artists), ['Craftpix']);
   assert.notDeepEqual(await pixelAt(page, await canvas.screenshot(), 120, 165), firstPreview);
   assert.deepEqual(errors, []);
 });
@@ -3681,8 +3683,17 @@ async function swipeToOption(page, moveFinger, selector, footer) {
   assert.ok(option.y > option.clip.bottom, 'The lower option should start outside the scrollable body');
   const action = await uiControl(page, footer);
   const { x, top, bottom } = option.clip;
-  for (let swipe = 0; swipe < 8 && option.y > option.clip.bottom; swipe += 1) {
-    await moveFinger(x, bottom - 10, x, top + 10);
+  const center = (top + bottom) / 2;
+  for (let swipe = 0; swipe < 8 && (option.y < top || option.y > bottom); swipe += 1) {
+    const distance = Math.min(Math.abs(option.y - center), bottom - top - 20);
+    const halfSwipe = Math.sign(option.y - center) * distance / 2;
+    await moveFinger(x, center + halfSwipe, x, center - halfSwipe, 'touchEnd', 120);
+    await page.waitForFunction((sceneKey) => {
+      const game = window.puzzlePickerScene.sys.game;
+      const scene = game.scene.getScene(sceneKey);
+      const body = scene.children.list.find(({ type }) => type === 'rexDialog').getElement('content');
+      return body.getElement('scroller').state === 'IDLE';
+    }, selector.sceneKey ?? 'SelectPuzzle', { timeout: 4000 });
     option = await uiControl(page, selector);
   }
   assert.ok(option.y >= option.clip.top && option.y <= option.clip.bottom, 'Swiping should bring the option into view');

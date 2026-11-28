@@ -2,7 +2,18 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { getPieceCount, pieceShapes, puzzleSizePresets } from '../../src/domain/puzzleSizes.ts';
 import { maximumPuzzlePieceCount, staticPuzzleSizes } from '../../src/domain/staticPuzzleSizes.ts';
-import { puzzleSizeChoices } from '../../src/puzzles/puzzleSizeChoices.ts';
+import { hasPuzzleSizeChoice, puzzleSizeChoices } from '../../src/puzzles/puzzleSizeChoices.ts';
+
+test('picker availability agrees with setup choices for playable and unplayable sources', () => {
+  for (const [motion, width, height, playable] of [
+    ['Static', 5, 6, false], ['Static', 5, 7, true], ['Static', 2000, 2834, true],
+    ['Animated', 400, 100, false], ['Animated', 1920, 1020, true],
+  ]) {
+    const source = { motion, maxViewport: { width, height } };
+    assert.equal(hasPuzzleSizeChoice(source), playable);
+    assert.equal(hasPuzzleSizeChoice(source), puzzleSizeChoices(source).length > 0);
+  }
+});
 
 test('static artwork follows the square preset areas without changing proportions or depending on piece shape', () => {
   for (const artwork of [{ width: 2000, height: 2834 }, { width: 4000, height: 1000 }]) {

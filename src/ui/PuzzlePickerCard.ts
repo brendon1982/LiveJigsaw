@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { creditedArtistName, type PuzzleSource } from '../puzzles/PuzzleSource';
-import { puzzleSizeChoices } from '../puzzles/puzzleSizeChoices';
+import { hasPuzzleSizeChoice } from '../puzzles/puzzleSizeChoices';
 import { addPressFeedback, type UIScene } from './button';
 import { headerControlGap, puzzleSpacing } from './puzzleHeader';
 import { metadataTextStyle, palette, styleWithTheme } from './theme';
@@ -85,7 +85,7 @@ export function makePuzzlePickerCard(
     tags.setColor(colors.mutedText);
     statusLabel.setColor(colors.text);
   });
-  if (puzzleSizeChoices(source).length > 0) {
+  if (hasPuzzleSizeChoice(source)) {
     addPressFeedback(background, (value) => {
       pressed = value;
       background.setFillStyle(pressed ? palette.surfacePressed : palette.surface);

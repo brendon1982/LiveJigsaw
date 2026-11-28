@@ -7,10 +7,14 @@ const targetPresets = puzzleSizePresets.map(({ square }) => ({
 }));
 export const maximumPuzzlePieceCount = Math.floor(Math.max(...targetPresets.map(({ count }) => count)) * (1 + countVariance));
 
+export function hasStaticPuzzleSize(artwork: Size): boolean {
+  return targetPresets.some(({ count, area }) => candidateGrids(fitArtworkToArea(artwork, area), count).next().done === false);
+}
+
 export function staticPuzzleSizes(artwork: Size) {
   return targetPresets.flatMap(({ count, area, snapTolerance }) => {
     const board = fitArtworkToArea(artwork, area);
-    const grids = candidateGrids(board, count);
+    const grids = [...candidateGrids(board, count)];
     if (!grids.length) return [];
 
     const preset = Object.fromEntries(pieceShapeIds.map((shape) => {
@@ -31,21 +35,21 @@ function fitArtworkToArea({ width, height }: Size, targetArea: number): Size {
   };
 }
 
-function candidateGrids({ width, height }: Size, targetCount: number) {
+type CandidateGrid = { columns: number; rows: number; cellWidth: number; cellHeight: number };
+
+function* candidateGrids({ width, height }: Size, targetCount: number): Generator<CandidateGrid> {
   const minCount = Math.ceil(targetCount * (1 - countVariance));
   const maxCount = Math.floor(targetCount * (1 + countVariance));
-  const grids = [];
   for (let rows = 1; rows <= Math.min(height, maxCount); rows += 1) {
     const minColumns = Math.ceil(minCount / rows);
     const maxColumns = Math.min(width, Math.floor(maxCount / rows));
     for (let columns = minColumns; columns <= maxColumns; columns += 1) {
-      grids.push({ columns, rows, cellWidth: width / columns, cellHeight: height / rows });
+      yield { columns, rows, cellWidth: width / columns, cellHeight: height / rows };
     }
   }
-  return grids;
 }
 
-function bestFitGrid(grids: ReturnType<typeof candidateGrids>, shape: Size, targetCount: number) {
+function bestFitGrid(grids: CandidateGrid[], shape: Size, targetCount: number) {
   const idealAspect = shape.width / shape.height;
   let best = grids[0];
   let bestError = Infinity;

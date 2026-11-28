@@ -1053,13 +1053,27 @@ scenario('landing card artwork credits open separately from touch navigation', a
     const all = caption('browse-All');
     const dots = controls.find(({ name }) => name === 'Artwork credits for Theme');
     return {
-      colors: [theme, all, dots].map((label) => label.getElement('text').style.color),
+      textBounds: [theme, all, dots].map((label) => {
+        const { x, y, width, height } = label.getElement('text').getBounds();
+        return { x, y, width, height };
+      }),
       sameHeight: theme.height === dots.height,
     };
   });
-  assert.deepEqual(labels.colors, ['#fff', '#fff', '#fff']);
   assert.equal(labels.sameHeight, true);
   const image = await page.screenshot();
+  const screenshot = PNG.sync.read(image);
+  const renderedWhiteText = labels.textBounds.map(({ x, y, width, height }) => {
+    for (let row = Math.floor(y); row < Math.ceil(y + height); row += 1) {
+      for (let column = Math.floor(x); column < Math.ceil(x + width); column += 1) {
+        const index = (row * screenshot.width + column) * 4;
+        const [red, green, blue] = screenshot.data.subarray(index, index + 3);
+        if (red === 255 && green === 255 && blue === 255) return true;
+      }
+    }
+    return false;
+  });
+  assert.deepEqual(renderedWhiteText, [true, true, true], 'Theme, All, and the credits dots should render white');
   const left = Math.ceil(card.x - card.width / 2);
   const top = Math.ceil(card.y - card.height / 2);
   assert.deepEqual(await pixelAt(page, image, left, top), await pixelAt(page, image, left - 3, top),

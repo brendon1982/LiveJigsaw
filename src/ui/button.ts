@@ -101,10 +101,10 @@ type OptionTile = {
 
 function makeArtworkCaption(scene: UIScene, text: Phaser.GameObjects.Text, depth: number) {
   const background = scene.rexUI.add.roundRectangle(0, 0, 1, 1, 9, 0x000000, 0.73).setDepth(depth);
-  text.setColor('#fff').setDepth(depth);
+  text.setColor('#fff').setDepth(depth + 0.1);
   return scene.rexUI.add.label({
     background, text, align: 'center', space: { left: 8, right: 8, top: 4, bottom: 4 },
-  }).setDepth(depth);
+  }).setDepth(depth, true);
 }
 
 export function addArtworkCreditsButton(
